@@ -1,0 +1,17 @@
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+coverage/
+.idea/
+.vscode/
+*.iml
+android/local.properties
+android/key.properties
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+docs/API_CONTRACT.md
