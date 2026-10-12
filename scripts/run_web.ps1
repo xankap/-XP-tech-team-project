@@ -4,7 +4,7 @@
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path -Parent $PSScriptRoot)
 
-$api = if ($env:XP_API_BASE_URL) { $env:XP_API_BASE_URL } else { 'http://127.0.0.1:3000' }
+$api = if ($env:XP_API_BASE_URL) { $env:XP_API_BASE_URL } else { 'http://localhost:3000' }
 $googleClientId = if ($env:GOOGLE_CLIENT_ID) { $env:GOOGLE_CLIENT_ID } else { '264320031504-avqcsa5p6kic2toh3edv9ueje8h5dh10.apps.googleusercontent.com' }
 
 try {

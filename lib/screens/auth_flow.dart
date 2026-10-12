@@ -285,12 +285,31 @@ class _LoginPageState extends State<LoginPage> {
     _checkBackend();
   }
 
-  /// Early, non-blocking warning if the API is down so users aren't surprised later.
-  Future<void> _checkBackend() async {
+  /// Early warning if the API is down; retries so a restart of the backend clears the banner.
+  Future<void> _checkBackend({bool force = false}) async {
     try {
-      await _api.health();
+      final health = await _api.health();
+      if (!mounted) return;
+      if (health.ok) {
+        setState(() {
+          if (_error != null && _error!.contains('Backend')) _error = null;
+          _info = 'Connected to backend';
+        });
+        // Clear the success chip after a moment so it does not clutter the form.
+        Future<void>.delayed(const Duration(seconds: 2), () {
+          if (mounted && _info == 'Connected to backend') {
+            setState(() => _info = null);
+          }
+        });
+      }
     } on AuthApiException catch (e) {
-      if (mounted && _error == null) setState(() => _error = e.message);
+      if (!mounted) return;
+      setState(() => _error = e.message);
+      if (!force) {
+        Future<void>.delayed(const Duration(seconds: 3), () {
+          if (mounted) _checkBackend(force: true);
+        });
+      }
     }
   }
 
