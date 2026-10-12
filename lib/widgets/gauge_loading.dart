@@ -124,7 +124,7 @@ class _GaugePainter extends CustomPainter {
         startAngle: start,
         endAngle: start + sweep,
         colors: [accent.withValues(alpha: 0.2), accent],
-        transforms: [GradientRotation(start)],
+        transform: GradientRotation(start),
       ).createShader(Rect.fromCircle(center: center, radius: radius))
       ..style = PaintingStyle.stroke
       ..strokeWidth = size.width * 0.07
