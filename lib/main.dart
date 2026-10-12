@@ -26,6 +26,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'theme/app_theme.dart';
+import 'screens/auth_flow.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:http/http.dart' as http;
@@ -89,8 +91,19 @@ Future<void> main() async {
 // APP ROOT  [FIX-02] DGMApp class was missing — restored
 // ════════════════════════════════════════════════════════════════════════════
 
-class DGMApp extends StatelessWidget {
+class DGMApp extends StatefulWidget {
   const DGMApp({super.key});
+
+  @override
+  State<DGMApp> createState() => _DGMAppState();
+}
+
+class _DGMAppState extends State<DGMApp> {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  void _setThemeMode(ThemeMode mode) {
+    setState(() => _themeMode = mode);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,189 +111,14 @@ class DGMApp extends StatelessWidget {
       child: MaterialApp(
         title: 'XP Tech · Digital Gas Meter',
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.theme,
-        home: const AppSplashGate(),
-      ),
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-
-class AppSplashGate extends StatefulWidget {
-  const AppSplashGate({super.key});
-  @override
-  State<AppSplashGate> createState() => _AppSplashGateState();
-}
-
-class _AppSplashGateState extends State<AppSplashGate>
-    with SingleTickerProviderStateMixin {
-  bool _showLanding = true;
-  late final AnimationController _fadeCtrl;
-  late final Animation<double> _fade;
-
-  @override
-  void initState() {
-    super.initState();
-    _fadeCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    )..forward();
-    _fade = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOutCubic);
-  }
-
-  @override
-  void dispose() {
-    _fadeCtrl.dispose();
-    super.dispose();
-  }
-
-  void _enterApp() {
-    if (!mounted) return;
-    setState(() => _showLanding = false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_showLanding) return const MainShell();
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppTheme.corporateBlue,
-              Color(0xFF1565C0),
-              AppTheme.skyBlue,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fade,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-                  child: Column(
-                    children: [
-                      const Spacer(flex: 2),
-                      Container(
-                        padding: const EdgeInsets.all(22),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.18),
-                              blurRadius: 28,
-                              offset: const Offset(0, 12),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.local_gas_station_rounded,
-                          size: 56,
-                          color: AppTheme.corporateBlue,
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-                      const Text(
-                        'XP TECHNOLOGY',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.6,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'SMART GAS MONITORING',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppTheme.lightBlue.withValues(alpha: 0.95),
-                          fontSize: 12,
-                          letterSpacing: 2.4,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.22),
-                          ),
-                        ),
-                        child: const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _LandingFeature(
-                              icon: Icons.speed_rounded,
-                              title: 'Live cylinder readings',
-                              subtitle: 'Gas level, weight, battery and leak status',
-                            ),
-                            SizedBox(height: 14),
-                            _LandingFeature(
-                              icon: Icons.location_on_rounded,
-                              title: 'Find refill partners',
-                              subtitle: 'Nearby XP Tech stations on the map',
-                            ),
-                            SizedBox(height: 14),
-                            _LandingFeature(
-                              icon: Icons.bar_chart_rounded,
-                              title: 'Usage history',
-                              subtitle: 'Track cooking sessions and weekly use',
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Spacer(flex: 3),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _enterApp,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: AppTheme.corporateBlue,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            textStyle: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                          child: const Text('Get started'),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Digital Gas Meter · XP Tech',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.72),
-                          fontSize: 12,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: _themeMode,
+        home: AuthBootstrapFlow(
+          homeBuilder: (onLogout) => _ThemeScope(
+            themeMode: _themeMode,
+            onThemeModeChanged: _setThemeMode,
+            child: MainShell(onLogout: onLogout),
           ),
         ),
       ),
@@ -288,171 +126,24 @@ class _AppSplashGateState extends State<AppSplashGate>
   }
 }
 
-class _LandingFeature extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  const _LandingFeature({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
+class _ThemeScope extends InheritedWidget {
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
+  const _ThemeScope({
+    required this.themeMode,
+    required this.onThemeModeChanged,
+    required super.child,
   });
 
+  static _ThemeScope of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_ThemeScope>()!;
+
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.16),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: Colors.white, size: 22),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.82),
-                  fontSize: 13,
-                  height: 1.35,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+  bool updateShouldNotify(covariant _ThemeScope oldWidget) =>
+      themeMode != oldWidget.themeMode;
 }
 
-// 1. THEME & DESIGN TOKENS
-// ════════════════════════════════════════════════════════════════════════════
 
-class AppTheme {
-  static const Color corporateBlue = Color(0xFF0D47A1);
-  static const Color skyBlue      = Color(0xFF1976D2);
-  static const Color lightBlue    = Color(0xFFBBDEFB);
-  static const Color accentBlue   = Color(0xFF42A5F5);
-  static const Color cleanWhite   = Color(0xFFFFFFFF);
-  static const Color offWhite     = Color(0xFFF5F8FF);
-  static const Color cardBackground = Color(0xFFFFFFFF);
-
-  static const Color statusOK       = Color(0xFF2E7D32);
-  static const Color statusWarning  = Color(0xFFF57F17);
-  static const Color statusCritical = Color(0xFFC62828);
-  static const Color statusUnknown  = Color(0xFF757575);
-
-  static ThemeData get theme => ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: corporateBlue,
-        brightness: Brightness.light,
-        primary: corporateBlue,
-        secondary: skyBlue,
-        surface: offWhite,
-        onPrimary: cleanWhite,
-        onSurface: const Color(0xFF1A237E),
-      ),
-      scaffoldBackgroundColor: offWhite,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: corporateBlue,
-        foregroundColor: cleanWhite,
-        elevation: 0,
-        centerTitle: false,
-        titleTextStyle: TextStyle(
-          fontFamily: 'Roboto',
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: cleanWhite,
-          letterSpacing: 0.2,
-        ),
-      ),
-      cardTheme: CardThemeData(                           // correct class name
-        color: cardBackground,
-        elevation: 2,
-        shadowColor: corporateBlue.withValues(alpha: 0.12), // [FIX-06]
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
-        margin:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: cleanWhite,
-        selectedItemColor: corporateBlue,
-        unselectedItemColor: Color(0xFF90A4AE),
-        selectedLabelStyle:
-            TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
-        elevation: 16,
-        type: BottomNavigationBarType.fixed,
-      ),
-      textTheme: const TextTheme(
-        displayLarge: TextStyle(
-            fontSize: 57,
-            fontWeight: FontWeight.w700,
-            color: corporateBlue),
-        headlineMedium: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-            color: corporateBlue),
-        titleLarge: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1A237E)),
-        titleMedium: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF37474F)),
-        bodyMedium:
-            TextStyle(fontSize: 14, color: Color(0xFF546E7A)),
-        labelSmall: TextStyle(
-            fontSize: 10,
-            letterSpacing: 1.2,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF78909C)),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: corporateBlue,
-          foregroundColor: cleanWhite,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
-          padding: const EdgeInsets.symmetric(
-              horizontal: 24, vertical: 14),
-          textStyle: const TextStyle(
-              fontSize: 15, fontWeight: FontWeight.w600),
-        ),
-      ),
-      chipTheme: ChipThemeData(
-        backgroundColor:
-            lightBlue.withValues(alpha: 0.4), // [FIX-06]
-        selectedColor: skyBlue,
-        labelStyle: const TextStyle(
-            fontSize: 12, color: corporateBlue),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
-      ),
-    );
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// 2. DATA MODELS
 // ════════════════════════════════════════════════════════════════════════════
 
 enum LeakStatus { ok, warning, critical, unknown }
@@ -916,7 +607,8 @@ class _AppStateData extends State<_AppState> {
 // ════════════════════════════════════════════════════════════════════════════
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  final VoidCallback? onLogout;
+  const MainShell({super.key, this.onLogout});
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -929,11 +621,11 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
-    _screens = const [
-      DashboardScreen(),
-      MapScreen(),
-      HistoryScreen(),
-      SettingsScreen(),
+    _screens = [
+      const DashboardScreen(),
+      const MapScreen(),
+      const HistoryScreen(),
+      SettingsScreen(onLogout: widget.onLogout),
     ];
   }
 
@@ -1980,7 +1672,8 @@ class _SessionTile extends StatelessWidget {
 // ════════════════════════════════════════════════════════════════════════════
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final VoidCallback? onLogout;
+  const SettingsScreen({super.key, this.onLogout});
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
@@ -2093,6 +1786,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
             const SizedBox(height: 12),
             Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('Developer testing', style: Theme.of(context).textTheme.labelSmall)),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.brightness_6_rounded, color: AppTheme.skyBlue),
+                title: const Text('Theme mode'),
+                subtitle: Text({
+                  ThemeMode.system: 'System',
+                  ThemeMode.light: 'Light',
+                  ThemeMode.dark: 'Dark',
+                }[_ThemeScope.of(context).themeMode]!),
+                trailing: DropdownButton<ThemeMode>(
+                  value: _ThemeScope.of(context).themeMode,
+                  underline: const SizedBox.shrink(),
+                  onChanged: (mode) {
+                    if (mode != null) _ThemeScope.of(context).onThemeModeChanged(mode);
+                  },
+                  items: const [
+                    DropdownMenuItem(value: ThemeMode.system, child: Text('System')),
+                    DropdownMenuItem(value: ThemeMode.light, child: Text('Light')),
+                    DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark')),
+                  ],
+                ),
+              ),
+            ),
+            if (widget.onLogout != null)
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.logout_rounded, color: AppTheme.statusCritical),
+                  title: const Text('Log out'),
+                  onTap: widget.onLogout,
+                ),
+              ),
             Card(child: SwitchListTile(value: app.demoBusinessAccess, onChanged: (value) => setState(() { app.demoBusinessAccess = value; }), secondary: const Icon(Icons.developer_mode, color: AppTheme.skyBlue), title: const Text('Demo business access'), subtitle: const Text('Local-only testing bypass. Remove/disable before production; it is not authentication.'))),
             const Card(child: ListTile(leading: Icon(Icons.info_outline_rounded, color: AppTheme.skyBlue), title: Text('XP Technology Digital Gas Meter'), subtitle: Text('Business backend integration is configurable through XP_API_BASE_URL.'))),
           ]),
