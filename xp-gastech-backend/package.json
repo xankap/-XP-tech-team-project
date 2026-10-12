@@ -1,0 +1,23 @@
+{
+  "name": "xp-gastech-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "db:test": "node -e \"require(\"./server.js\")\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^18.0.7",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.1",
+    "google-auth-library": "^11.2.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.23.1",
+    "twilio": "^6.1.2"
+  }
+}
