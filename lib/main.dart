@@ -24,6 +24,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
@@ -59,9 +60,11 @@ final FlutterLocalNotificationsPlugin notificationsPlugin =
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Lock to portrait
-  await SystemChrome.setPreferredOrientations(
-      [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+  // Lock to portrait on mobile surfaces; keep web/desktop free to rotate/resize
+  if (!kIsWeb) {
+    await SystemChrome.setPreferredOrientations(
+        [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+  }
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: AppTheme.corporateBlue,
@@ -93,7 +96,7 @@ class DGMApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return _AppState(
       child: MaterialApp(
-        title: 'Digital Gas Meter',
+        title: 'XP Tech · Digital Gas Meter',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.theme,
         home: const AppSplashGate(),
@@ -110,24 +113,233 @@ class AppSplashGate extends StatefulWidget {
   State<AppSplashGate> createState() => _AppSplashGateState();
 }
 
-class _AppSplashGateState extends State<AppSplashGate> {
-  bool _showSplash = true;
+class _AppSplashGateState extends State<AppSplashGate>
+    with SingleTickerProviderStateMixin {
+  bool _showLanding = true;
+  late final AnimationController _fadeCtrl;
+  late final Animation<double> _fade;
+
   @override
   void initState() {
     super.initState();
-    Future<void>.delayed(const Duration(milliseconds: 1200), () {
-      if (mounted) setState(() => _showSplash = false);
-    });
+    _fadeCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    )..forward();
+    _fade = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOutCubic);
   }
+
   @override
-  Widget build(BuildContext context) => _showSplash
-      ? const Scaffold(backgroundColor: AppTheme.corporateBlue, body: Center(child: Column(
-          mainAxisSize: MainAxisSize.min, children: [
-            CircleAvatar(radius: 42, backgroundColor: Colors.white, child: Icon(Icons.local_gas_station_rounded, size: 44, color: AppTheme.corporateBlue)),
-            SizedBox(height: 16), Text('XP TECHNOLOGY', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: 1.4)),
-            SizedBox(height: 6), Text('SMART GAS MONITORING', style: TextStyle(color: AppTheme.lightBlue, fontSize: 11, letterSpacing: 2)),
-          ])))
-      : const MainShell();
+  void dispose() {
+    _fadeCtrl.dispose();
+    super.dispose();
+  }
+
+  void _enterApp() {
+    if (!mounted) return;
+    setState(() => _showLanding = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_showLanding) return const MainShell();
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppTheme.corporateBlue,
+              Color(0xFF1565C0),
+              AppTheme.skyBlue,
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fade,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                  child: Column(
+                    children: [
+                      const Spacer(flex: 2),
+                      Container(
+                        padding: const EdgeInsets.all(22),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.18),
+                              blurRadius: 28,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.local_gas_station_rounded,
+                          size: 56,
+                          color: AppTheme.corporateBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      const Text(
+                        'XP TECHNOLOGY',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.6,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'SMART GAS MONITORING',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppTheme.lightBlue.withValues(alpha: 0.95),
+                          fontSize: 12,
+                          letterSpacing: 2.4,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.22),
+                          ),
+                        ),
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _LandingFeature(
+                              icon: Icons.speed_rounded,
+                              title: 'Live cylinder readings',
+                              subtitle: 'Gas level, weight, battery and leak status',
+                            ),
+                            SizedBox(height: 14),
+                            _LandingFeature(
+                              icon: Icons.location_on_rounded,
+                              title: 'Find refill partners',
+                              subtitle: 'Nearby XP Tech stations on the map',
+                            ),
+                            SizedBox(height: 14),
+                            _LandingFeature(
+                              icon: Icons.bar_chart_rounded,
+                              title: 'Usage history',
+                              subtitle: 'Track cooking sessions and weekly use',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(flex: 3),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _enterApp,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: AppTheme.corporateBlue,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          child: const Text('Get started'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Digital Gas Meter · XP Tech',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.72),
+                          fontSize: 12,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LandingFeature extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  const _LandingFeature({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: Colors.white, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.82),
+                  fontSize: 13,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 // 1. THEME & DESIGN TOKENS
@@ -727,9 +939,32 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final width = MediaQuery.sizeOf(context).width;
+    final wide = width >= 900;
+
+    final content = Scaffold(
       body: IndexedStack(index: _index, children: _screens),
       bottomNavigationBar: _buildNav(),
+    );
+
+    if (!wide) return content;
+
+    // Keep the same visual language on desktop/web by centering a phone-like frame
+    return ColoredBox(
+      color: const Color(0xFFE8EEF8),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 960),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: Material(
+              elevation: 10,
+              shadowColor: AppTheme.corporateBlue.withValues(alpha: 0.25),
+              child: content,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
