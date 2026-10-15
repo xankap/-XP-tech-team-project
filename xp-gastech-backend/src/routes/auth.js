@@ -7,6 +7,15 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Send a JSON error. Known (status-tagged) errors keep their message; unexpected
+// 5xx errors get a generic message so DB/internal details never leak to clients.
+function sendError(res, err, fallback, defaultStatus = 500) {
+  const status = err.status || defaultStatus;
+  if (!err.status) console.error(`[auth] ${fallback}:`, err);
+  const message = err.status ? err.message || fallback : fallback;
+  res.status(status).json({ error: message });
+}
+
 const smsSendLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
@@ -40,7 +49,7 @@ router.post('/signup', authLimiter, async (req, res) => {
     });
     res.status(201).json(result);
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message || 'Signup failed' });
+    sendError(res, err, 'Signup failed');
   }
 });
 
@@ -52,7 +61,7 @@ router.post('/login', authLimiter, async (req, res) => {
     });
     res.status(200).json(result);
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message || 'Login failed' });
+    sendError(res, err, 'Login failed');
   }
 });
 
@@ -62,7 +71,7 @@ router.post('/google', authLimiter, async (req, res) => {
     const result = await loginWithGoogleIdToken(req.body?.idToken);
     res.status(200).json(result);
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message || 'Google login failed' });
+    sendError(res, err, 'Google login failed');
   }
 });
 
@@ -75,8 +84,8 @@ router.post('/send-sms-code', smsSendLimiter, async (req, res) => {
     const result = await sendSmsCode(req.body?.phone);
     res.status(200).json(result);
   } catch (err) {
-    const status = err.status || (err.code === 'TWILIO_NOT_CONFIGURED' ? 503 : 500);
-    res.status(status).json({ error: err.message || 'Failed to send code' });
+    if (err.code === 'TWILIO_NOT_CONFIGURED' && !err.status) err.status = 503;
+    sendError(res, err, 'Failed to send code');
   }
 });
 
@@ -85,7 +94,7 @@ router.post('/verify-sms-code', smsVerifyLimiter, async (req, res) => {
     const result = await verifySmsCode(req.body?.phone, req.body?.code);
     res.status(200).json(result);
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message || 'Verification failed' });
+    sendError(res, err, 'Verification failed');
   }
 });
 
