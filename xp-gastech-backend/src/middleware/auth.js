@@ -26,7 +26,7 @@ async function requireAuth(req, res, next) {
     }
 
     const { rows } = await pool.query(
-      `select id, email, phone, phone_verified_at, email_verified_at, created_at
+      `select id, email, phone, role, phone_verified_at, email_verified_at, created_at
        from users where id = $1`,
       [payload.sub]
     );
@@ -39,8 +39,16 @@ async function requireAuth(req, res, next) {
     req.auth = payload;
     return next();
   } catch (err) {
-    return res.status(500).json({ error: err.message || 'Auth middleware failed' });
+    console.error('[auth middleware]', err);
+    return res.status(500).json({ error: 'Auth check failed' });
   }
 }
 
-module.exports = { requireAuth };
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  return next();
+}
+
+module.exports = { requireAuth, requireAdmin };

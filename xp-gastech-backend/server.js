@@ -3,6 +3,8 @@ require('dotenv').config();
 const express = require('express');
 const { pool } = require('./src/db/pool');
 const authRoutes = require('./src/routes/auth');
+const retailerRoutes = require('./src/routes/retailers');
+const businessRoutes = require('./src/routes/businesses');
 const { getTwilioConfig } = require('./src/services/twilio');
 
 const app = express();
@@ -30,7 +32,7 @@ app.use((req, res, next) => {
   if (origin && isAllowedOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Max-Age', '600');
   }
@@ -53,6 +55,10 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/auth', authRoutes);
+app.use('/retailers', retailerRoutes);
+app.use('/businesses', businessRoutes);
+// Flutter map contract alias: GET /partner-stations/nearby?latitude&longitude&radiusKm
+app.get('/partner-stations/nearby', retailerRoutes.nearbyHandler);
 
 // JSON 404 for unknown routes.
 app.use((_req, res) => {
