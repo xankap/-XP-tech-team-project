@@ -22,9 +22,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-// import 'dart:typed_data';
+import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'theme/app_theme.dart';
+import 'screens/auth_flow.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:http/http.dart' as http;
@@ -34,6 +37,19 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+// ---------------------------------------------------------------------------
+// pubspec.yaml dependencies:
+//
+//    flutter_bluetooth_serial: ^0.4.0
+//    google_maps_flutter: ^2.6.1
+//    flutter_local_notifications: ^17.2.2
+//    permission_handler: ^11.3.1
+//    geolocator: ^12.0.0
+//    shared_preferences: ^2.2.3
+//    http: ^1.2.1
+//    intl: ^0.19.0
+//    provider: ^6.1.2
+// ---------------------------------------------------------------------------
 
 // ─── Global notification plugin instance ────────────────────────────────────
 final FlutterLocalNotificationsPlugin notificationsPlugin =
@@ -46,9 +62,11 @@ final FlutterLocalNotificationsPlugin notificationsPlugin =
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Lock to portrait
-  await SystemChrome.setPreferredOrientations(
-      [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+  // Lock to portrait on mobile surfaces; keep web/desktop free to rotate/resize
+  if (!kIsWeb) {
+    await SystemChrome.setPreferredOrientations(
+        [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+  }
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: AppTheme.corporateBlue,
@@ -73,161 +91,59 @@ Future<void> main() async {
 // APP ROOT  [FIX-02] DGMApp class was missing — restored
 // ════════════════════════════════════════════════════════════════════════════
 
-class DGMApp extends StatelessWidget {
+class DGMApp extends StatefulWidget {
   const DGMApp({super.key});
+
+  @override
+  State<DGMApp> createState() => _DGMAppState();
+}
+
+class _DGMAppState extends State<DGMApp> {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  void _setThemeMode(ThemeMode mode) {
+    setState(() => _themeMode = mode);
+  }
 
   @override
   Widget build(BuildContext context) {
     return _AppState(
       child: MaterialApp(
-        title: 'Digital Gas Meter',
+        title: 'XP Tech · Digital Gas Meter',
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.theme,
-        home: const AppSplashGate(),
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: _themeMode,
+        home: AuthBootstrapFlow(
+          homeBuilder: (onLogout) => _ThemeScope(
+            themeMode: _themeMode,
+            onThemeModeChanged: _setThemeMode,
+            child: MainShell(onLogout: onLogout),
+          ),
+        ),
       ),
     );
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+class _ThemeScope extends InheritedWidget {
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
+  const _ThemeScope({
+    required this.themeMode,
+    required this.onThemeModeChanged,
+    required super.child,
+  });
 
-class AppSplashGate extends StatefulWidget {
-  const AppSplashGate({super.key});
+  static _ThemeScope of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_ThemeScope>()!;
+
   @override
-  State<AppSplashGate> createState() => _AppSplashGateState();
+  bool updateShouldNotify(covariant _ThemeScope oldWidget) =>
+      themeMode != oldWidget.themeMode;
 }
 
-class _AppSplashGateState extends State<AppSplashGate> {
-  bool _showSplash = true;
-  @override
-  void initState() {
-    super.initState();
-    Future<void>.delayed(const Duration(milliseconds: 1200), () {
-      if (mounted) setState(() => _showSplash = false);
-    });
-  }
-  @override
-  Widget build(BuildContext context) => _showSplash
-      ? const Scaffold(backgroundColor: AppTheme.corporateBlue, body: Center(child: Column(
-          mainAxisSize: MainAxisSize.min, children: [
-            CircleAvatar(radius: 42, backgroundColor: Colors.white, child: Icon(Icons.local_gas_station_rounded, size: 44, color: AppTheme.corporateBlue)),
-            SizedBox(height: 16), Text('XP TECHNOLOGY', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: 1.4)),
-            SizedBox(height: 6), Text('SMART GAS MONITORING', style: TextStyle(color: AppTheme.lightBlue, fontSize: 11, letterSpacing: 2)),
-          ])))
-      : const MainShell();
-}
 
-// 1. THEME & DESIGN TOKENS
-// ════════════════════════════════════════════════════════════════════════════
-
-class AppTheme {
-  static const Color corporateBlue = Color(0xFF0D47A1);
-  static const Color skyBlue      = Color(0xFF1976D2);
-  static const Color lightBlue    = Color(0xFFBBDEFB);
-  static const Color accentBlue   = Color(0xFF42A5F5);
-  static const Color cleanWhite   = Color(0xFFFFFFFF);
-  static const Color offWhite     = Color(0xFFF5F8FF);
-  static const Color cardBackground = Color(0xFFFFFFFF);
-
-  static const Color statusOK       = Color(0xFF2E7D32);
-  static const Color statusWarning  = Color(0xFFF57F17);
-  static const Color statusCritical = Color(0xFFC62828);
-  static const Color statusUnknown  = Color(0xFF757575);
-
-  static ThemeData get theme => ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: corporateBlue,
-        brightness: Brightness.light,
-        primary: corporateBlue,
-        secondary: skyBlue,
-        surface: offWhite,
-        onPrimary: cleanWhite,
-        onSurface: const Color(0xFF1A237E),
-      ),
-      scaffoldBackgroundColor: offWhite,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: corporateBlue,
-        foregroundColor: cleanWhite,
-        elevation: 0,
-        centerTitle: false,
-        titleTextStyle: TextStyle(
-          fontFamily: 'Roboto',
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: cleanWhite,
-          letterSpacing: 0.2,
-        ),
-      ),
-      cardTheme: CardThemeData(                           // correct class name
-        color: cardBackground,
-        elevation: 2,
-        shadowColor: corporateBlue.withValues(alpha: 0.12), // [FIX-06]
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
-        margin:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: cleanWhite,
-        selectedItemColor: corporateBlue,
-        unselectedItemColor: Color(0xFF90A4AE),
-        selectedLabelStyle:
-            TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
-        elevation: 16,
-        type: BottomNavigationBarType.fixed,
-      ),
-      textTheme: const TextTheme(
-        displayLarge: TextStyle(
-            fontSize: 57,
-            fontWeight: FontWeight.w700,
-            color: corporateBlue),
-        headlineMedium: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-            color: corporateBlue),
-        titleLarge: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1A237E)),
-        titleMedium: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF37474F)),
-        bodyMedium:
-            TextStyle(fontSize: 14, color: Color(0xFF546E7A)),
-        labelSmall: TextStyle(
-            fontSize: 10,
-            letterSpacing: 1.2,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF78909C)),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: corporateBlue,
-          foregroundColor: cleanWhite,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
-          padding: const EdgeInsets.symmetric(
-              horizontal: 24, vertical: 14),
-          textStyle: const TextStyle(
-              fontSize: 15, fontWeight: FontWeight.w600),
-        ),
-      ),
-      chipTheme: ChipThemeData(
-        backgroundColor:
-            lightBlue.withValues(alpha: 0.4), // [FIX-06]
-        selectedColor: skyBlue,
-        labelStyle: const TextStyle(
-            fontSize: 12, color: corporateBlue),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
-      ),
-    );
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// 2. DATA MODELS
 // ════════════════════════════════════════════════════════════════════════════
 
 enum LeakStatus { ok, warning, critical, unknown }
@@ -330,25 +246,23 @@ class BluetoothService extends ChangeNotifier {
   BtState _state = BtState.disconnected;
   GasReading _latest = GasReading.empty();
   String? _connectedDevice;
-  String? _connectedAddress;
+  String? _connectedAddress; // Kept for the existing business/cylinder UI.
+  String? _scanError; // Exposes errors to the existing Bluetooth sheet.
   BluetoothConnection? _connection;
   StreamSubscription? _sub;
 
   final List<BtDeviceInfo> _discovered = [];
-  String? _scanError;
 
   BtState get state => _state;
   GasReading get latest => _latest;
   String? get connectedDevice => _connectedDevice;
   String? get connectedAddress => _connectedAddress;
-  List<BtDeviceInfo> get discovered => List.unmodifiable(_discovered);
   String? get scanError => _scanError;
   bool get isScanning => _state == BtState.scanning;
+  List<BtDeviceInfo> get discovered => List.unmodifiable(_discovered);
 
-  /// Loads Android's existing Bluetooth bond list. This does not perform a
-  /// discovery scan; it lists devices already paired in the phone settings.
   Future<void> startScan() async {
-    if (_state == BtState.connected || _state == BtState.connecting) return;
+    if (_state == BtState.connected) return;
 
     _state = BtState.scanning;
     _scanError = null;
@@ -356,151 +270,77 @@ class BluetoothService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Android 12+ requires BLUETOOTH_CONNECT at runtime to read bonded devices.
-      final permission = await Permission.bluetoothConnect.status;
-      if (!permission.isGranted) {
-        final requested = await Permission.bluetoothConnect.request();
-        if (!requested.isGranted) {
-          throw Exception(
-            'Bluetooth permission was denied. Allow Nearby devices/Bluetooth permission in Android Settings.',
-          );
-        }
+      List<BluetoothDevice> bondedDevices = await FlutterBluetoothSerial.instance.getBondedDevices();
+      for (var d in bondedDevices) {
+        _discovered.add(BtDeviceInfo(device: d, alreadyPaired: true));
       }
-
-      final bluetooth = FlutterBluetoothSerial.instance;
-      final enabled = await bluetooth.isEnabled;
-      if (enabled != true) {
-        final enabledNow = await bluetooth.requestEnable();
-        if (enabledNow != true) {
-          throw Exception('Bluetooth is turned off. Turn it on and try again.');
-        }
-      }
-
-      final bondedDevices = await bluetooth.getBondedDevices();
-      final uniqueByAddress = <String, BluetoothDevice>{};
-      for (final device in bondedDevices) {
-        uniqueByAddress[device.address] = device;
-      }
-      _discovered
-        ..clear()
-        ..addAll(uniqueByAddress.values.map(
-          (device) => BtDeviceInfo(device: device, alreadyPaired: true),
-        ));
-      _discovered.sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
+      notifyListeners();
     } catch (e) {
       _scanError = e.toString().replaceFirst('Exception: ', '');
-    } finally {
-      _state = BtState.disconnected;
+    }
+
+    _state = BtState.disconnected;
+    notifyListeners();
+  }
+
+  Future<void> connectToDevice(BtDeviceInfo info) async {
+    _state = BtState.connecting;
+    notifyListeners();
+
+    try {
+      _connection = await BluetoothConnection.toAddress(info.address);
+      
+      _connectedDevice = info.displayName;
+      _connectedAddress = info.address;
+      _scanError = null;
+      _state = BtState.connected;
+      notifyListeners();
+
+      final buf = StringBuffer();
+
+      _sub = _connection!.input!.listen((Uint8List data) {
+        buf.write(ascii.decode(data));
+        if (buf.toString().contains('\n')) {
+          _latest = GasReading.fromSerial(buf.toString());
+          buf.clear();
+          notifyListeners();
+        }
+      });
+      _sub!.onDone(() {
+        disconnect();
+      });
+
+    } catch (e) {
+      _scanError = 'Could not connect to ${info.displayName}: ${e.toString().replaceFirst('Exception: ', '')}';
+      _connectedDevice = null;
+      _connectedAddress = null;
+      _connection = null;
+      _state = BtState.error;
       notifyListeners();
     }
   }
 
-
-Future<void> connectToDevice(BtDeviceInfo info) async {
-  _state = BtState.connecting;
-  _scanError = null;
-  notifyListeners();
-
-  try {
-    debugPrint(
-      'Connecting to ${info.displayName} at ${info.address}',
-    );
-
-    final connection =
-        await BluetoothConnection.toAddress(info.address);
-
-    _connection = connection;
-
-    if (!connection.isConnected) {
-      throw Exception('Bluetooth connection was not established.');
+  Future<void> connect(String deviceName) async {
+    final match = _discovered.where((d) =>
+        d.displayName.toLowerCase().contains(deviceName.toLowerCase()));
+    if (match.isNotEmpty) {
+      await connectToDevice(match.first);
+    } else {
+      await startScan();
+      final retry = _discovered.where((d) =>
+          d.displayName.toLowerCase().contains(deviceName.toLowerCase()));
+      if (retry.isNotEmpty) await connectToDevice(retry.first);
     }
-
-    _connectedDevice = info.displayName;
-    _connectedAddress = info.address;
-    _scanError = null;
-    _state = BtState.connected;
-    notifyListeners();
-
-    debugPrint('Bluetooth connected successfully.');
-
-    final input = connection.input;
-
-    if (input == null) {
-      throw Exception('Bluetooth input stream is unavailable.');
-    }
-
-    final buffer = StringBuffer();
-
-    _sub = input.listen(
-      (Uint8List data) {
-        final received = ascii.decode(data, allowInvalid: true);
-        debugPrint('Bluetooth received: ${received.trim()}');
-
-        buffer.write(received);
-
-        // Process each complete newline-terminated reading.
-        while (buffer.toString().contains('\n')) {
-          final contents = buffer.toString();
-          final newlineIndex = contents.indexOf('\n');
-
-          final line = contents
-              .substring(0, newlineIndex)
-              .trim();
-
-          buffer
-            ..clear()
-            ..write(contents.substring(newlineIndex + 1));
-
-          if (line.isEmpty) continue;
-
-          try {
-            _latest = GasReading.fromSerial('$line\n');
-            notifyListeners();
-          } catch (e) {
-            debugPrint('Gas reading parse error: $e');
-            debugPrint('Invalid reading: $line');
-          }
-        }
-      },
-      onError: (Object error) {
-        debugPrint('Bluetooth stream error: $error');
-        disconnect();
-      },
-      onDone: () {
-        debugPrint('Bluetooth connection closed by remote device.');
-        disconnect();
-      },
-      cancelOnError: true,
-    );
-
-} catch (e, stackTrace) {
-  debugPrint('========== HC-05 CONNECTION FAILED ==========');
-  debugPrint('Error type: ${e.runtimeType}');
-  debugPrint('Error details: $e');
-  debugPrint('Device name: ${info.displayName}');
-  debugPrint('Device address: ${info.address}');
-  debugPrintStack(stackTrace: stackTrace);
-
-  _scanError = 'Could not connect to ${info.displayName}: $e';
-  _connectedDevice = null;
-  _connectedAddress = null;
-  _connection = null;
-  _state = BtState.error;
-
-  notifyListeners();
-}
-}
+  }
 
   Future<void> sendCommand(String command) async {
-    final connection = _connection;
     if (_state != BtState.connected ||
-        connection == null ||
-        !connection.isConnected) {
-      throw StateError('Bluetooth meter is not connected.');
+        _connection == null ||
+        !_connection!.isConnected) {
+      throw StateError('Connect to a gas meter before sending commands.');
     }
-
-    connection.output.add(ascii.encode('$command\n'));
-    await connection.output.allSent;
+    _connection!.output.add(Uint8List.fromList(ascii.encode('$command\n')));
+    await _connection!.output.allSent;
   }
 
   Future<void> disconnect() async {
@@ -557,7 +397,7 @@ class NotificationService {
       id: id,
       title: title,
       body: body,
-      notificationDetails: const NotificationDetails(
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           'dgm_channel',
           'Gas Meter Alerts',
@@ -567,7 +407,7 @@ class NotificationService {
           color: AppTheme.corporateBlue,
           icon: '@mipmap/ic_launcher',
         ),
-        iOS: DarwinNotificationDetails(
+        iOS: const DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
@@ -640,7 +480,7 @@ class HistoryService extends ChangeNotifier {
   }
 
   Future<bool> syncToBackend({String? accessToken}) async {
-    const baseUrl = const String.fromEnvironment('XP_API_BASE_URL');
+    final baseUrl = const String.fromEnvironment('XP_API_BASE_URL');
     if (baseUrl.isEmpty || _sessions.isEmpty) return false;
     final response = await http.post(
       Uri.parse('$baseUrl/business/usage-history/sync'),
@@ -767,7 +607,8 @@ class _AppStateData extends State<_AppState> {
 // ════════════════════════════════════════════════════════════════════════════
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  final VoidCallback? onLogout;
+  const MainShell({super.key, this.onLogout});
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -780,19 +621,42 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
-    _screens = const [
-      DashboardScreen(),
-      MapScreen(),
-      HistoryScreen(),
-      SettingsScreen(),
+    _screens = [
+      const DashboardScreen(),
+      const MapScreen(),
+      const HistoryScreen(),
+      SettingsScreen(onLogout: widget.onLogout),
     ];
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final width = MediaQuery.sizeOf(context).width;
+    final wide = width >= 900;
+
+    final content = Scaffold(
       body: IndexedStack(index: _index, children: _screens),
       bottomNavigationBar: _buildNav(),
+    );
+
+    if (!wide) return content;
+
+    // Keep the same visual language on desktop/web by centering a phone-like frame
+    return ColoredBox(
+      color: const Color(0xFFE8EEF8),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 960),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: Material(
+              elevation: 10,
+              shadowColor: AppTheme.corporateBlue.withValues(alpha: 0.25),
+              child: content,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -867,11 +731,11 @@ class _DashboardScreenState extends State<DashboardScreen>
         // CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
   }
 
-  // [FIX-08] Hoisted from a nested closure inside initState
+  
   Future<void> _requestPermissions() async {
-    // Bluetooth CONNECT is requested by BluetoothService.startScan() exactly
-    // when the user opens the meter picker. Keep unrelated permissions here.
     await [
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
       Permission.location,
       Permission.notification,
     ].request();
@@ -1464,7 +1328,7 @@ class _MapScreenState extends State<MapScreen> {
   String? _partnerError;
 
   Future<void> _loadPartnerStations() async {
-    const baseUrl =  String.fromEnvironment('XP_API_BASE_URL');
+    final baseUrl = const String.fromEnvironment('XP_API_BASE_URL');
     if (baseUrl.isEmpty) {
       if (mounted) setState(() => _partnerError = 'Partner stations appear when XP Tech API is configured.');
       return;
@@ -1808,7 +1672,8 @@ class _SessionTile extends StatelessWidget {
 // ════════════════════════════════════════════════════════════════════════════
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final VoidCallback? onLogout;
+  const SettingsScreen({super.key, this.onLogout});
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
@@ -1912,20 +1777,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('Business cylinders', style: Theme.of(context).textTheme.labelSmall)),
               Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
                 if (app.cylinders.isEmpty) const ListTile(title: Text('No cylinders added yet'), subtitle: Text('Add a cylinder and assign its location and meter.')),
-                RadioGroup<String>(
-                  groupValue: app.activeCylinderId,
-                  onChanged: (value) => setState(() => app.activeCylinderId = value),
-                  child: Column(
-                    children: app.cylinders
-                        .map((c) => RadioListTile<String>(
-                              value: c.id,
-                              title: Text(c.name),
-                              subtitle: Text('${c.location} • ${c.meterAddress}'),
-                              secondary: Text('${c.cylinderSizeKg.toStringAsFixed(2)} kg'),
-                            ))
-                        .toList(),
-                  ),
-                ),
+                ...app.cylinders.map((c) => RadioListTile<String>(value: c.id, groupValue: app.activeCylinderId, onChanged: (v) => setState(() => app.activeCylinderId = v), title: Text(c.name), subtitle: Text('${c.location} • ${c.meterAddress}'), secondary: Text('${c.cylinderSizeKg.toStringAsFixed(2)} kg'))),
                 TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Cylinder / site name')),
                 TextField(controller: _locationController, decoration: const InputDecoration(labelText: 'Location / branch')),
                 const SizedBox(height: 8),
@@ -1934,6 +1786,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
             const SizedBox(height: 12),
             Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('Developer testing', style: Theme.of(context).textTheme.labelSmall)),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.brightness_6_rounded, color: AppTheme.skyBlue),
+                title: const Text('Theme mode'),
+                subtitle: Text({
+                  ThemeMode.system: 'System',
+                  ThemeMode.light: 'Light',
+                  ThemeMode.dark: 'Dark',
+                }[_ThemeScope.of(context).themeMode]!),
+                trailing: DropdownButton<ThemeMode>(
+                  value: _ThemeScope.of(context).themeMode,
+                  underline: const SizedBox.shrink(),
+                  onChanged: (mode) {
+                    if (mode != null) _ThemeScope.of(context).onThemeModeChanged(mode);
+                  },
+                  items: const [
+                    DropdownMenuItem(value: ThemeMode.system, child: Text('System')),
+                    DropdownMenuItem(value: ThemeMode.light, child: Text('Light')),
+                    DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark')),
+                  ],
+                ),
+              ),
+            ),
+            if (widget.onLogout != null)
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.logout_rounded, color: AppTheme.statusCritical),
+                  title: const Text('Log out'),
+                  onTap: widget.onLogout,
+                ),
+              ),
             Card(child: SwitchListTile(value: app.demoBusinessAccess, onChanged: (value) => setState(() { app.demoBusinessAccess = value; }), secondary: const Icon(Icons.developer_mode, color: AppTheme.skyBlue), title: const Text('Demo business access'), subtitle: const Text('Local-only testing bypass. Remove/disable before production; it is not authentication.'))),
             const Card(child: ListTile(leading: Icon(Icons.info_outline_rounded, color: AppTheme.skyBlue), title: Text('XP Technology Digital Gas Meter'), subtitle: Text('Business backend integration is configurable through XP_API_BASE_URL.'))),
           ]),
