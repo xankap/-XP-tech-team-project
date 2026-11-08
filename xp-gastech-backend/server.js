@@ -12,6 +12,10 @@ const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || '0.0.0.0';
 
 app.disable('x-powered-by');
+// Trust the first proxy hop (Vercel's edge). Required so express-rate-limit
+// reads the real client IP from X-Forwarded-For instead of rejecting every
+// request; direct local connections are unaffected.
+app.set('trust proxy', 1);
 
 // --- CORS (hand-rolled, no extra dependency) ---------------------------------
 // Allows any http(s)://localhost:<port> / 127.0.0.1:<port> origin (Flutter web
