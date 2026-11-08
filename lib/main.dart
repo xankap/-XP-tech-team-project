@@ -28,6 +28,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth_flow.dart';
+import 'services/xp_api.dart';
+import 'widgets/business_gas_card.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:http/http.dart' as http;
@@ -1327,36 +1329,30 @@ class _MapScreenState extends State<MapScreen> {
   bool _loadingPartners = false;
   String? _partnerError;
 
+  final XpApi _api = XpApi();
+
   Future<void> _loadPartnerStations() async {
-    final baseUrl = const String.fromEnvironment('XP_API_BASE_URL');
-    if (baseUrl.isEmpty) {
-      if (mounted) setState(() => _partnerError = 'Partner stations appear when XP Tech API is configured.');
-      return;
-    }
+    if (_loadingPartners) return;
     setState(() { _loadingPartners = true; _partnerError = null; });
     try {
-      final uri = Uri.parse('$baseUrl/partner-stations/nearby').replace(queryParameters: {
-        'latitude': _currentPos.latitude.toString(),
-        'longitude': _currentPos.longitude.toString(),
-        'radiusKm': '10',
+      final stations = await _api.nearbyStations(_currentPos.latitude, _currentPos.longitude, radiusKm: 10);
+      final markers = stations.map((s) => Marker(
+        markerId: MarkerId('xp_${s.id}'),
+        position: LatLng(s.latitude, s.longitude),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+        infoWindow: InfoWindow(
+          title: s.name,
+          snippet: [s.distanceLabel, s.address ?? s.phone ?? ''].where((e) => e.isNotEmpty).join(' · '),
+        ),
+      )).toSet();
+      if (!mounted) return;
+      setState(() {
+        _markers..clear()..addAll(markers);
+        _loadingPartners = false;
+        if (stations.isEmpty) _partnerError = 'No open XP Tech partner stations within 10 km yet.';
       });
-      final response = await http.get(uri).timeout(const Duration(seconds: 12));
-      if (response.statusCode != 200) throw Exception('HTTP ${response.statusCode}');
-      final payload = jsonDecode(response.body) as Map<String, dynamic>;
-      final stations = (payload['stations'] as List<dynamic>? ?? []);
-      final markers = <Marker>{};
-      for (final item in stations) {
-        final station = Map<String, dynamic>.from(item as Map);
-        markers.add(Marker(
-          markerId: MarkerId('xp_${station['id']}'),
-          position: LatLng((station['latitude'] as num).toDouble(), (station['longitude'] as num).toDouble()),
-          infoWindow: InfoWindow(title: station['name']?.toString() ?? 'XP Tech Partner',
-            snippet: station['address']?.toString() ?? station['phone']?.toString() ?? 'Registered XP Tech partner'),
-        ));
-      }
-      if (mounted) setState(() { _markers..clear()..addAll(markers); _loadingPartners = false; });
-    } catch (_) {
-      if (mounted) setState(() { _loadingPartners = false; _partnerError = 'Could not load XP Tech partner stations. Check your connection.'; });
+    } catch (e) {
+      if (mounted) setState(() { _loadingPartners = false; _partnerError = e.toString(); });
     }
   }
 
@@ -1372,6 +1368,7 @@ class _MapScreenState extends State<MapScreen> {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         setState(() => _locLoading = false);
+        await _loadPartnerStations(); // fall back to default city
         return;
       }
 
@@ -1380,12 +1377,14 @@ class _MapScreenState extends State<MapScreen> {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
           setState(() => _locLoading = false);
+          await _loadPartnerStations(); // fall back to default city
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
         setState(() => _locLoading = false);
+        await _loadPartnerStations(); // fall back to default city
         return;
       }
 
@@ -1415,18 +1414,22 @@ class _MapScreenState extends State<MapScreen> {
             markers: _markers,
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
-            onMapCreated: (ctrl) { _mapCtrl = ctrl; if (!_locLoading) _loadPartnerStations(); },
+            onMapCreated: (ctrl) { _mapCtrl = ctrl; },
           ),
           if (_partnerError != null)
             Positioned(left: 16, right: 16, top: 16, child: Card(child: Padding(
-              padding: const EdgeInsets.all(12), child: Text(_partnerError!)))),
+              padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+              child: Row(children: [
+                Expanded(child: Text(_partnerError!)),
+                TextButton(onPressed: _loadPartnerStations, child: const Text('Retry')),
+              ])))),
           if (_loadingPartners)
             const Positioned(top: 16, right: 16, child: Card(child: Padding(
               padding: EdgeInsets.all(8), child: SizedBox(width: 20, height: 20,
                 child: CircularProgressIndicator(strokeWidth: 2))))),
           if (_locLoading)
             Container(
-              color: Colors.white.withValues(alpha: 0.7), // [FIX-06]
+              color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.7), // [FIX-06]
               child: const Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1473,6 +1476,7 @@ class HistoryScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 16),
+                const BusinessGasCard(),
                 if (sessions.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(28),

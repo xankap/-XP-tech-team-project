@@ -15,3 +15,8 @@ android/key.properties
 *.jks
 *.keystore
 docs/API_CONTRACT.md
+xp-gastech-backend/node_modules/
+xp-gastech-backend/*.log
+xp-gastech-backend/server.out.log
+xp-gastech-backend/server.err.log
+xp-gastech-backend/smoke-*.js

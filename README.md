@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-# -XP-tech-team-project
-This project contains the source code for the application that enable users monitor their gas levels and reach out to vendors easyily
-=======
 # XP Technology Digital Gas Meter
 
 Flutter application for Bluetooth gas-meter monitoring, local cooking-session history, business cylinder records, meter calibration, and XP Tech partner-station mapping.
@@ -52,4 +48,3 @@ Flutter application for Bluetooth gas-meter monitoring, local cooking-session hi
 - Keep secrets out of Git; use staging API URLs and restricted keys.
 - Use feature branches and pull requests. Run `flutter analyze` and tests before merging.
 - Keep API DTOs and services separate from widgets as the backend integration grows. The current single-file source is retained to preserve the supplied UI; recommended next refactor is in `docs/PROJECT_STRUCTURE.md`.
->>>>>>> first commit from local
