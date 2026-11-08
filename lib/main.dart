@@ -32,7 +32,6 @@ import 'services/xp_api.dart';
 import 'widgets/business_gas_card.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
@@ -481,23 +480,6 @@ class HistoryService extends ChangeNotifier {
     }).toList()));
   }
 
-  Future<bool> syncToBackend({String? accessToken}) async {
-    final baseUrl = const String.fromEnvironment('XP_API_BASE_URL');
-    if (baseUrl.isEmpty || _sessions.isEmpty) return false;
-    final response = await http.post(
-      Uri.parse('$baseUrl/business/usage-history/sync'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (accessToken != null && accessToken.isNotEmpty) 'Authorization': 'Bearer $accessToken',
-      },
-      body: jsonEncode({'sessions': _sessions.map((s) => {
-        'startedAt': s.start.toUtc().toIso8601String(),
-        'endedAt': s.end.toUtc().toIso8601String(),
-        'gasUsedKg': s.gasUsedKg,
-      }).toList()}),
-    ).timeout(const Duration(seconds: 15));
-    return response.statusCode >= 200 && response.statusCode < 300;
-  }
 
   void recordReading(GasReading r) {
     if (r.weightKg <= 0) return;
@@ -1564,13 +1546,27 @@ class HistoryScreen extends StatelessWidget {
                 if (appBusinessSyncAvailable(context))
                   Padding(padding: const EdgeInsets.all(16), child: OutlinedButton.icon(
                     onPressed: () async {
-                      try {
-                        final ok = await historyService.syncToBackend();
-                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? 'Usage history synced.' : 'History was not synced. Check API configuration and try again.')));
-                      } catch (_) {
-                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('History sync failed. Check your internet connection and API configuration.')));
+                      final bt = _AppState.of(context).btService;
+                      if (bt.state != BtState.connected) {
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connect to your meter first, then sync the live reading.')));
+                        return;
                       }
-                    }, icon: const Icon(Icons.cloud_upload_outlined), label: const Text('Sync history to XP Tech'))),
+                      try {
+                        final reading = bt.latest;
+                        final appState = _AppState.of(context);
+                        final active = appState.cylinders.where((c) => c.id == appState.activeCylinderId);
+                        await XpApi().postGasReading(
+                          percentLeft: reading.percentage,
+                          kgLeft: reading.weightKg > 0 ? reading.weightKg : null,
+                          cylinderLabel: active.isEmpty ? null : active.first.name,
+                        );
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Live reading synced to XP Tech.')));
+                      } on XpApiException catch (e) {
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+                      } catch (_) {
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sync failed. Check your connection and API configuration.')));
+                      }
+                    }, icon: const Icon(Icons.cloud_upload_outlined), label: const Text('Sync live reading to XP Tech'))),
                 const SizedBox(height: 32),
                 ],
               ],

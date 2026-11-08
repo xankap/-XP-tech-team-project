@@ -1,30 +1,34 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:xp_gas_monitor/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const DGMApp());
+  group('GasReading.fromSerial (meter packet contract)', () {
+    test('parses a full meter packet', () {
+      final r = GasReading.fromSerial('GAS:72.5,W:5.8,BAT:88,LEAK:0\r\n');
+      expect(r.percentage, 72.5);
+      expect(r.weightKg, 5.8);
+      expect(r.batterySoc, 88);
+      expect(r.leakStatus, LeakStatus.ok);
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('maps leak levels to warning and critical', () {
+      expect(GasReading.fromSerial('GAS:10,W:1,BAT:50,LEAK:1').leakStatus,
+          LeakStatus.warning);
+      expect(GasReading.fromSerial('GAS:10,W:1,BAT:50,LEAK:2').leakStatus,
+          LeakStatus.critical);
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    test('clamps out-of-range values', () {
+      final r = GasReading.fromSerial('GAS:150,W:2,BAT:120,LEAK:0');
+      expect(r.percentage, 100);
+      expect(r.batterySoc, 100);
+    });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('returns an empty reading for a malformed packet', () {
+      final r = GasReading.fromSerial('GAS:abc,W:x,BAT:y,LEAK:z');
+      expect(r.percentage, 0);
+      expect(r.leakStatus, LeakStatus.unknown);
+    });
   });
 }

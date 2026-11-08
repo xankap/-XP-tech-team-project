@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "db:test": "node -e \"require(\"./server.js\")\""
+    "db:test": "node -e \"require(\"./server.js\")\"",
+    "db:seed": "node scripts/seed_demo.js"
   },
   "keywords": [],
   "author": "",
