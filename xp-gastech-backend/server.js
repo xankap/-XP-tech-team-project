@@ -5,7 +5,7 @@ const { pool } = require('./src/db/pool');
 const authRoutes = require('./src/routes/auth');
 const retailerRoutes = require('./src/routes/retailers');
 const businessRoutes = require('./src/routes/businesses');
-const { getTwilioConfig } = require('./src/services/twilio');
+const { getAfricasTalkingConfig } = require('./src/services/africasTalking');
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -50,10 +50,10 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '32kb' }));
 
 app.get('/health', (_req, res) => {
-  const twilio = getTwilioConfig();
+  const africasTalking = getAfricasTalkingConfig();
   res.json({
     ok: true,
-    twilioConfigured: twilio.configured,
+    smsConfigured: africasTalking.configured,
     googleConfigured: Boolean(process.env.GOOGLE_CLIENT_ID),
   });
 });
@@ -105,8 +105,8 @@ async function main() {
   if (process.env.RUN_SERVER === '1') {
     const server = app.listen(port, host, () => {
       console.log(`XP GasTech API listening on http://${host}:${port}`);
-      const twilio = getTwilioConfig();
-      console.log(twilio.configured ? 'Twilio configured' : 'Twilio not fully configured — set TWILIO_* in .env');
+      const africasTalking = getAfricasTalkingConfig();
+      console.log(africasTalking.configured ? 'Africa\'s Talking configured' : 'Africa\'s Talking not fully configured — set AFRICASTALKING_* in .env');
       console.log(process.env.GOOGLE_CLIENT_ID ? 'Google OAuth configured' : 'GOOGLE_CLIENT_ID missing — Google sign-in disabled');
     });
     server.on('error', (err) => {

@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { pool } = require('../db/pool');
-const { sendSms, getTwilioConfig } = require('./twilio');
+const { sendSms, getAfricasTalkingConfig } = require('./africasTalking');
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -65,19 +65,19 @@ async function sendSmsCode(phoneRaw) {
     client.release();
   }
 
-  const twilio = getTwilioConfig();
-  if (twilio.configured) {
+  const africasTalking = getAfricasTalkingConfig();
+  if (africasTalking.configured) {
     await sendSms(phone, `Your XP GasTech verification code is ${code}. It expires in 10 minutes.`);
-    return { ok: true, phone, twilioConfigured: true, expiresInSeconds: 600 };
+    return { ok: true, phone, smsConfigured: true, expiresInSeconds: 600 };
   }
 
-  // Dev fallback when Twilio env is empty — never log the code in production logs beyond this flag
+  // Dev fallback when SMS provider env is empty — never log the code in production logs beyond this flag
   const payload = {
     ok: true,
     phone,
-    twilioConfigured: false,
+    smsConfigured: false,
     expiresInSeconds: 600,
-    message: 'Twilio credentials missing. Set TWILIO_* in .env to send real SMS.',
+    message: 'SMS credentials missing. Set AFRICASTALKING_* in .env to send real SMS.',
   };
   if (process.env.NODE_ENV !== 'production') {
     payload.devCode = code;
