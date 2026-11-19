@@ -30,9 +30,9 @@ class AuthResult {
 /// Backend health snapshot from GET /health.
 class BackendHealth {
   final bool ok;
-  final bool twilioConfigured;
+  final bool smsConfigured;
   final bool googleConfigured;
-  const BackendHealth({required this.ok, required this.twilioConfigured, required this.googleConfigured});
+  const BackendHealth({required this.ok, required this.smsConfigured, required this.googleConfigured});
 }
 
 /// Single place for all auth HTTP calls to xp-gastech-backend.
@@ -69,7 +69,7 @@ class AuthApi {
     final json = await _send(() => _client.get(Uri.parse('$baseUrl/health')), fallbackError: 'Health check failed');
     return BackendHealth(
       ok: json['ok'] == true,
-      twilioConfigured: json['twilioConfigured'] == true,
+      smsConfigured: json['smsConfigured'] == true,
       googleConfigured: json['googleConfigured'] == true,
     );
   }
