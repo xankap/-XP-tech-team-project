@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
+import 'session_controller.dart';
 
 /// Error with a user-facing [message].
 class XpApiException implements Exception {
@@ -61,21 +61,39 @@ class BusinessGasSummary {
 
 /// Data API for xp-gastech-backend (retailers, business gas). Auth endpoints live in AuthApi.
 class XpApi {
-  XpApi({http.Client? client}) : _client = client ?? http.Client();
+  XpApi({http.Client? client, SessionController? session})
+      : _client = client ?? http.Client(),
+        _sessionOverride = session;
   final http.Client _client;
-  static const _tokenKey = 'xp_auth_access_token';
+  final SessionController? _sessionOverride;
+
+  SessionController? get _session => _sessionOverride ?? SessionController.instance;
 
   Uri _uri(String path, [Map<String, String>? q]) =>
       Uri.parse('${AppConfig.apiBaseUrl}$path').replace(queryParameters: q);
 
-  Future<Map<String, String>> _headers({bool auth = false}) async {
-    final h = <String, String>{'Content-Type': 'application/json', 'Accept': 'application/json'};
-    if (auth) {
-      final token = (await SharedPreferences.getInstance()).getString(_tokenKey);
-      if (token == null || token.isEmpty) throw const XpApiException('Please sign in again.', statusCode: 401);
-      h['Authorization'] = 'Bearer $token';
+  Map<String, String> _headers({String? token}) => {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+  /// Authenticated request: attaches the access token and, on a 401, refreshes
+  /// the session once and retries. A rejected refresh signs the user out.
+  Future<Map<String, dynamic>> _sendAuthed(Future<http.Response> Function(Map<String, String> headers) req) async {
+    final session = _session;
+    final token = session?.accessToken;
+    if (session == null || token == null) {
+      throw const XpApiException('Please sign in again.', statusCode: 401);
     }
-    return h;
+    try {
+      return await _send(() => req(_headers(token: token)));
+    } on XpApiException catch (e) {
+      if (e.statusCode != 401) rethrow;
+      final fresh = await session.refreshAccessToken();
+      if (fresh == null) rethrow;
+      return _send(() => req(_headers(token: fresh)));
+    }
   }
 
   Future<Map<String, dynamic>> _send(Future<http.Response> Function() req) async {
@@ -102,15 +120,14 @@ class XpApi {
   Future<List<PartnerStation>> nearbyStations(double lat, double lng, {double radiusKm = 10}) async {
     final body = await _send(() async => _client.get(
         _uri('/retailers/nearby', {'lat': '$lat', 'lng': '$lng', 'radius': '${(radiusKm * 1000).round()}'}),
-        headers: await _headers()));
+        headers: _headers()));
     return (body['stations'] as List? ?? const [])
         .map((e) => PartnerStation.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
   }
 
   Future<BusinessGasSummary> myGas({int weeks = 8}) async {
-    final body = await _send(() async =>
-        _client.get(_uri('/businesses/me/gas', {'weeks': '$weeks'}), headers: await _headers(auth: true)));
+    final body = await _sendAuthed((h) => _client.get(_uri('/businesses/me/gas', {'weeks': '$weeks'}), headers: h));
     final l = body['latest'] as Map?;
     return BusinessGasSummary(
       latestKg: (l?['kgLeft'] as num?)?.toDouble(),
@@ -125,13 +142,14 @@ class XpApi {
   }
 
   Future<void> postGasReading({double? kgLeft, double? percentLeft, String? cylinderLabel}) async {
-    await _send(() async => _client.post(_uri('/businesses/me/gas-readings'),
-        headers: await _headers(auth: true),
+    final recordedAt = DateTime.now().toUtc().toIso8601String();
+    await _sendAuthed((h) => _client.post(_uri('/businesses/me/gas-readings'),
+        headers: h,
         body: jsonEncode({
           if (kgLeft != null) 'kgLeft': kgLeft,
           if (percentLeft != null) 'percentLeft': percentLeft,
           if (cylinderLabel != null) 'cylinderLabel': cylinderLabel,
-          'recordedAt': DateTime.now().toUtc().toIso8601String(),
+          'recordedAt': recordedAt,
         })));
   }
 }

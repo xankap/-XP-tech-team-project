@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:xp_gas_monitor/screens/auth_flow.dart';
+import 'package:xp_gas_monitor/services/session_controller.dart';
+import 'package:xp_gas_monitor/services/session_store.dart';
 import 'package:xp_gas_monitor/widgets/xp_logo.dart';
 
 Finder _logoImage() => find.byWidgetPredicate((w) =>
@@ -19,7 +21,9 @@ void main() {
   testWidgets('XP Tech logo shows on landing, greeting and login screens', (tester) async {
     for (final size in const [Size(390, 844), Size(1280, 800)]) {
       await tester.binding.setSurfaceSize(size);
-      await tester.pumpWidget(MaterialApp(home: AuthBootstrapFlow(homeBuilder: (_) => const SizedBox())));
+      final session = SessionController(store: SessionStore(MemorySessionStorage(), migrateLegacyPrefs: false));
+      await session.restore();
+      await tester.pumpWidget(MaterialApp(home: AuthBootstrapFlow(session: session, homeBuilder: (onLogout, user) => const SizedBox())));
       await tester.pump();
 
       // Landing page

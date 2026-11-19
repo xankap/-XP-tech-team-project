@@ -28,6 +28,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth_flow.dart';
+import 'services/session_controller.dart';
+import 'services/session_store.dart';
 import 'services/xp_api.dart';
 import 'widgets/business_gas_card.dart';
 import 'package:flutter/services.dart';
@@ -85,7 +87,14 @@ Future<void> main() async {
     settings: const InitializationSettings(android: android, iOS: ios),
   );
 
-  runApp(const DGMApp()); // [FIX-01] was missing entirely
+  // Signed-in check is LOCAL ONLY (secure storage / localStorage), so the app
+  // opens straight to home with no network. Validation happens later, in the
+  // background, inside AuthBootstrapFlow.
+  final session = SessionController(store: SessionStore.platformDefault());
+  SessionController.instance = session;
+  await session.restore();
+
+  runApp(DGMApp(session: session)); // [FIX-01] was missing entirely
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -93,7 +102,8 @@ Future<void> main() async {
 // ════════════════════════════════════════════════════════════════════════════
 
 class DGMApp extends StatefulWidget {
-  const DGMApp({super.key});
+  final SessionController session;
+  const DGMApp({super.key, required this.session});
 
   @override
   State<DGMApp> createState() => _DGMAppState();
@@ -116,10 +126,11 @@ class _DGMAppState extends State<DGMApp> {
         darkTheme: AppTheme.dark,
         themeMode: _themeMode,
         home: AuthBootstrapFlow(
-          homeBuilder: (onLogout) => _ThemeScope(
+          session: widget.session,
+          homeBuilder: (onLogout, user) => _ThemeScope(
             themeMode: _themeMode,
             onThemeModeChanged: _setThemeMode,
-            child: MainShell(onLogout: onLogout),
+            child: MainShell(onLogout: onLogout, accountLabel: user.displayName),
           ),
         ),
       ),
@@ -592,7 +603,10 @@ class _AppStateData extends State<_AppState> {
 
 class MainShell extends StatefulWidget {
   final VoidCallback? onLogout;
-  const MainShell({super.key, this.onLogout});
+
+  /// Signed-in account shown in Settings (available offline).
+  final String? accountLabel;
+  const MainShell({super.key, this.onLogout, this.accountLabel});
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -600,18 +614,12 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _index = 0;
-  late final List<Widget> _screens;
-
-  @override
-  void initState() {
-    super.initState();
-    _screens = [
-      const DashboardScreen(),
-      const MapScreen(),
-      const HistoryScreen(),
-      SettingsScreen(onLogout: widget.onLogout),
-    ];
-  }
+  List<Widget> get _screens => [
+        const DashboardScreen(),
+        const MapScreen(),
+        const HistoryScreen(),
+        SettingsScreen(onLogout: widget.onLogout, accountLabel: widget.accountLabel),
+      ];
 
   @override
   Widget build(BuildContext context) {
@@ -1673,7 +1681,8 @@ class _SessionTile extends StatelessWidget {
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback? onLogout;
-  const SettingsScreen({super.key, this.onLogout});
+  final String? accountLabel;
+  const SettingsScreen({super.key, this.onLogout, this.accountLabel});
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
@@ -1688,6 +1697,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _sizeController.dispose(); _nameController.dispose(); _locationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _confirmLogout() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text(
+            'This removes your saved login from this device. You will need an internet connection to log in again.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            key: const Key('confirm-logout'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Log out', style: TextStyle(color: AppTheme.statusCritical)),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) widget.onLogout?.call();
   }
 
   Future<void> _sendEmptyWeight(BluetoothService bt) async {
@@ -1812,9 +1841,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (widget.onLogout != null)
               Card(
                 child: ListTile(
+                  key: const Key('logout-tile'),
                   leading: const Icon(Icons.logout_rounded, color: AppTheme.statusCritical),
                   title: const Text('Log out'),
-                  onTap: widget.onLogout,
+                  subtitle: widget.accountLabel == null ? null : Text('Signed in as ${widget.accountLabel}'),
+                  onTap: _confirmLogout,
                 ),
               ),
             Card(child: SwitchListTile(value: app.demoBusinessAccess, onChanged: (value) => setState(() { app.demoBusinessAccess = value; }), secondary: const Icon(Icons.developer_mode, color: AppTheme.skyBlue), title: const Text('Demo business access'), subtitle: const Text('Local-only testing bypass. Remove/disable before production; it is not authentication.'))),

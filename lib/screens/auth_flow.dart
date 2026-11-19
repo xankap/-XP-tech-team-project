@@ -2,67 +2,107 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/auth_api.dart';
 import '../services/google_auth.dart';
+import '../services/session_controller.dart';
+import '../services/session_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/gauge_loading.dart';
 import '../widgets/google_sign_in_button.dart';
 import '../widgets/xp_logo.dart';
 
-const _tokenKey = 'xp_auth_access_token';
-const _emailKey = 'xp_auth_email';
+/// Signature for building the signed-in home.
+typedef HomeBuilder = Widget Function(VoidCallback onLogout, UserProfile user);
 
-/// Landing → logo greeting → gauge loading → login.
+/// Startup router.
+///
+/// * Stored session present  -> home immediately (no network needed).
+/// * No session, first run   -> landing -> logo greeting -> gauge loading -> login.
+/// * After logout / expiry   -> straight to login.
+///
+/// Once signed in, the session is checked with the backend in the background
+/// (after the first frame and when the app returns to the foreground).
 class AuthBootstrapFlow extends StatefulWidget {
-  final Widget Function(VoidCallback onLogout) homeBuilder;
-  const AuthBootstrapFlow({super.key, required this.homeBuilder});
+  final SessionController session;
+  final HomeBuilder homeBuilder;
+
+  /// Minimum time between foreground re-validations.
+  final Duration revalidateEvery;
+
+  /// Auth API used by the login page (injectable for tests).
+  final AuthApi? api;
+  const AuthBootstrapFlow({
+    super.key,
+    required this.session,
+    required this.homeBuilder,
+    this.revalidateEvery = const Duration(minutes: 5),
+    this.api,
+  });
 
   @override
   State<AuthBootstrapFlow> createState() => _AuthBootstrapFlowState();
 }
 
-enum _BootStep { landing, logo, loading, login, home }
+enum _BootStep { landing, logo, loading, login }
 
-class _AuthBootstrapFlowState extends State<AuthBootstrapFlow> {
+class _AuthBootstrapFlowState extends State<AuthBootstrapFlow> with WidgetsBindingObserver {
   _BootStep _step = _BootStep.landing;
-  String? _token;
-  String? _email;
+  bool _wasSignedIn = false;
+  DateTime? _lastValidation;
+
+  SessionController get _session => widget.session;
 
   @override
   void initState() {
     super.initState();
-    _restoreSession();
-  }
-
-  Future<void> _restoreSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString(_tokenKey);
-    final email = prefs.getString(_emailKey);
-    if (!mounted) return;
-    if (token != null && token.isNotEmpty) {
-      setState(() {
-        _token = token;
-        _email = email;
-        _step = _BootStep.home;
-      });
+    WidgetsBinding.instance.addObserver(this);
+    _session.addListener(_onSessionChanged);
+    _wasSignedIn = _session.isSignedIn;
+    if (!_wasSignedIn && _session.signOutReason != SignOutReason.none) _step = _BootStep.login;
+    if (_wasSignedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _validate(force: true));
     }
   }
 
-  Future<void> _persistSession(String token, String email) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
-    await prefs.setString(_emailKey, email);
+  @override
+  void didUpdateWidget(covariant AuthBootstrapFlow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.session != widget.session) {
+      oldWidget.session.removeListener(_onSessionChanged);
+      widget.session.addListener(_onSessionChanged);
+    }
   }
 
-  Future<void> _clearSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
-    await prefs.remove(_emailKey);
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _session.removeListener(_onSessionChanged);
+    super.dispose();
   }
 
-  void _goLandingNext() => setState(() => _step = _BootStep.logo);
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _validate();
+  }
+
+  void _validate({bool force = false}) {
+    if (!_session.isSignedIn) return;
+    final now = DateTime.now();
+    if (!force && _lastValidation != null && now.difference(_lastValidation!) < widget.revalidateEvery) return;
+    _lastValidation = now;
+    // Fire-and-forget: never blocks the UI, never logs out on network errors.
+    unawaited(_session.validateInBackground());
+  }
+
+  void _onSessionChanged() {
+    if (!mounted) return;
+    final signedIn = _session.isSignedIn;
+    setState(() {
+      if (_wasSignedIn && !signedIn) _step = _BootStep.login;
+      _wasSignedIn = signedIn;
+    });
+  }
 
   Future<void> _runLogoThenLoading() async {
     setState(() => _step = _BootStep.logo);
@@ -74,29 +114,21 @@ class _AuthBootstrapFlowState extends State<AuthBootstrapFlow> {
     setState(() => _step = _BootStep.login);
   }
 
-  Future<void> _onLoggedIn(String token, String email) async {
-    await _persistSession(token, email);
-    if (!mounted) return;
-    setState(() {
-      _token = token;
-      _email = email;
-      _step = _BootStep.home;
-    });
+  Future<void> _onLoggedIn(AuthResult result, String method, String fallbackId) async {
+    await _session.signIn(result, method: method, fallbackId: fallbackId);
+    _lastValidation = DateTime.now();
   }
 
   Future<void> _logout() async {
-    await _clearSession();
+    await _session.logout();
     await GoogleAuth.signOut();
-    if (!mounted) return;
-    setState(() {
-      _token = null;
-      _email = null;
-      _step = _BootStep.landing;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_session.isSignedIn) {
+      return widget.homeBuilder(_logout, _session.user ?? const UserProfile());
+    }
     switch (_step) {
       case _BootStep.landing:
         return _LandingPage(onContinue: _runLogoThenLoading);
@@ -105,9 +137,13 @@ class _AuthBootstrapFlowState extends State<AuthBootstrapFlow> {
       case _BootStep.loading:
         return const _BootLoadingPage();
       case _BootStep.login:
-        return LoginPage(onSuccess: _onLoggedIn);
-      case _BootStep.home:
-        return widget.homeBuilder(_logout);
+        return LoginPage(
+          api: widget.api,
+          onSuccess: _onLoggedIn,
+          notice: _session.signOutReason == SignOutReason.expired
+              ? 'Your session has ended. Please log in again.'
+              : null,
+        );
     }
   }
 }
@@ -230,9 +266,16 @@ class _BootLoadingPage extends StatelessWidget {
   }
 }
 
+/// Called after a successful login: (result, method 'email'|'phone'|'google', fallback identifier).
+typedef LoginSuccess = Future<void> Function(AuthResult result, String method, String fallbackId);
+
 class LoginPage extends StatefulWidget {
-  final Future<void> Function(String token, String email) onSuccess;
-  const LoginPage({super.key, required this.onSuccess});
+  final LoginSuccess onSuccess;
+
+  /// Optional banner, e.g. after the session expired.
+  final String? notice;
+  final AuthApi? api;
+  const LoginPage({super.key, required this.onSuccess, this.notice, this.api});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -242,7 +285,7 @@ enum _AuthTab { login, signup }
 enum _SignupMethod { chooser, email, phone }
 
 class _LoginPageState extends State<LoginPage> {
-  final _api = AuthApi();
+  late final AuthApi _api = widget.api ?? AuthApi();
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _phone = TextEditingController();
@@ -253,6 +296,13 @@ class _LoginPageState extends State<LoginPage> {
   bool _codeSent = false;
   String? _error;
   String? _info;
+
+  /// Email that still needs verification (after sign-up or a 403 on login).
+  String? _verifyEmail;
+
+  /// True right after sign-up: show the "check your inbox" panel instead of the form.
+  bool _signupDone = false;
+  DateTime? _lastResend;
 
   late final Future<void> _googleReady;
   StreamSubscription<GoogleSignInAuthenticationEvent>? _googleSub;
@@ -317,6 +367,8 @@ class _LoginPageState extends State<LoginPage> {
       _error = null;
       _info = null;
       _codeSent = false;
+      _signupDone = false;
+      _verifyEmail = null;
     });
   }
 
@@ -351,9 +403,20 @@ class _LoginPageState extends State<LoginPage> {
     final email = _email.text.trim();
     final password = _password.text;
     if (!_validEmailPassword(email, password)) return;
+    setState(() => _verifyEmail = null);
     await _run(() async {
-      final result = await _api.login(email: email, password: password);
-      await widget.onSuccess(result.token, result.displayId(email));
+      try {
+        final result = await _api.login(email: email, password: password);
+        await widget.onSuccess(result, 'email', email);
+      } on AuthApiException catch (e) {
+        if (!e.isEmailNotVerified) rethrow;
+        if (mounted) {
+          setState(() {
+            _verifyEmail = email;
+            _error = 'Please verify your email first. Check your inbox for the link, or resend it below.';
+          });
+        }
+      }
     });
   }
 
@@ -364,8 +427,51 @@ class _LoginPageState extends State<LoginPage> {
     if (!_validEmailPassword(email, password)) return;
     await _run(() async {
       final result = await _api.signup(email: email, password: password, phone: phone);
-      await widget.onSuccess(result.token, result.displayId(email));
+      final session = result.session;
+      if (session != null) {
+        // Older backend without email verification: signed in directly.
+        await widget.onSuccess(session, 'email', email);
+        return;
+      }
+      if (mounted) {
+        setState(() {
+          _verifyEmail = email;
+          _signupDone = true;
+          _password.clear();
+          _info = result.message;
+          _lastResend = result.emailSent ? DateTime.now() : null;
+        });
+      }
     });
+  }
+
+  static const _resendCooldown = Duration(seconds: 60);
+
+  Future<void> _resendVerification() async {
+    final email = _verifyEmail;
+    if (email == null) return;
+    final last = _lastResend;
+    if (last != null && DateTime.now().difference(last) < _resendCooldown) {
+      final wait = _resendCooldown - DateTime.now().difference(last);
+      setState(() => _error = 'Please wait ${wait.inSeconds + 1}s before resending.');
+      return;
+    }
+    await _run(() async {
+      final message = await _api.resendVerification(email: email);
+      if (mounted) {
+        setState(() {
+          _lastResend = DateTime.now();
+          _info = message;
+        });
+      }
+    });
+  }
+
+  void _backToLoginWithEmail() {
+    final email = _verifyEmail;
+    _switchTab(_AuthTab.login);
+    if (email != null) _email.text = email;
+    setState(() => _verifyEmail = email);
   }
 
   Future<void> _sendSmsCode() async {
@@ -394,7 +500,7 @@ class _LoginPageState extends State<LoginPage> {
     }
     await _run(() async {
       final result = await _api.verifySmsCode(phone: phone, code: code);
-      await widget.onSuccess(result.token, result.displayId(phone));
+      await widget.onSuccess(result, 'phone', phone);
     });
   }
 
@@ -414,7 +520,7 @@ class _LoginPageState extends State<LoginPage> {
         throw AuthApiException(GoogleAuth.describeError(e));
       }
       final result = await _api.google(idToken: idToken);
-      await widget.onSuccess(result.token, result.displayId(account.email));
+      await widget.onSuccess(result, 'google', account.email);
     });
   }
 
@@ -428,7 +534,7 @@ class _LoginPageState extends State<LoginPage> {
         throw AuthApiException(GoogleAuth.describeError(e));
       }
       final result = await _api.google(idToken: idToken);
-      await widget.onSuccess(result.token, result.email ?? 'Google user');
+      await widget.onSuccess(result, 'google', result.email ?? 'Google user');
     });
   }
 
@@ -609,6 +715,18 @@ class _LoginPageState extends State<LoginPage> {
           onSubmitted: (_) => _submitLogin(),
         ),
         _messages(context),
+        if (_verifyEmail != null) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('resend-verification'),
+              onPressed: _busy ? null : _resendVerification,
+              icon: const Icon(Icons.mark_email_unread_outlined),
+              label: const Text('Resend verification email'),
+            ),
+          ),
+        ],
         const SizedBox(height: 22),
         SizedBox(
           width: double.infinity,
@@ -637,11 +755,53 @@ class _LoginPageState extends State<LoginPage> {
           subtitle: 'Use email and a secure password',
           onTap: () => setState(() {
             _signupMethod = _SignupMethod.email;
+            _signupDone = false;
             _error = null;
           }),
         ),
         _googleOption(context),
         _messages(context),
+      ];
+
+  List<Widget> _verifyEmailPanel(BuildContext context) => [
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppTheme.corporateBlue.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              const Icon(Icons.mark_email_read_outlined, size: 44, color: AppTheme.corporateBlue),
+              const SizedBox(height: 10),
+              Text('Verify your email', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              Text(
+                'We sent a verification link to ${_verifyEmail ?? 'your email'}. Open it, then come back and log in.',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+        _messages(context),
+        const SizedBox(height: 18),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            key: const Key('resend-verification'),
+            onPressed: _busy ? null : _resendVerification,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Resend verification email'),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _busy ? null : _backToLoginWithEmail,
+            child: const Text('I verified it — log in'),
+          ),
+        ),
       ];
 
   List<Widget> _signupEmailForm(BuildContext context) => [
@@ -734,7 +894,7 @@ class _LoginPageState extends State<LoginPage> {
     } else if (_signupMethod == _SignupMethod.chooser) {
       body = _signupChooser(context);
     } else if (_signupMethod == _SignupMethod.email) {
-      body = _signupEmailForm(context);
+      body = _signupDone ? _verifyEmailPanel(context) : _signupEmailForm(context);
     } else {
       body = _signupPhoneForm(context);
     }
@@ -761,6 +921,21 @@ class _LoginPageState extends State<LoginPage> {
                     Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
                     Text(subtitle, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
+                    if (widget.notice != null) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.errorContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          widget.notice!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 22),
                     _modeToggle(context),
                     const SizedBox(height: 22),

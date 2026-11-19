@@ -1,29 +1,13 @@
 const { OAuth2Client } = require('google-auth-library');
-const jwt = require('jsonwebtoken');
 const { pool } = require('../db/pool');
 const { publicUser } = require('./emailAuth');
-
-const JWT_EXPIRES = '7d';
+const { issueSession } = require('./sessions');
 
 function getGoogleClientId() {
   return (process.env.GOOGLE_CLIENT_ID || '').trim();
 }
 
-function signToken(user) {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    const err = new Error('JWT_SECRET is not configured');
-    err.status = 500;
-    throw err;
-  }
-  return jwt.sign(
-    { sub: user.id, email: user.email || null, phone: user.phone || null, typ: 'access' },
-    secret,
-    { expiresIn: JWT_EXPIRES }
-  );
-}
-
-async function loginWithGoogleIdToken(idToken) {
+async function loginWithGoogleIdToken(idToken, ctx = {}) {
   if (typeof idToken !== 'string' || !idToken.trim()) {
     const err = new Error('idToken is required');
     err.status = 400;
@@ -92,7 +76,7 @@ async function loginWithGoogleIdToken(idToken) {
     user = inserted.rows[0];
   }
 
-  const token = signToken(user);
+  const session = await issueSession(user, ctx);
   return {
     user: {
       ...publicUser(user),
@@ -100,7 +84,7 @@ async function loginWithGoogleIdToken(idToken) {
       name: fullName,
       picture,
     },
-    token,
+    ...session,
   };
 }
 

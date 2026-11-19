@@ -33,7 +33,14 @@ class GoogleAuth {
       GoogleSignIn.instance.authenticationEvents;
 
   /// True where we can open the Google flow from our own button (mobile/desktop).
-  static bool get supportsCustomButton => !kIsWeb && GoogleSignIn.instance.supportsAuthenticate();
+  static bool get supportsCustomButton {
+    if (kIsWeb) return false;
+    try {
+      return GoogleSignIn.instance.supportsAuthenticate();
+    } catch (_) {
+      return false; // no platform implementation (e.g. unit tests, unsupported desktop)
+    }
+  }
 
   /// Interactive sign-in for non-web platforms. Returns the Google ID token.
   static Future<String> signInForIdToken() async {

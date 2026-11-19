@@ -1,8 +1,8 @@
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const { pool } = require('../db/pool');
 const { sendSms, getSmsConfig } = require('./sendchamp');
+const { issueSession } = require('./sessions');
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -93,7 +93,7 @@ async function sendSmsCode(phoneRaw) {
   return payload;
 }
 
-async function verifySmsCode(phoneRaw, codeRaw) {
+async function verifySmsCode(phoneRaw, codeRaw, ctx = {}) {
   const phone = normalizePhone(phoneRaw);
   const code = typeof codeRaw === 'string' ? codeRaw.trim() : '';
   if (!phone) {
@@ -114,6 +114,7 @@ async function verifySmsCode(phoneRaw, codeRaw) {
     throw err;
   }
 
+  let user;
   const client = await pool.connect();
   try {
     await client.query('begin');
@@ -163,30 +164,26 @@ async function verifySmsCode(phoneRaw, codeRaw) {
       `update sms_verification_codes set consumed_at = now() where id = $1`,
       [row.id]
     );
-    const user = await upsertUserByPhone(client, phone);
+    user = await upsertUserByPhone(client, phone);
     await client.query(
       `update users set phone_verified_at = coalesce(phone_verified_at, now()) where id = $1`,
       [user.id]
     );
     await client.query('commit');
-
-    const token = jwt.sign(
-      { sub: user.id, phone: user.phone, typ: 'access' },
-      secret,
-      { expiresIn: '7d' }
-    );
-
-    return {
-      ok: true,
-      token,
-      user: { id: user.id, email: user.email, phone: user.phone, created_at: user.created_at },
-    };
   } catch (e) {
     try { await client.query('rollback'); } catch (_) {}
     throw e;
   } finally {
     client.release();
   }
+
+  // Issued after the OTP transaction so the pooled connection is free again.
+  const session = await issueSession(user, ctx);
+  return {
+    ok: true,
+    ...session,
+    user: { id: user.id, email: user.email, phone: user.phone, created_at: user.created_at },
+  };
 }
 
 module.exports = { sendSmsCode, verifySmsCode, normalizePhone, buildOtpMessage };

@@ -4,7 +4,9 @@ const { sendSmsCode, verifySmsCode } = require('../services/smsAuth');
 const { signup, login, verifyEmailToken, resendVerification } = require('../services/emailAuth');
 const { getEmailConfig, esc, layout } = require('../services/sendchampEmail');
 const { loginWithGoogleIdToken } = require('../services/googleAuth');
+const jwt = require('jsonwebtoken');
 const { requireAuth } = require('../middleware/auth');
+const { refreshSession, revokeSession, revokeFamily } = require('../services/sessions');
 
 const router = express.Router();
 
@@ -15,7 +17,7 @@ function sendError(res, err, fallback, defaultStatus = 500) {
   if (!err.status) console.error(`[auth] ${fallback}:`, err);
   const message = err.status ? err.message || fallback : fallback;
   const body = { error: message };
-  if (err.status && err.code === 'EMAIL_NOT_VERIFIED') body.code = err.code;
+  if (err.status && ['EMAIL_NOT_VERIFIED', 'INVALID_REFRESH_TOKEN', 'REFRESH_RACE'].includes(err.code)) body.code = err.code;
   res.status(status).json(body);
 }
 
@@ -54,6 +56,19 @@ const verifyLimiter = rateLimit({
 const resendLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Try again later.' },
+});
+
+// Device context stored with a refresh-token session (both optional, truncated server-side).
+function sessionCtx(req) {
+  return { deviceLabel: req.body?.deviceLabel, userAgent: req.get('user-agent') };
+}
+
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Try again later.' },
@@ -115,7 +130,7 @@ router.post('/login', authLimiter, async (req, res) => {
     const result = await login({
       email: req.body?.email,
       password: req.body?.password,
-    });
+    }, sessionCtx(req));
     res.status(200).json(result);
   } catch (err) {
     sendError(res, err, 'Login failed');
@@ -125,7 +140,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
 router.post('/google', authLimiter, async (req, res) => {
   try {
-    const result = await loginWithGoogleIdToken(req.body?.idToken);
+    const result = await loginWithGoogleIdToken(req.body?.idToken, sessionCtx(req));
     res.status(200).json(result);
   } catch (err) {
     sendError(res, err, 'Google login failed');
@@ -133,7 +148,36 @@ router.post('/google', authLimiter, async (req, res) => {
 });
 
 router.get('/me', requireAuth, async (req, res) => {
-  res.status(200).json({ user: req.user });
+  res.set('Cache-Control', 'no-store').status(200).json({ user: req.user });
+});
+
+// Exchange a refresh token for a new access token + rotated refresh token.
+router.post('/refresh', refreshLimiter, async (req, res) => {
+  try {
+    const result = await refreshSession(req.body?.refreshToken, sessionCtx(req));
+    res.set('Cache-Control', 'no-store').status(200).json(result);
+  } catch (err) {
+    sendError(res, err, 'Refresh failed');
+  }
+});
+
+// Revoke this device's login. Accepts the refresh token in the body and/or a
+// Bearer access token (revokes its session). Always 200 so logout never blocks.
+router.post('/logout', refreshLimiter, async (req, res) => {
+  try {
+    await revokeSession(req.body?.refreshToken);
+    const header = req.headers.authorization || '';
+    const m = header.match(/^Bearer\s+(.+)$/i);
+    if (m && process.env.JWT_SECRET) {
+      try {
+        const payload = jwt.verify(m[1], process.env.JWT_SECRET);
+        if (payload?.sid) await revokeFamily(payload.sid);
+      } catch (_) { /* expired/invalid access token: refresh-token revoke above is enough */ }
+    }
+  } catch (err) {
+    console.error('[auth] logout revoke failed:', err && err.code);
+  }
+  res.status(200).json({ ok: true });
 });
 
 router.post('/send-sms-code', smsSendLimiter, async (req, res) => {
@@ -148,7 +192,7 @@ router.post('/send-sms-code', smsSendLimiter, async (req, res) => {
 
 router.post('/verify-sms-code', smsVerifyLimiter, async (req, res) => {
   try {
-    const result = await verifySmsCode(req.body?.phone, req.body?.code);
+    const result = await verifySmsCode(req.body?.phone, req.body?.code, sessionCtx(req));
     res.status(200).json(result);
   } catch (err) {
     sendError(res, err, 'Verification failed');

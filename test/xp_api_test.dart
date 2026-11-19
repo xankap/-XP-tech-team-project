@@ -5,15 +5,27 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:xp_gas_monitor/services/session_controller.dart';
+import 'package:xp_gas_monitor/services/session_store.dart';
 import 'package:xp_gas_monitor/services/xp_api.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUp(() {
-    SharedPreferences.setMockInitialValues(
-        {'xp_auth_access_token': 'test-token'});
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SessionStore(MemorySessionStorage(), migrateLegacyPrefs: false);
+    await store.save(StoredSession(
+        accessToken: 'test-token',
+        user: const UserProfile(email: 'test@example.com'),
+        method: 'email',
+        createdAt: DateTime.utc(2026, 11, 20)));
+    final session = SessionController(store: store);
+    await session.restore();
+    SessionController.instance = session;
   });
+
+  tearDown(() => SessionController.instance = null);
 
   group('XpApi.postGasReading (History sync path)', () {
     test('posts live reading to /businesses/me/gas-readings with bearer auth',

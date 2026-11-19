@@ -1,13 +1,12 @@
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { pool } = require('../db/pool');
 const { getEmailConfig, sendEmail, verificationEmail, welcomeEmail } = require('./sendchampEmail');
+const { issueSession } = require('./sessions');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const E164 = /^\+[1-9][0-9]{7,14}$/;
 const BCRYPT_COST = 12;
-const JWT_EXPIRES = '7d';
 const VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 60 * 1000;
 const VERIFY_MESSAGE = 'Check your email to verify your account';
@@ -27,20 +26,6 @@ function normalizePhoneOptional(phone) {
   const trimmed = phone.trim().replace(/[\s()-]/g, '');
   if (!E164.test(trimmed)) return undefined;
   return trimmed;
-}
-
-function signToken(user) {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    const err = new Error('JWT_SECRET is not configured');
-    err.status = 500;
-    throw err;
-  }
-  return jwt.sign(
-    { sub: user.id, email: user.email || null, phone: user.phone || null, typ: 'access' },
-    secret,
-    { expiresIn: JWT_EXPIRES }
-  );
 }
 
 function publicUser(row) {
@@ -143,7 +128,7 @@ async function signup({ email, password, phone }) {
   };
 }
 
-async function login({ email, password }) {
+async function login({ email, password }, ctx = {}) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) {
     const err = new Error('Valid email is required');
@@ -181,8 +166,8 @@ async function login({ email, password }) {
     throw err;
   }
 
-  const token = signToken(row);
-  return { user: publicUser(row), token };
+  const session = await issueSession(row, ctx);
+  return { user: publicUser(row), ...session };
 }
 
 // Consume a verification token. Returns { ok, user? }; ok=false for invalid/expired/used.
