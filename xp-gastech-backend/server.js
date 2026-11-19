@@ -5,7 +5,7 @@ const { pool } = require('./src/db/pool');
 const authRoutes = require('./src/routes/auth');
 const retailerRoutes = require('./src/routes/retailers');
 const businessRoutes = require('./src/routes/businesses');
-const { getAfricasTalkingConfig } = require('./src/services/africasTalking');
+const { getSmsConfig } = require('./src/services/sendchamp');
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -50,10 +50,9 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '32kb' }));
 
 app.get('/health', (_req, res) => {
-  const africasTalking = getAfricasTalkingConfig();
   res.json({
     ok: true,
-    smsConfigured: africasTalking.configured,
+    smsConfigured: getSmsConfig().configured,
     googleConfigured: Boolean(process.env.GOOGLE_CLIENT_ID),
   });
 });
@@ -105,8 +104,7 @@ async function main() {
   if (process.env.RUN_SERVER === '1') {
     const server = app.listen(port, host, () => {
       console.log(`XP GasTech API listening on http://${host}:${port}`);
-      const africasTalking = getAfricasTalkingConfig();
-      console.log(africasTalking.configured ? 'Africa\'s Talking configured' : 'Africa\'s Talking not fully configured — set AFRICASTALKING_* in .env');
+      console.log(getSmsConfig().configured ? 'Sendchamp SMS configured' : 'Sendchamp SMS not configured — set SENDCHAMP_PUBLIC_KEY in .env');
       console.log(process.env.GOOGLE_CLIENT_ID ? 'Google OAuth configured' : 'GOOGLE_CLIENT_ID missing — Google sign-in disabled');
     });
     server.on('error', (err) => {

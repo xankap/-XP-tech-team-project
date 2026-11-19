@@ -63,7 +63,7 @@ Delete the parking A record (`2.57.91.91`) when you add these.
    `DATABASE_URL` (Supabase **pooler** URL, port 6543 — required for
    serverless), `JWT_SECRET`, `GOOGLE_CLIENT_ID`,
    `CORS_ORIGINS=https://xptechltd.com,https://www.xptechltd.com`,
-   Twilio vars only if SMS is needed for the demo. Do NOT set `RUN_SERVER`
+   `SENDCHAMP_PUBLIC_KEY` (and optional `SENDCHAMP_SENDER_NAME`, `SENDCHAMP_ROUTE`) only if SMS is needed for the demo. Do NOT set `RUN_SERVER`
    or `PORT` on Vercel.
 4. Vercel → Settings → Domains → add `api.xptechltd.com`, confirm the CNAME
    target in the table above.

@@ -84,7 +84,7 @@ router.post('/send-sms-code', smsSendLimiter, async (req, res) => {
     const result = await sendSmsCode(req.body?.phone);
     res.status(200).json(result);
   } catch (err) {
-    if (err.code === 'TWILIO_NOT_CONFIGURED' && !err.status) err.status = 503;
+    if (err.code === 'SMS_NOT_CONFIGURED' && !err.status) err.status = 503;
     sendError(res, err, 'Failed to send code');
   }
 });

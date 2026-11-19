@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { pool } = require('../db/pool');
-const { sendSms, getAfricasTalkingConfig } = require('./africasTalking');
+const { sendSms, getSmsConfig } = require('./sendchamp');
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -65,8 +65,7 @@ async function sendSmsCode(phoneRaw) {
     client.release();
   }
 
-  const africasTalking = getAfricasTalkingConfig();
-  if (africasTalking.configured) {
+  if (getSmsConfig().configured) {
     await sendSms(phone, `Your XP GasTech verification code is ${code}. It expires in 10 minutes.`);
     return { ok: true, phone, smsConfigured: true, expiresInSeconds: 600 };
   }
@@ -77,7 +76,7 @@ async function sendSmsCode(phoneRaw) {
     phone,
     smsConfigured: false,
     expiresInSeconds: 600,
-    message: 'SMS credentials missing. Set AFRICASTALKING_* in .env to send real SMS.',
+    message: 'SMS credentials missing. Set SENDCHAMP_PUBLIC_KEY in .env to send real SMS.',
   };
   if (process.env.NODE_ENV !== 'production') {
     payload.devCode = code;
