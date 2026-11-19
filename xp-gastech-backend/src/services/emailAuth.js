@@ -1,11 +1,18 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { pool } = require('../db/pool');
+const { getEmailConfig, sendEmail, verificationEmail, welcomeEmail } = require('./sendchampEmail');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const E164 = /^\+[1-9][0-9]{7,14}$/;
 const BCRYPT_COST = 12;
 const JWT_EXPIRES = '7d';
+const VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
+const RESEND_COOLDOWN_MS = 60 * 1000;
+const VERIFY_MESSAGE = 'Check your email to verify your account';
+const VERIFY_MESSAGE_NOT_SENT =
+  "Account created, but we couldn't send the verification email right now. Please try resending it in a few minutes.";
 
 function normalizeEmail(email) {
   if (typeof email !== 'string') return null;
@@ -44,6 +51,38 @@ function publicUser(row) {
   };
 }
 
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
+// Create a fresh verification token (invalidating older ones) and email the link.
+// Returns true when the email was handed to the provider; never throws for mail problems.
+async function issueVerificationEmail(user) {
+  const cfg = getEmailConfig();
+  const token = crypto.randomBytes(32).toString('hex');
+  await pool.query(
+    `update email_verification_tokens set used_at = now() where user_id = $1 and used_at is null`,
+    [user.id]
+  );
+  await pool.query(
+    `insert into email_verification_tokens (user_id, token_hash, expires_at) values ($1, $2, $3)`,
+    [user.id, hashToken(token), new Date(Date.now() + VERIFY_TTL_MS).toISOString()]
+  );
+  const link = `${cfg.apiBaseUrl}/auth/verify-email?token=${token}`;
+  const mail = verificationEmail({ email: user.email, link });
+  if (!cfg.configured) {
+    console.warn('[email] SENDCHAMP_EMAIL_FROM (or SENDCHAMP_PUBLIC_KEY) is not set: verification email NOT sent. User must use resend after it is configured.');
+    return false;
+  }
+  try {
+    await sendEmail({ to: user.email, ...mail });
+    return true;
+  } catch (e) {
+    console.error('[email] verification email failed:', e && e.code);
+    return false;
+  }
+}
+
 async function signup({ email, password, phone }) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) {
@@ -71,6 +110,7 @@ async function signup({ email, password, phone }) {
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
 
+  let user;
   try {
     const { rows } = await pool.query(
       `insert into users (email, phone, password_hash)
@@ -78,9 +118,7 @@ async function signup({ email, password, phone }) {
        returning id, email, phone, created_at`,
       [normalizedEmail, normalizedPhone, passwordHash]
     );
-    const user = rows[0];
-    const token = signToken(user);
-    return { user: publicUser(user), token };
+    user = rows[0];
   } catch (e) {
     if (e.code === '23505') {
       const err = new Error('Email or phone already registered');
@@ -89,6 +127,20 @@ async function signup({ email, password, phone }) {
     }
     throw e;
   }
+
+  // No login token until the email address is verified.
+  let emailSent = false;
+  try {
+    emailSent = await issueVerificationEmail(user);
+  } catch (e) {
+    console.error('[email] could not create verification token:', e && e.code, e && e.message);
+  }
+  return {
+    verificationRequired: true,
+    emailSent,
+    message: emailSent ? VERIFY_MESSAGE : VERIFY_MESSAGE_NOT_SENT,
+    user: publicUser(user),
+  };
 }
 
 async function login({ email, password }) {
@@ -105,7 +157,7 @@ async function login({ email, password }) {
   }
 
   const { rows } = await pool.query(
-    `select id, email, phone, password_hash from users where email = $1`,
+    `select id, email, phone, password_hash, email_verified_at from users where email = $1`,
     [normalizedEmail]
   );
   const row = rows[0];
@@ -122,8 +174,71 @@ async function login({ email, password }) {
     throw err;
   }
 
+  if (!row.email_verified_at) {
+    const err = new Error('Please verify your email first');
+    err.status = 403;
+    err.code = 'EMAIL_NOT_VERIFIED';
+    throw err;
+  }
+
   const token = signToken(row);
   return { user: publicUser(row), token };
 }
 
-module.exports = { signup, login, publicUser };
+// Consume a verification token. Returns { ok, user? }; ok=false for invalid/expired/used.
+async function verifyEmailToken(token) {
+  if (typeof token !== 'string' || !/^[0-9a-f]{64}$/i.test(token)) return { ok: false };
+  const { rows } = await pool.query(
+    `with t as (
+       update email_verification_tokens
+          set used_at = now()
+        where token_hash = $1 and used_at is null and expires_at > now()
+        returning user_id
+     )
+     update users u
+        set email_verified_at = coalesce(u.email_verified_at, now())
+       from t
+      where u.id = t.user_id
+      returning u.id, u.email`,
+    [hashToken(token.toLowerCase())]
+  );
+  const user = rows[0];
+  if (!user) return { ok: false };
+  // Best-effort welcome email: never fails verification.
+  try {
+    if (user.email && getEmailConfig().configured) {
+      await sendEmail({ to: user.email, ...welcomeEmail({ email: user.email }) });
+    }
+  } catch (e) {
+    console.error('[email] welcome email failed:', e && e.code);
+  }
+  return { ok: true, user: { id: user.id, email: user.email } };
+}
+
+// Generic outcome regardless of whether the account exists (no enumeration).
+async function resendVerification(emailRaw) {
+  const email = normalizeEmail(emailRaw);
+  if (!email) {
+    const err = new Error('Valid email is required');
+    err.status = 400;
+    throw err;
+  }
+  try {
+    const { rows } = await pool.query(
+      `select u.id, u.email, u.email_verified_at, u.password_hash,
+              (select max(created_at) from email_verification_tokens t where t.user_id = u.id) as last_sent
+         from users u where u.email = $1`,
+      [email]
+    );
+    const u = rows[0];
+    const recent = u && u.last_sent && Date.now() - new Date(u.last_sent).getTime() < RESEND_COOLDOWN_MS;
+    if (u && u.password_hash && !u.email_verified_at && !recent) {
+      await issueVerificationEmail(u);
+    }
+  } catch (e) {
+    console.error('[email] resend failed:', e && e.code, e && e.message);
+  }
+  return { ok: true, message: 'If an account exists for that email and still needs verification, a new link has been sent.' };
+}
+
+module.exports = { signup, login, publicUser, verifyEmailToken, resendVerification, hashToken };

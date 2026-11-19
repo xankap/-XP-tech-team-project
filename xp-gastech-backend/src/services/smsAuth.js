@@ -15,6 +15,15 @@ function normalizePhone(phone) {
   return trimmed;
 }
 
+const DEFAULT_OTP_TEMPLATE = 'Your XP GasTech verification code is {{code}}. It expires in 10 minutes.';
+
+// Customizable via SMS_OTP_TEMPLATE (must contain {{code}}); default is the original text.
+function buildOtpMessage(code) {
+  const custom = (process.env.SMS_OTP_TEMPLATE || '').trim();
+  const template = custom.includes('{{code}}') ? custom : DEFAULT_OTP_TEMPLATE;
+  return template.split('{{code}}').join(code);
+}
+
 function generateCode() {
   return String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
 }
@@ -66,7 +75,7 @@ async function sendSmsCode(phoneRaw) {
   }
 
   if (getSmsConfig().configured) {
-    await sendSms(phone, `Your XP GasTech verification code is ${code}. It expires in 10 minutes.`);
+    await sendSms(phone, buildOtpMessage(code));
     return { ok: true, phone, smsConfigured: true, expiresInSeconds: 600 };
   }
 
@@ -180,4 +189,4 @@ async function verifySmsCode(phoneRaw, codeRaw) {
   }
 }
 
-module.exports = { sendSmsCode, verifySmsCode, normalizePhone };
+module.exports = { sendSmsCode, verifySmsCode, normalizePhone, buildOtpMessage };

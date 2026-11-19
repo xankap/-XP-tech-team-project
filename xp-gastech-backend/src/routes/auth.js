@@ -1,7 +1,8 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { sendSmsCode, verifySmsCode } = require('../services/smsAuth');
-const { signup, login } = require('../services/emailAuth');
+const { signup, login, verifyEmailToken, resendVerification } = require('../services/emailAuth');
+const { getEmailConfig, esc, layout } = require('../services/sendchampEmail');
 const { loginWithGoogleIdToken } = require('../services/googleAuth');
 const { requireAuth } = require('../middleware/auth');
 
@@ -13,7 +14,9 @@ function sendError(res, err, fallback, defaultStatus = 500) {
   const status = err.status || defaultStatus;
   if (!err.status) console.error(`[auth] ${fallback}:`, err);
   const message = err.status ? err.message || fallback : fallback;
-  res.status(status).json({ error: message });
+  const body = { error: message };
+  if (err.status && err.code === 'EMAIL_NOT_VERIFIED') body.code = err.code;
+  res.status(status).json(body);
 }
 
 const smsSendLimiter = rateLimit({
@@ -38,6 +41,60 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many auth requests. Try again later.' },
+});
+
+const verifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification attempts. Try again later.' },
+});
+
+const resendLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Try again later.' },
+});
+
+function verifyPage(ok) {
+  const { appBaseUrl } = getEmailConfig();
+  const title = ok ? 'Email verified' : 'Link invalid or expired';
+  const body = ok
+    ? `<p>Your email is verified. You can now sign in to XP GasTech.</p>`
+    : `<p>This verification link is invalid, already used, or expired. Open the app, sign in and request a new verification email.</p>`;
+  return layout(title, `${body}<p><a href="${esc(appBaseUrl)}" style="display:inline-block;background:#0b6b3a;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none">Go to XP GasTech</a></p>`);
+}
+
+router.get('/verify-email', verifyLimiter, async (req, res) => {
+  let ok = false;
+  try {
+    ok = (await verifyEmailToken(String(req.query.token || ''))).ok;
+  } catch (err) {
+    console.error('[auth] verify-email failed:', err);
+    return res.status(500).type('html').send(verifyPage(false));
+  }
+  res.status(ok ? 200 : 400).set('Cache-Control', 'no-store').type('html').send(verifyPage(ok));
+});
+
+router.post('/verify-email', verifyLimiter, async (req, res) => {
+  try {
+    const { ok } = await verifyEmailToken(req.body?.token);
+    if (!ok) return res.status(400).json({ error: 'Invalid or expired verification link' });
+    res.status(200).json({ ok: true, message: 'Email verified' });
+  } catch (err) {
+    sendError(res, err, 'Verification failed');
+  }
+});
+
+router.post('/resend-verification', resendLimiter, async (req, res) => {
+  try {
+    res.status(200).json(await resendVerification(req.body?.email));
+  } catch (err) {
+    sendError(res, err, 'Request failed');
+  }
 });
 
 router.post('/signup', authLimiter, async (req, res) => {

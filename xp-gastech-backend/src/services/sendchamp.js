@@ -30,6 +30,35 @@ function summarize(payload) {
   return { status: payload.status, code: payload.code, message: payload.message };
 }
 
+function httpsPost(url, key, data) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const req = require('https').request(
+      {
+        method: 'POST',
+        hostname: u.hostname,
+        path: u.pathname,
+        timeout: 15000,
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'Content-Length': Buffer.byteLength(data),
+        },
+      },
+      (res) => {
+        let text = '';
+        res.on('data', (d) => (text += d));
+        res.on('end', () => resolve({ status: res.statusCode, text }));
+      }
+    );
+    req.on('timeout', () => req.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })));
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+}
+
 /**
  * Send an SMS through Sendchamp.
  * @param {string|string[]} to one E.164 number (+234...) or an array of them (bulk)
@@ -68,11 +97,33 @@ async function sendSms(to, body) {
     } catch (_) {
       payload = undefined;
     }
-  } catch (_) {
-    throw smsError('Could not reach the SMS provider.', 'SMS_SEND_FAILED', 502);
+  } catch (err) {
+    console.error(
+      '[sendchamp] fetch failed:',
+      err && err.name,
+      err && err.message,
+      err && err.cause && (err.cause.code || err.cause.message)
+    );
+    try {
+      console.error('[sendchamp] inspect', require('util').inspect(err && err.cause, { depth: 3 }).slice(0, 1500));
+    } catch (_) {}
+    console.error('[sendchamp] key diag', {
+      len: publicKey.length,
+      printableAscii: /^[\x21-\x7E]+$/.test(publicKey),
+    });
+    try {
+      const r = await httpsPost(SMS_ENDPOINT, publicKey, JSON.stringify({ to: recipients, message: body, sender_name: senderName, route }));
+      console.error('[sendchamp] https fallback status', r.status);
+      response = { ok: r.status >= 200 && r.status < 300, status: r.status };
+      try { payload = JSON.parse(r.text); } catch (_) { payload = undefined; }
+    } catch (e3) {
+      console.error('[sendchamp] https fallback failed', e3 && e3.code, e3 && e3.message);
+      throw smsError('Could not reach the SMS provider.', 'SMS_SEND_FAILED', 502);
+    }
   }
 
   if (!response.ok || !payload || String(payload.status).toLowerCase() !== 'success') {
+    console.error('[sendchamp] non-ok response:', response.status, JSON.stringify(summarize(payload)));
     throw smsError('The SMS provider rejected the request.', 'SMS_SEND_FAILED', 502, summarize(payload));
   }
   return payload;

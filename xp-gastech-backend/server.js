@@ -6,6 +6,7 @@ const authRoutes = require('./src/routes/auth');
 const retailerRoutes = require('./src/routes/retailers');
 const businessRoutes = require('./src/routes/businesses');
 const { getSmsConfig } = require('./src/services/sendchamp');
+const { getEmailConfig } = require('./src/services/sendchampEmail');
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -53,6 +54,7 @@ app.get('/health', (_req, res) => {
   res.json({
     ok: true,
     smsConfigured: getSmsConfig().configured,
+    emailConfigured: getEmailConfig().configured,
     googleConfigured: Boolean(process.env.GOOGLE_CLIENT_ID),
   });
 });
