@@ -76,21 +76,46 @@ function summarize(text) {
   return undefined;
 }
 
+// Sendchamp/Go54 delivers every /email/send message as text/plain (confirmed
+// in Gmail raw source for both type "text/html" and type "html"). HTML is
+// shown as visible tags, so we send a clean plain-text body.
+function htmlToText(html) {
+  return String(html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<a [^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, label) => {
+      const t = label.replace(/<[^>]+>/g, '').trim();
+      return t && t !== href ? `${t} (${href})` : href;
+    })
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&mdash;/g, '\u2014')
+    .replace(/&middot;/g, '\u00b7')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /**
  * Send one email through Sendchamp. Throws EMAIL_NOT_CONFIGURED / EMAIL_SEND_FAILED.
  * Never logs the key or the message body.
- * @param {{to: string, name?: string, subject: string, html: string}} msg
+ * @param {{to: string, name?: string, subject: string, html?: string, text?: string}} msg
  */
-async function sendEmail({ to, name, subject, html }) {
+async function sendEmail({ to, name, subject, html, text }) {
   const { apiKey, fromEmail, fromName, configured } = getEmailConfig();
   if (!configured) {
     throw emailError('Email is not configured. Set SENDCHAMP_PUBLIC_KEY and SENDCHAMP_EMAIL_FROM.', 'EMAIL_NOT_CONFIGURED');
   }
+  const value = (text && String(text).trim()) || htmlToText(html);
   const payload = {
     subject,
     to: [{ email: to, name: name || to }],
     from: { email: fromEmail, name: fromName },
-    message_body: { type: 'text/html', value: html },
+    message_body: { type: 'text', value },
   };
   let res;
   try {
@@ -137,6 +162,11 @@ function render(template, vars) {
   return String(template).replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_, k) => (vars[k] === undefined ? '' : esc(vars[k])));
 }
 
+// Plain-text placeholder replacement (no HTML escaping).
+function renderText(template, vars) {
+  return String(template).replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_, k) => (vars[k] === undefined ? '' : String(vars[k])));
+}
+
 // Friendly name for greetings: the given name if we have one (e.g. from
 // Google), otherwise the part of the email before the @.
 function displayName(email, name) {
@@ -146,32 +176,92 @@ function displayName(email, name) {
   return local || 'there';
 }
 
+const DEFAULT_VERIFY_TEXT = `XP Tech
+
+Confirm your email, {{name}}
+
+Thanks for signing up for XP Tech. We're glad you're here.
+
+Please confirm your email to activate your account by opening this link (it expires in 24 hours):
+
+{{link}}
+
+Didn't sign up for XP Tech? You can safely ignore this email — no account will be activated.
+
+We look forward to helping you keep an eye on your cooking gas.
+
+Warmly,
+The XP Tech team
+
+Safety first: if you ever smell gas, leave the area right away and call 112 from a safe place.
+
+XP Tech Ltd · Enugu, Nigeria
+Questions? support@xptechltd.com
+`;
+
+const DEFAULT_WELCOME_TEXT = `XP Tech
+
+Welcome to XP Tech, {{name}}
+
+Your account is ready. We're so glad to have you. XP Tech keeps an eye on your cooking gas so you never run out by surprise.
+
+Here's what you can do:
+- Live gas level — see how much gas is left in your cylinder
+- Low-gas alerts — get a heads-up before you run out
+- Nearby refill — find gas retailers close to you
+- Usage history — track how fast you use gas over time
+
+Get started in 3 steps:
+1. Connect your meter — turn on Bluetooth and pair your XP meter in the app.
+2. Set your cylinder size — so your gas level and days left are accurate.
+3. Turn on alerts — allow notifications to hear about low gas in time.
+
+Open XP Tech: {{app_url}}
+
+Need help setting up? Write to support@xptechltd.com.
+
+Welcome to the family. If you ever need anything, just write to us.
+
+Warmly,
+The XP Tech team
+
+Safety first: if you ever smell gas, leave the area right away and call 112 from a safe place.
+
+XP Tech Ltd · Enugu, Nigeria
+Questions? support@xptechltd.com
+`;
+
 /**
  * Overridable via env: EMAIL_VERIFY_SUBJECT, EMAIL_VERIFY_HTML (full HTML with
- * {{name}} {{link}} {{app_url}}), EMAIL_WELCOME_SUBJECT, EMAIL_WELCOME_HTML.
+ * {{name}} {{link}} {{app_url}}), EMAIL_VERIFY_TEXT, EMAIL_WELCOME_SUBJECT,
+ * EMAIL_WELCOME_HTML, EMAIL_WELCOME_TEXT.
  */
 function verificationEmail({ email, link, name: givenName }) {
   const { appBaseUrl } = getEmailConfig();
   const name = displayName(email, givenName);
+  const vars = { name, link, app_url: appBaseUrl };
   const tpl = loadTemplate(
     'verification.html',
     'EMAIL_VERIFY_HTML',
     '<p>Hi {{name}}, verify your email for XP Tech: <a href="{{link}}">{{link}}</a></p>'
   );
+  const textTpl = (process.env.EMAIL_VERIFY_TEXT || '').trim() || DEFAULT_VERIFY_TEXT;
   const subject = (process.env.EMAIL_VERIFY_SUBJECT || '').trim() || 'Verify your email for XP Tech';
-  return { name, subject, html: render(tpl, { name, link, app_url: appBaseUrl }) };
+  return { name, subject, html: render(tpl, vars), text: renderText(textTpl, vars) };
 }
 
 function welcomeEmail({ email, name: givenName }) {
   const { appBaseUrl } = getEmailConfig();
   const name = displayName(email, givenName);
+  const vars = { name, app_url: appBaseUrl };
   const tpl = loadTemplate(
     'welcome.html',
     'EMAIL_WELCOME_HTML',
     '<p>Welcome to XP Tech, {{name}}. <a href="{{app_url}}">Open XP Tech</a></p>'
   );
+  const textTpl = (process.env.EMAIL_WELCOME_TEXT || '').trim() || DEFAULT_WELCOME_TEXT;
   const subject = (process.env.EMAIL_WELCOME_SUBJECT || '').trim() || `Welcome to XP Tech, ${name}`;
-  return { name, subject, html: render(tpl, { name, app_url: appBaseUrl }) };
+  return { name, subject, html: render(tpl, vars), text: renderText(textTpl, vars) };
 }
 
 module.exports = {
@@ -183,4 +273,5 @@ module.exports = {
   render,
   esc,
   layout,
+  htmlToText,
 };

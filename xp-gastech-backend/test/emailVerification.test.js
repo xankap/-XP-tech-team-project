@@ -65,7 +65,7 @@ test('sendEmail: sends Sendchamp payload; errors map to EMAIL_SEND_FAILED', asyn
     subject: 'S',
     to: [{ email: 'a@b.co', name: 'Ann' }],
     from: { email: 'no-reply@xptechltd.com', name: 'XP Tech' },
-    message_body: { type: 'text/html', value: '<p>h</p>' },
+    message_body: { type: 'text', value: 'h' },
   });
   mailer.setTransport(async () => ({ status: 400, text: '{"status":"failed","code":400,"message":"no active subscription. Please subscribe on dashboard"}' }));
   await assert.rejects(mailer.sendEmail({ to: 'a@b.co', subject: 's', html: 'h' }), (e) => e.code === 'EMAIL_SEND_FAILED' && e.providerResponse.code === 400);
@@ -82,6 +82,9 @@ test('templates: placeholders rendered + escaped; env override works', () => {
   assert.match(v.html, /Confirm your email, ann&lt;x&gt;/);
   assert.match(v.html, /href="https:\/\/api\.x\/auth\/verify-email\?token=abc&amp;a=1"/);
   assert.ok(!/\{\{/.test(v.html));
+  assert.match(v.text, /Confirm your email, ann<x>/);
+  assert.match(v.text, /https:\/\/api\.x\/auth\/verify-email\?token=abc&a=1/);
+  assert.ok(!/</.test(v.text.replace('ann<x>', '')), 'plain text has no HTML tags');
   assert.equal(v.subject, 'Verify your email for XP Tech');
   process.env.EMAIL_VERIFY_SUBJECT = 'Custom';
   process.env.EMAIL_VERIFY_HTML = '<b>{{name}}|{{link}}</b>';
@@ -108,9 +111,12 @@ test('default templates: every placeholder filled, branding, links and safety li
     assert.match(m.html, /support@xptechltd\.com/);
     assert.match(m.html, /href="https:\/\/xptechltd\.com\/privacy"/);
     assert.match(m.html, /href="https:\/\/xptechltd\.com\/terms"/);
-    assert.match(m.html, /max-width:600px/);
+    assert.match(m.html, /max-width:520px/);
+    assert.match(m.text, /The XP Tech team/);
+    assert.ok(!/<[a-z]/i.test(m.text), 'plain-text body has no HTML tags');
   }
-  assert.equal((v.html.match(/token=a{64}/g) || []).length, 4, 'button (VML + html) and fallback link');
+  assert.equal((v.html.match(/token=a{64}/g) || []).length, 3, 'button href, fallback href, and visible link');
+  assert.match(v.text, /token=a{64}/);
   assert.match(v.html, />Verify my email</);
   assert.match(v.html, /24 hours/);
   assert.match(v.html, /ignore this email/);
