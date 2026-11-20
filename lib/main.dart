@@ -28,6 +28,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth_flow.dart';
+import 'services/auth_api.dart';
 import 'services/session_controller.dart';
 import 'services/session_store.dart';
 import 'services/xp_api.dart';
@@ -130,7 +131,7 @@ class _DGMAppState extends State<DGMApp> {
           homeBuilder: (onLogout, user) => _ThemeScope(
             themeMode: _themeMode,
             onThemeModeChanged: _setThemeMode,
-            child: MainShell(onLogout: onLogout, accountLabel: user.displayName),
+            child: MainShell(onLogout: onLogout, accountLabel: user.displayName, session: widget.session),
           ),
         ),
       ),
@@ -606,7 +607,8 @@ class MainShell extends StatefulWidget {
 
   /// Signed-in account shown in Settings (available offline).
   final String? accountLabel;
-  const MainShell({super.key, this.onLogout, this.accountLabel});
+  final SessionController? session;
+  const MainShell({super.key, this.onLogout, this.accountLabel, this.session});
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -615,10 +617,10 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _index = 0;
   List<Widget> get _screens => [
-        const DashboardScreen(),
+        DashboardScreen(accountLabel: widget.accountLabel),
         const MapScreen(),
         const HistoryScreen(),
-        SettingsScreen(onLogout: widget.onLogout, accountLabel: widget.accountLabel),
+        SettingsScreen(onLogout: widget.onLogout, accountLabel: widget.accountLabel, session: widget.session),
       ];
 
   @override
@@ -700,7 +702,8 @@ class _MainShellState extends State<MainShell> {
 // ════════════════════════════════════════════════════════════════════════════
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final String? accountLabel;
+  const DashboardScreen({super.key, this.accountLabel});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -758,6 +761,20 @@ class _DashboardScreenState extends State<DashboardScreen>
               SliverToBoxAdapter(
                 child: Column(
                   children: [
+                    if (widget.accountLabel != null && widget.accountLabel!.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Hi, ${widget.accountLabel}',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.corporateBlue,
+                                ),
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 8),
                     _buildGaugeCard(reading, bt.state),
                     const SizedBox(height: 4),
@@ -1682,7 +1699,8 @@ class _SessionTile extends StatelessWidget {
 class SettingsScreen extends StatefulWidget {
   final VoidCallback? onLogout;
   final String? accountLabel;
-  const SettingsScreen({super.key, this.onLogout, this.accountLabel});
+  final SessionController? session;
+  const SettingsScreen({super.key, this.onLogout, this.accountLabel, this.session});
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
@@ -1697,6 +1715,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _sizeController.dispose(); _nameController.dispose(); _locationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _editUsername([BuildContext? _]) async {
+    final session = widget.session;
+    if (session == null || session.accessToken == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = TextEditingController(text: session.user?.username ?? '');
+    final username = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Username'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Username',
+              helperText: '3–20 characters: letters, numbers, _ or .',
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    if (username == null || !mounted) return;
+    if (!RegExp(r'^[a-zA-Z0-9._]{3,20}$').hasMatch(username)) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Username must be 3–20 characters: letters, numbers, _ or .')),
+      );
+      return;
+    }
+    try {
+      final profile = await AuthApi().setUsername(accessToken: session.accessToken!, username: username);
+      await session.updateProfile(profile);
+      if (!mounted) return;
+      setState(() {});
+      messenger.showSnackBar(const SnackBar(content: Text('Username saved')));
+    } on AuthApiException catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('Could not save username: $e')));
+    }
   }
 
   Future<void> _confirmLogout() async {
@@ -1838,6 +1907,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
+            if (widget.session != null)
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.alternate_email_rounded, color: AppTheme.corporateBlue),
+                  title: const Text('Username'),
+                  subtitle: Text(
+                    (widget.session!.user?.username != null && widget.session!.user!.username!.trim().isNotEmpty)
+                        ? widget.session!.user!.username!
+                        : 'Not set — tap to choose one for login and the dashboard',
+                  ),
+                  trailing: const Icon(Icons.edit_outlined),
+                  onTap: _editUsername,
+                ),
+              ),
             if (widget.onLogout != null)
               Card(
                 child: ListTile(

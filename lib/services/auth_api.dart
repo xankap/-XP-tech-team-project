@@ -36,6 +36,7 @@ class AuthResult {
   final String? email;
   final String? phone;
   final String? name;
+  final String? username;
   final Map<String, dynamic> raw;
   const AuthResult({
     required this.token,
@@ -44,13 +45,14 @@ class AuthResult {
     this.email,
     this.phone,
     this.name,
+    this.username,
     required this.raw,
   });
 
   /// Best identifier to show/persist for the signed-in user.
-  String displayId(String fallback) => email ?? phone ?? fallback;
+  String displayId(String fallback) => username ?? email ?? phone ?? fallback;
 
-  UserProfile get profile => UserProfile(id: userId, email: email, phone: phone, name: name);
+  UserProfile get profile => UserProfile(id: userId, email: email, phone: phone, name: name, username: username);
 }
 
 /// Response of POST /auth/signup. New backends require email verification and
@@ -82,12 +84,45 @@ class AuthApi {
 
   String get _unreachable => 'Backend not reachable at $baseUrl — start xp-gastech-backend.';
 
-  Future<AuthResult> login({required String email, required String password}) =>
-      _authPost('/auth/login', {'email': email, 'password': password}, fallbackError: 'Login failed');
+  Future<AuthResult> login({String? email, String? username, String? identifier, required String password}) {
+    final body = <String, dynamic>{'password': password};
+    if (identifier != null && identifier.isNotEmpty) {
+      body['identifier'] = identifier;
+    } else if (email != null && email.isNotEmpty) {
+      body['email'] = email;
+    } else if (username != null && username.isNotEmpty) {
+      body['username'] = username;
+    }
+    return _authPost('/auth/login', body, fallbackError: 'Login failed');
+  }
 
-  Future<SignupResult> signup({required String email, required String password, String? phone}) async {
+  Future<bool> usernameAvailable(String username) async {
+    final uri = Uri.parse('$baseUrl/auth/username-available').replace(queryParameters: {'u': username});
+    final json = await _send(() => _client.get(uri, headers: const {'Accept': 'application/json'}), fallbackError: 'Could not check username');
+    return json['available'] == true;
+  }
+
+  Future<UserProfile> setUsername({required String accessToken, required String username}) async {
+    final json = await _send(
+      () => _client.patch(
+        Uri.parse('$baseUrl/auth/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+        body: jsonEncode({'username': username}),
+      ),
+      fallbackError: 'Could not update username',
+    );
+    final user = json['user'] is Map ? Map<String, dynamic>.from(json['user'] as Map) : const <String, dynamic>{};
+    return UserProfile.fromJson(user);
+  }
+
+  Future<SignupResult> signup({required String email, required String password, String? phone, String? username}) async {
     final body = <String, dynamic>{'email': email, 'password': password};
     if (phone != null && phone.isNotEmpty) body['phone'] = phone;
+    if (username != null && username.isNotEmpty) body['username'] = username;
     final json = await _post('/auth/signup', body, fallbackError: 'Sign up failed');
     final token = json['token']?.toString();
     if (json['verificationRequired'] != true && token != null && token.isNotEmpty) {
@@ -179,6 +214,7 @@ class AuthApi {
       email: str(user['email']),
       phone: str(user['phone']),
       name: str(user['name']),
+      username: str(user['username']),
       raw: json,
     );
   }

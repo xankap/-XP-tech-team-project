@@ -298,6 +298,7 @@ class _LoginPageState extends State<LoginPage> {
   late final AuthApi _api = widget.api ?? AuthApi();
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _username = TextEditingController();
   final _phone = TextEditingController();
   final _smsCode = TextEditingController();
   _AuthTab _tab = _AuthTab.login;
@@ -313,6 +314,14 @@ class _LoginPageState extends State<LoginPage> {
   /// True right after sign-up: show the "check your inbox" panel instead of the form.
   bool _signupDone = false;
   DateTime? _lastResend;
+
+  /// After phone/Google login, offer an optional username if the account has none.
+  bool _pickUsername = false;
+  AuthResult? _pendingResult;
+  String? _pendingMethod;
+  String? _pendingFallback;
+
+  static final _usernameRe = RegExp(r'^[a-zA-Z0-9._]{3,20}$');
 
   late final Future<void> _googleReady;
   StreamSubscription<GoogleSignInAuthenticationEvent>? _googleSub;
@@ -365,6 +374,7 @@ class _LoginPageState extends State<LoginPage> {
     _googleSub?.cancel();
     _email.dispose();
     _password.dispose();
+    _username.dispose();
     _phone.dispose();
     _smsCode.dispose();
     super.dispose();
@@ -379,6 +389,8 @@ class _LoginPageState extends State<LoginPage> {
       _codeSent = false;
       _signupDone = false;
       _verifyEmail = null;
+      _pickUsername = false;
+      _pendingResult = null;
     });
   }
 
@@ -409,20 +421,90 @@ class _LoginPageState extends State<LoginPage> {
     return true;
   }
 
+  bool _validUsername(String username, {required bool required}) {
+    if (username.isEmpty) {
+      if (!required) return true;
+      setState(() => _error = 'Please choose a username (3–20 letters, numbers, _ or .).');
+      return false;
+    }
+    if (!_usernameRe.hasMatch(username)) {
+      setState(() => _error = 'Username must be 3–20 characters: letters, numbers, underscores or periods.');
+      return false;
+    }
+    return true;
+  }
+
+  bool _validLogin(String identifier, String password) {
+    if (password.length < 8) {
+      setState(() => _error = 'Enter a password (8+ characters).');
+      return false;
+    }
+    if (identifier.contains('@')) {
+      if (identifier.length < 5 || !identifier.contains('.')) {
+        setState(() => _error = 'Enter a valid email or username.');
+        return false;
+      }
+      return true;
+    }
+    return _validUsername(identifier, required: true);
+  }
+
+  Future<void> _completeLogin(AuthResult result, String method, String fallback) async {
+    if (result.username != null && result.username!.trim().isNotEmpty) {
+      await widget.onSuccess(result, method, fallback);
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _pickUsername = true;
+      _pendingResult = result;
+      _pendingMethod = method;
+      _pendingFallback = fallback;
+      _username.clear();
+    });
+  }
+
+  Future<void> _submitChosenUsername({bool skip = false}) async {
+    final pending = _pendingResult;
+    final method = _pendingMethod;
+    final fallback = _pendingFallback;
+    if (pending == null || method == null) return;
+    if (skip) {
+      await widget.onSuccess(pending, method, fallback ?? pending.displayId('XP Tech user'));
+      return;
+    }
+    final username = _username.text.trim();
+    if (!_validUsername(username, required: true)) return;
+    await _run(() async {
+      final profile = await _api.setUsername(accessToken: pending.token, username: username);
+      final updated = AuthResult(
+        token: pending.token,
+        refreshToken: pending.refreshToken,
+        userId: pending.userId ?? profile.id,
+        email: profile.email ?? pending.email,
+        phone: profile.phone ?? pending.phone,
+        name: profile.name ?? pending.name,
+        username: profile.username,
+        raw: pending.raw,
+      );
+      await widget.onSuccess(updated, method, fallback ?? updated.displayId('XP Tech user'));
+    });
+  }
+
   Future<void> _submitLogin() async {
-    final email = _email.text.trim();
+    final identifier = _email.text.trim();
     final password = _password.text;
-    if (!_validEmailPassword(email, password)) return;
-    setState(() => _verifyEmail = null);
+    if (!_validLogin(identifier, password)) return;
+    setState(() => _verifyEmail = identifier.contains('@') ? identifier : null);
     await _run(() async {
       try {
-        final result = await _api.login(email: email, password: password);
-        await widget.onSuccess(result, 'email', email);
+        final result = await _api.login(identifier: identifier, password: password);
+        await _completeLogin(result, 'email', identifier);
       } on AuthApiException catch (e) {
         if (!e.isEmailNotVerified) rethrow;
         if (mounted) {
           setState(() {
-            _verifyEmail = email;
+            _verifyEmail = identifier.contains('@') ? identifier : null;
             _error = 'Please verify your email first. Check your inbox for the link, or resend it below.';
           });
         }
@@ -434,9 +516,11 @@ class _LoginPageState extends State<LoginPage> {
     final email = _email.text.trim();
     final password = _password.text;
     final phone = _phone.text.trim();
+    final username = _username.text.trim();
     if (!_validEmailPassword(email, password)) return;
+    if (!_validUsername(username, required: true)) return;
     await _run(() async {
-      final result = await _api.signup(email: email, password: password, phone: phone);
+      final result = await _api.signup(email: email, password: password, phone: phone, username: username);
       final session = result.session;
       if (session != null) {
         // Older backend without email verification: signed in directly.
@@ -510,7 +594,7 @@ class _LoginPageState extends State<LoginPage> {
     }
     await _run(() async {
       final result = await _api.verifySmsCode(phone: phone, code: code);
-      await widget.onSuccess(result, 'phone', phone);
+      await _completeLogin(result, 'phone', phone);
     });
   }
 
@@ -530,7 +614,7 @@ class _LoginPageState extends State<LoginPage> {
         throw AuthApiException(GoogleAuth.describeError(e));
       }
       final result = await _api.google(idToken: idToken);
-      await widget.onSuccess(result, 'google', account.email);
+      await _completeLogin(result, 'google', account.email);
     });
   }
 
@@ -544,7 +628,7 @@ class _LoginPageState extends State<LoginPage> {
         throw AuthApiException(GoogleAuth.describeError(e));
       }
       final result = await _api.google(idToken: idToken);
-      await widget.onSuccess(result, 'google', result.email ?? 'Google user');
+      await _completeLogin(result, 'google', result.email ?? 'Google user');
     });
   }
 
@@ -713,8 +797,8 @@ class _LoginPageState extends State<LoginPage> {
         TextField(
           controller: _email,
           keyboardType: TextInputType.emailAddress,
-          autofillHints: const [AutofillHints.email],
-          decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.mail_outline_rounded)),
+          autofillHints: const [AutofillHints.username, AutofillHints.email],
+          decoration: const InputDecoration(labelText: 'Email or username', prefixIcon: Icon(Icons.person_outline_rounded)),
         ),
         const SizedBox(height: 14),
         TextField(
@@ -833,6 +917,17 @@ class _LoginPageState extends State<LoginPage> {
         ),
         const SizedBox(height: 14),
         TextField(
+          controller: _username,
+          keyboardType: TextInputType.text,
+          autofillHints: const [AutofillHints.username],
+          decoration: const InputDecoration(
+            labelText: 'Username',
+            helperText: '3–20 characters: letters, numbers, _ or .',
+            prefixIcon: Icon(Icons.alternate_email_rounded),
+          ),
+        ),
+        const SizedBox(height: 14),
+        TextField(
           controller: _password,
           obscureText: true,
           decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Icons.lock_outline_rounded)),
@@ -891,15 +986,62 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ];
 
+
+  List<Widget> _pickUsernamePanel(BuildContext context) => [
+        const Icon(Icons.alternate_email_rounded, size: 44, color: AppTheme.corporateBlue),
+        const SizedBox(height: 12),
+        Text('Choose a username', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        Text(
+          'You can use this to log in, and it will show on your dashboard. You can skip and set one later.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 18),
+        TextField(
+          controller: _username,
+          keyboardType: TextInputType.text,
+          autofillHints: const [AutofillHints.username],
+          decoration: const InputDecoration(
+            labelText: 'Username',
+            helperText: '3–20 characters: letters, numbers, _ or .',
+            prefixIcon: Icon(Icons.alternate_email_rounded),
+          ),
+        ),
+        _messages(context),
+        const SizedBox(height: 22),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _busy ? null : () => _submitChosenUsername(),
+            child: const Text('Save username'),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: _busy ? null : () => _submitChosenUsername(skip: true),
+            child: const Text('Skip for now'),
+          ),
+        ),
+      ];
+
   @override
   Widget build(BuildContext context) {
-    final title = _tab == _AuthTab.login ? 'Welcome back' : 'Join XP Tech';
-    final subtitle = _tab == _AuthTab.login
-        ? 'Log in to your Digital Gas Meter'
-        : 'Choose how you want to create your account';
+    final title = _pickUsername
+        ? 'Almost done'
+        : (_tab == _AuthTab.login ? 'Welcome back' : 'Join XP Tech');
+    final subtitle = _pickUsername
+        ? 'Pick a username for your account'
+        : (_tab == _AuthTab.login
+            ? 'Log in with your email or username'
+            : 'Choose how you want to create your account');
 
     late final List<Widget> body;
-    if (_tab == _AuthTab.login) {
+    if (_pickUsername) {
+      body = _pickUsernamePanel(context);
+    } else if (_tab == _AuthTab.login) {
       body = _loginFields(context);
     } else if (_signupMethod == _SignupMethod.chooser) {
       body = _signupChooser(context);
@@ -946,8 +1088,10 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 22),
-                    _modeToggle(context),
+                    if (!_pickUsername) ...[
+                      const SizedBox(height: 22),
+                      _modeToggle(context),
+                    ],
                     const SizedBox(height: 22),
                     ...body,
                   ],

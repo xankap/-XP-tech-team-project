@@ -70,12 +70,14 @@ All commits are on `main` unless noted otherwise.
 | 2026-11-20 | Sendchamp Silver email plan purchased (₦9,000, 10,000 emails). `SENDCHAMP_EMAIL_FROM=admin@xptechltd.com`, `SENDCHAMP_EMAIL_FROM_NAME=XP Tech`. Sender ID **XPTech** registered, still **Pending**. | (Sendchamp dashboard; no commit) |
 | 2026-11-20 | Emails switched to **plain text**. Sendchamp/Go54 delivers `/email/send` as `Content-Type: text/plain` even when `message_body.type` is `text/html` or `html`, so Gmail showed raw HTML tags. The From header is rewritten to `noreply@go54.com`. | (this patch set) |
 | 2026-11-20 | Phone OTP uses Sendchamp **Verification API** (`/verification/create` + `/confirm`, sender `Sendchamp` or `SENDCHAMP_OTP_SENDER`, 6-digit numeric, 10 min). The old app-generated code + `/sms/send` path remains as `SENDCHAMP_OTP_MODE=legacy` fallback. `sendchamp.js` is unchanged. | (this patch set) |
+| 2026-11-20 | **Usernames:** users can sign up with a username, log in with email or username, and see it on the dashboard. Migration **008** `users.username` (nullable, lowercase, unique, 3–20 `[a-z0-9._]`). `POST /auth/signup` accepts optional `username` (409 if taken). `GET /auth/username-available?u=`. `POST /auth/login` accepts `identifier` (or `email` / `username`). `PATCH /auth/me` sets/changes it (for Google/phone users too). Username is included in login, refresh, `/auth/me`, and session user objects. Email login is unchanged. `sendchamp.js` was not modified. | (this patch set) |
 
 **Signup behaviour (important):**
-- **Email sign-up** (`POST /auth/signup`): always sends a verification email (if email is configured). An optional phone, if provided, is **stored only** and is **not** OTP-verified. The user cannot sign in until they click the email link. After that, a welcome email is sent (best-effort).
+- **Email sign-up** (`POST /auth/signup`): always sends a verification email (if email is configured). An optional `username` is stored (validated, unique, lowercase). An optional phone, if provided, is **stored only** and is **not** OTP-verified. The user cannot sign in until they click the email link. After that, a welcome email is sent (best-effort). Login then works with email or username plus password.
 - **Phone sign-up** (`POST /auth/send-sms-code` then `/auth/verify-sms-code`): sends a plain-text OTP SMS via the Verification API, then creates/logs in the user and issues a session. No email is sent.
 - **Google sign-up** (`POST /auth/google`): first-time Google users get a welcome email (best-effort). No phone is collected and no SMS OTP is sent.
 - There is **no** profile endpoint that triggers phone verification if a user later adds a number.
+- Phone and Google users can set or change a username later via `PATCH /auth/me`. The app prompts after those sign-ins if none is set, and Settings has a username editor.
 
 
 **Database migrations** (`xp-gastech-backend/sql/`):
@@ -87,13 +89,15 @@ All commits are on `main` unless noted otherwise.
 | `005_auth_sessions.sql` | `auth_sessions` + `purge_expired_auth_sessions()` | ✅ (`auth_sessions`). The pg_cron schedule was skipped because the extension isn't enabled. |
 | `006_lock_is_admin.sql` | `private.is_admin()`, policy rewrites, RLS fixes | ✅ (`lock_is_admin`) |
 | `007_meters_readings.sql` | `meters`, `meter_readings` | ✅ (`meters_readings`). The file is only on `offline-bluetooth`. |
+| `008_users_username.sql` | `users.username` (nullable, unique, format check) | ✅ (`users_username`) |
 
 Check what's applied with: `select version, name from supabase_migrations.schema_migrations order by version;`
 
-**Current production deployments (20 Nov, evening):**
-- API: `dpl_BrxneXFhfd9zN4VU2uJBLMKg6yLm` (Verification API OTP + plain-text email). Aliased to `https://api.xptechltd.com`.
-- Web: `dpl_egEvZjmdCHtD7ZXQjgN4PHfTJqaL`
+**Current production deployments (20 Nov, 23:52 Africa/Lagos):**
+- API: `dpl_oa3LDXfXDEwHEkefhNqn5mBpJYYP` (usernames + Verification API OTP + plain-text email). Aliased to `https://api.xptechltd.com`.
+- Web: `dpl_egEvZjmdCHtD7ZXQjgN4PHfTJqaL` (does **not** yet include the username UI). A release web build was made; uploading `build/web` through the file API failed because CanvasKit `.wasm` files are over the 8 MB upload limit. Deploy from a machine with the Vercel CLI: `flutter build web --release --dart-define=XP_API_BASE_URL=https://api.xptechltd.com` then deploy `build/web/` to production project `xp-gastech-web`.
 - Useful API rollbacks (promote in Vercel, do not force-push git):
+  - `dpl_BrxneXFhfd9zN4VU2uJBLMKg6yLm` — Verification API OTP + plain-text email, **no usernames**
   - `dpl_HQ9x8cpV35kaPoC6xX9xAsJSBWmr` — plain-text email, old app-side OTP
   - `dpl_8eu6z9dXvsrQaXWGusS9SysE7LXC` — branded HTML templates (will show as raw tags in Gmail)
   - `dpl_2AeeQnq5FN7yBeAWGu7Rz15WC9iQ` — earlier production before the email/OTP work

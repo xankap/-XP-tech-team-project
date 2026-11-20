@@ -11,12 +11,13 @@ class UserProfile {
   final String? email;
   final String? phone;
   final String? name;
+  final String? username;
 
-  const UserProfile({this.id, this.email, this.phone, this.name});
+  const UserProfile({this.id, this.email, this.phone, this.name, this.username});
 
-  /// Best label to show for the signed-in user.
+  /// Best label to show for the signed-in user. Username first, then name/email/phone.
   String get displayName {
-    for (final v in [name, email, phone]) {
+    for (final v in [username, name, email, phone]) {
       if (v != null && v.trim().isNotEmpty) return v;
     }
     return 'XP Tech user';
@@ -27,6 +28,7 @@ class UserProfile {
         email: other.email ?? email,
         phone: other.phone ?? phone,
         name: other.name ?? name,
+        username: other.username ?? username,
       );
 
   factory UserProfile.fromJson(Map<String, dynamic> j) => UserProfile(
@@ -34,6 +36,7 @@ class UserProfile {
         email: _str(j['email']),
         phone: _str(j['phone']),
         name: _str(j['name']),
+        username: _str(j['username']),
       );
 
   Map<String, dynamic> toJson() => {
@@ -41,6 +44,7 @@ class UserProfile {
         if (email != null) 'email': email,
         if (phone != null) 'phone': phone,
         if (name != null) 'name': name,
+        if (username != null) 'username': username,
       };
 }
 

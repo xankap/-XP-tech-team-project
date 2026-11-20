@@ -176,6 +176,11 @@ class SessionController extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Merge a profile update (e.g. after setting a username) into the stored session.
+  Future<void> updateProfile(UserProfile profile) async {
+    await _update((cur) => cur.copyWith(user: cur.user.merge(profile)));
+  }
+
   Future<void> _update(StoredSession Function(StoredSession cur) change) async {
     final cur = _session;
     if (cur == null) return;
