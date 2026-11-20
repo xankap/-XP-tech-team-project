@@ -18,7 +18,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('XP Tech logo shows on landing, greeting and login screens', (tester) async {
+  testWidgets('XP Tech logo on landing and login; greeting keeps the gas icon', (tester) async {
     for (final size in const [Size(390, 844), Size(1280, 800)]) {
       await tester.binding.setSurfaceSize(size);
       final session = SessionController(store: SessionStore(MemorySessionStorage(), migrateLegacyPrefs: false));
@@ -35,7 +35,8 @@ void main() {
       await tester.tap(find.text('Continue'));
       await tester.pump();
       expect(find.text('Welcome to XP Tech'), findsOneWidget);
-      expect(_logoImage(), findsOneWidget, reason: 'greeting @ $size');
+      expect(_logoImage(), findsNothing, reason: 'greeting @ $size keeps the original icon');
+      expect(find.byIcon(Icons.local_gas_station_rounded), findsOneWidget, reason: 'greeting @ $size');
 
       // Login page (after greeting + gauge loading)
       await tester.pump(const Duration(milliseconds: 1500));

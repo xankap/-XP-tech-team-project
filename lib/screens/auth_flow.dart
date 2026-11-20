@@ -237,7 +237,17 @@ class _LogoGreetingPage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const XpLogo(width: 160, padding: EdgeInsets.all(22)),
+            Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: AppTheme.corporateBlue,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(color: AppTheme.corporateBlue.withValues(alpha: 0.35), blurRadius: 28, offset: const Offset(0, 12)),
+                ],
+              ),
+              child: const Icon(Icons.local_gas_station_rounded, size: 64, color: Colors.white),
+            ),
             const SizedBox(height: 24),
             Text('Welcome to XP Tech', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
