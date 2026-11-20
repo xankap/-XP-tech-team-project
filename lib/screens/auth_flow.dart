@@ -9,6 +9,7 @@ import '../services/google_auth.dart';
 import '../theme/app_theme.dart';
 import '../widgets/gauge_loading.dart';
 import '../widgets/google_sign_in_button.dart';
+import '../widgets/xp_logo.dart';
 
 const _tokenKey = 'xp_auth_access_token';
 const _emailKey = 'xp_auth_email';
@@ -139,11 +140,7 @@ class _LandingPage extends StatelessWidget {
                 child: Column(
                   children: [
                     const Spacer(flex: 2),
-                    Container(
-                      padding: const EdgeInsets.all(22),
-                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                      child: const Icon(Icons.local_gas_station_rounded, size: 56, color: AppTheme.corporateBlue),
-                    ),
+                    const XpLogo(width: 160),
                     const SizedBox(height: 28),
                     const Text('XP TECHNOLOGY',
                         style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: 1.6)),
@@ -204,17 +201,7 @@ class _LogoGreetingPage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: AppTheme.corporateBlue,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(color: AppTheme.corporateBlue.withValues(alpha: 0.35), blurRadius: 28, offset: const Offset(0, 12)),
-                ],
-              ),
-              child: const Icon(Icons.local_gas_station_rounded, size: 64, color: Colors.white),
-            ),
+            const XpLogo(width: 160, padding: EdgeInsets.all(22)),
             const SizedBox(height: 24),
             Text('Welcome to XP Tech', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
@@ -764,13 +751,10 @@ class _LoginPageState extends State<LoginPage> {
                   children: [
                     Align(
                       alignment: Alignment.center,
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppTheme.corporateBlue.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.local_gas_station_rounded, size: 40, color: AppTheme.corporateBlue),
+                      child: XpLogo(
+                        width: 120,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        shadow: Theme.of(context).brightness == Brightness.dark,
                       ),
                     ),
                     const SizedBox(height: 18),
