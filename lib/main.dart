@@ -22,7 +22,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -31,9 +30,14 @@ import 'screens/auth_flow.dart';
 import 'services/session_controller.dart';
 import 'services/session_store.dart';
 import 'services/xp_api.dart';
+import 'meter/bluetooth_meter_service.dart';
+import 'meter/local_reading_store.dart';
+import 'meter/meter_reading_parser.dart';
+import 'meter/meter_transport.dart';
+import 'meter/reading_store_factory.dart';
 import 'widgets/business_gas_card.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:intl/intl.dart' show DateFormat;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
@@ -43,7 +47,8 @@ import 'package:permission_handler/permission_handler.dart';
 // ---------------------------------------------------------------------------
 // pubspec.yaml dependencies:
 //
-//    flutter_bluetooth_serial: ^0.4.0
+//    flutter_blue_classic: ^0.1.1   (classic SPP to the HC-05)
+//    sqflite: ^2.4.6                (offline reading store)
 //    google_maps_flutter: ^2.6.1
 //    flutter_local_notifications: ^17.2.2
 //    permission_handler: ^11.3.1
@@ -175,34 +180,36 @@ class GasReading {
     required this.timestamp,
   });
 
-  /// Parse packet: "GAS:72.5,W:5.8,BAT:88,LEAK:0\r\n"
+  /// Parse packet: "GAS:72.5,W:5.8,BAT:88,LEAK:0\r\n".
+  /// Malformed lines give [GasReading.empty] (never throws).
   factory GasReading.fromSerial(String raw) {
-    try {
-      final parts = raw.trim().split(',');
-      double gas = 0, weight = 0, bat = 0;
-      int leak = 0;
-      for (final p in parts) {
-        if (p.startsWith('GAS:'))  gas    = double.parse(p.substring(4));
-        if (p.startsWith('W:'))    weight = double.parse(p.substring(2));
-        if (p.startsWith('BAT:'))  bat    = double.parse(p.substring(4));
-        if (p.startsWith('LEAK:')) leak   = int.parse(p.substring(5));
-      }
-      final status = leak == 2
-          ? LeakStatus.critical
-          : leak == 1
-              ? LeakStatus.warning
-              : LeakStatus.ok;
-      return GasReading(
-        percentage:  gas.clamp(0, 100),
-        weightKg:    weight,
-        batterySoc:  bat.clamp(0, 100),
-        leakStatus:  status,
-        timestamp:   DateTime.now(),
-      );
-    } catch (_) {
-      return GasReading.empty();
-    }
+    final p = MeterReadingParser.parseLine(raw);
+    return p == null ? GasReading.empty() : GasReading.fromPacket(p, DateTime.now());
   }
+
+  factory GasReading.fromPacket(MeterPacket p, DateTime at) => GasReading(
+        percentage: p.percent ?? 0,
+        weightKg: p.weightKg ?? 0,
+        batterySoc: p.battery ?? 0,
+        leakStatus: _leak(p.leakLevel),
+        timestamp: at,
+      );
+
+  /// A reading saved on the phone (shown offline on Home).
+  factory GasReading.fromLocal(LocalReading r) => GasReading(
+        percentage: r.percent ?? 0,
+        weightKg: r.weightKg ?? 0,
+        batterySoc: r.battery ?? 0,
+        leakStatus: _leak(r.leakLevel),
+        timestamp: r.recordedAt.toLocal(),
+      );
+
+  static LeakStatus _leak(int? level) => switch (level) {
+        0 => LeakStatus.ok,
+        1 => LeakStatus.warning,
+        2 => LeakStatus.critical,
+        _ => LeakStatus.unknown,
+      };
 
   factory GasReading.empty() => GasReading(
         percentage:  0,
@@ -233,146 +240,28 @@ class CookingSession {
 
 // ════════════════════════════════════════════════════════════════════════════
 // 3. BLUETOOTH SERVICE
-//    [FIX-05] Removed the unused _connect() stub that duplicated connect()
+//    The offline meter link lives in lib/meter/ (BluetoothMeterService):
+//    classic SPP to the HC-05, robust line parsing, auto-reconnect and a
+//    local reading store. These helpers adapt it to the existing screens.
 // ════════════════════════════════════════════════════════════════════════════
 
-enum BtState { disconnected, scanning, connecting, connected, error }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Lightweight model for a discovered / paired device shown in the sheet
-// ─────────────────────────────────────────────────────────────────────────────
-class BtDeviceInfo {
-  final BluetoothDevice device;
-  final bool alreadyPaired; // true = found in system bond list
-  BtDeviceInfo({required this.device, required this.alreadyPaired});
-
-  String get displayName {
-    final name = device.name;
-    return name != null && name.isNotEmpty ? name : device.address;
-  }
-  
-  String get address => device.address;
+extension MeterUi on BluetoothMeterService {
+  /// Live reading from the connected meter (empty until a packet arrives).
+  GasReading get latest => livePacket == null || liveAt == null
+      ? GasReading.empty()
+      : GasReading.fromPacket(livePacket!, liveAt!);
+  String? get connectedAddress => isConnected ? device?.address : null;
+  String? get connectedDevice => isConnected ? device?.displayName : null;
 }
 
-class BluetoothService extends ChangeNotifier {
-  BtState _state = BtState.disconnected;
-  GasReading _latest = GasReading.empty();
-  String? _connectedDevice;
-  String? _connectedAddress; // Kept for the existing business/cylinder UI.
-  String? _scanError; // Exposes errors to the existing Bluetooth sheet.
-  BluetoothConnection? _connection;
-  StreamSubscription? _sub;
-
-  final List<BtDeviceInfo> _discovered = [];
-
-  BtState get state => _state;
-  GasReading get latest => _latest;
-  String? get connectedDevice => _connectedDevice;
-  String? get connectedAddress => _connectedAddress;
-  String? get scanError => _scanError;
-  bool get isScanning => _state == BtState.scanning;
-  List<BtDeviceInfo> get discovered => List.unmodifiable(_discovered);
-
-  Future<void> startScan() async {
-    if (_state == BtState.connected) return;
-
-    _state = BtState.scanning;
-    _scanError = null;
-    _discovered.clear();
-    notifyListeners();
-
-    try {
-      List<BluetoothDevice> bondedDevices = await FlutterBluetoothSerial.instance.getBondedDevices();
-      for (var d in bondedDevices) {
-        _discovered.add(BtDeviceInfo(device: d, alreadyPaired: true));
-      }
-      notifyListeners();
-    } catch (e) {
-      _scanError = e.toString().replaceFirst('Exception: ', '');
-    }
-
-    _state = BtState.disconnected;
-    notifyListeners();
-  }
-
-  Future<void> connectToDevice(BtDeviceInfo info) async {
-    _state = BtState.connecting;
-    notifyListeners();
-
-    try {
-      _connection = await BluetoothConnection.toAddress(info.address);
-      
-      _connectedDevice = info.displayName;
-      _connectedAddress = info.address;
-      _scanError = null;
-      _state = BtState.connected;
-      notifyListeners();
-
-      final buf = StringBuffer();
-
-      _sub = _connection!.input!.listen((Uint8List data) {
-        buf.write(ascii.decode(data));
-        if (buf.toString().contains('\n')) {
-          _latest = GasReading.fromSerial(buf.toString());
-          buf.clear();
-          notifyListeners();
-        }
-      });
-      _sub!.onDone(() {
-        disconnect();
-      });
-
-    } catch (e) {
-      _scanError = 'Could not connect to ${info.displayName}: ${e.toString().replaceFirst('Exception: ', '')}';
-      _connectedDevice = null;
-      _connectedAddress = null;
-      _connection = null;
-      _state = BtState.error;
-      notifyListeners();
-    }
-  }
-
-  Future<void> connect(String deviceName) async {
-    final match = _discovered.where((d) =>
-        d.displayName.toLowerCase().contains(deviceName.toLowerCase()));
-    if (match.isNotEmpty) {
-      await connectToDevice(match.first);
-    } else {
-      await startScan();
-      final retry = _discovered.where((d) =>
-          d.displayName.toLowerCase().contains(deviceName.toLowerCase()));
-      if (retry.isNotEmpty) await connectToDevice(retry.first);
-    }
-  }
-
-  Future<void> sendCommand(String command) async {
-    if (_state != BtState.connected ||
-        _connection == null ||
-        !_connection!.isConnected) {
-      throw StateError('Connect to a gas meter before sending commands.');
-    }
-    _connection!.output.add(Uint8List.fromList(ascii.encode('$command\n')));
-    await _connection!.output.allSent;
-  }
-
-  Future<void> disconnect() async {
-    await _sub?.cancel();
-    _sub = null;
-    await _connection?.close();
-    _connection = null;
-    
-    _connectedDevice = null;
-    _connectedAddress = null;
-    _state = BtState.disconnected;
-    _latest = GasReading.empty();
-    notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    disconnect();
-    super.dispose();
-  }
+/// "just now", "5 min ago", "3 h ago", else "20 Nov, 14:05" (phone time).
+String formatLastUpdated(DateTime at, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final d = n.difference(at);
+  if (d.inSeconds < 45) return 'just now';
+  if (d.inMinutes < 60) return '${d.inMinutes} min ago';
+  if (d.inHours < 24 && n.day == at.toLocal().day) return '${d.inHours} h ago';
+  return DateFormat('d MMM, HH:mm').format(at.toLocal());
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -534,6 +423,14 @@ class GasCylinder {
 // 6. APP STATE  [FIX-03] Moved before MainShell so it compiles in order
 // ════════════════════════════════════════════════════════════════════════════
 
+/// Test hook: replaces the meter service the app creates.
+@visibleForTesting
+BluetoothMeterService Function()? debugMeterServiceFactory;
+
+/// Test hook: the app-wide state scope around [child].
+@visibleForTesting
+Widget debugAppScope({required Widget child}) => _AppState(child: child);
+
 class _AppState extends StatefulWidget {
   final Widget child;
   const _AppState({required this.child});
@@ -546,7 +443,8 @@ class _AppState extends StatefulWidget {
 }
 
 class _AppStateData extends State<_AppState> {
-  final btService      = BluetoothService();
+  final btService      = (debugMeterServiceFactory ??
+      () => BluetoothMeterService(openStore: openPlatformReadingStore))();
   final historyService = HistoryService();
   bool demoBusinessAccess = false;
   final List<GasCylinder> cylinders = [];
@@ -577,11 +475,16 @@ class _AppStateData extends State<_AppState> {
   void initState() {
     super.initState();
     btService.addListener(_onBtUpdate);
+    unawaited(btService.init());
     loadCylinders();
   }
 
+  int _lastPacketCount = 0;
+
   void _onBtUpdate() {
-    if (btService.state == BtState.connected) {
+    // Only react to new packets, not to every status change.
+    if (btService.isConnected && btService.packetCount != _lastPacketCount) {
+      _lastPacketCount = btService.packetCount;
       historyService.recordReading(btService.latest);
     }
   }
@@ -725,12 +628,12 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   
   Future<void> _requestPermissions() async {
-    await [
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-      Permission.location,
-      Permission.notification,
-    ].request();
+    // Bluetooth permissions are requested by BluetoothMeterService when the
+    // meter is used (Android 12+: Nearby devices; older: location for scans).
+    if (kIsWeb) return;
+    try {
+      await Permission.notification.request();
+    } catch (_) {}
   }
 
   @override
@@ -746,8 +649,17 @@ class _DashboardScreenState extends State<DashboardScreen>
       animation: appState.btService,
       builder: (context, _) {
         final bt      = appState.btService;
-        final reading = bt.latest;
-        if (bt.state == BtState.connected) {
+        final live    = bt.isConnected && bt.livePacket != null;
+        final stored  = bt.lastStored;
+        // Live data when connected; otherwise the last reading kept on the
+        // phone, so Home still shows something with no meter/internet.
+        final reading = live
+            ? bt.latest
+            : stored != null
+                ? GasReading.fromLocal(stored)
+                : GasReading.empty();
+        final hasData = live || stored != null;
+        if (live) {
           NotificationService.evaluate(reading); // [FIX-09] no context arg
         }
         return Scaffold(
@@ -759,13 +671,19 @@ class _DashboardScreenState extends State<DashboardScreen>
                 child: Column(
                   children: [
                     const SizedBox(height: 8),
-                    _buildGaugeCard(reading, bt.state),
+                    _MeterStatusCard(
+                      bt: bt,
+                      lastUpdated: hasData ? reading.timestamp : null,
+                      live: live,
+                      onOpenSheet: () => showMeterSheet(context, bt),
+                    ),
+                    _buildGaugeCard(reading, hasData, live),
                     const SizedBox(height: 4),
-                    _buildStatusRow(reading, bt.state),
+                    _buildStatusRow(reading, hasData),
                     const SizedBox(height: 4),
-                    _buildMetricsRow(reading, bt.state),
+                    _buildMetricsRow(reading, hasData),
                     const SizedBox(height: 16),
-                    if (bt.state != BtState.connected)
+                    if (!bt.isConnected && bt.status != MeterLinkStatus.lost)
                       _buildConnectPrompt(bt),
                     const SizedBox(height: 24),
                   ],
@@ -778,8 +696,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildAppBar(BluetoothService bt, GasReading r) {
-  final connected = bt.state == BtState.connected;
+  Widget _buildAppBar(BluetoothMeterService bt, GasReading r) {
+  final connected = bt.isConnected;
   return SliverAppBar(
     expandedHeight: 80,
     pinned: true,
@@ -839,8 +757,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   );
 }
 
-  Widget _buildGaugeCard(GasReading r, BtState state) {
-    final connected = state == BtState.connected;
+  Widget _buildGaugeCard(GasReading r, bool connected, bool live) {
     final pct = connected ? r.percentage : 0.0;
     final color = pct > 40
         ? AppTheme.statusOK
@@ -896,8 +813,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildStatusRow(GasReading r, BtState state) {
-    final connected = state == BtState.connected;
+  Widget _buildStatusRow(GasReading r, bool connected) {
     final leak = connected ? r.leakStatus : LeakStatus.unknown;
     final (label, icon, color) = switch (leak) {
       LeakStatus.ok =>
@@ -962,8 +878,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildMetricsRow(GasReading r, BtState state) {
-    final connected = state == BtState.connected;
+  Widget _buildMetricsRow(GasReading r, bool connected) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -1048,7 +963,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildConnectPrompt(BluetoothService bt) {
+  Widget _buildConnectPrompt(BluetoothMeterService bt) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Card(
@@ -1080,160 +995,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                   backgroundColor: Colors.white,
                   foregroundColor: AppTheme.corporateBlue,
                 ),
-                onPressed: () => _showConnectSheet(context),
+                onPressed: () => showMeterSheet(context, bt),
                 child: const Text('Connect'),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  void _showConnectSheet(BuildContext context) {
-    final appState = _AppState.of(context);
-    final btService = appState.btService;
-
-    btService.startScan();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          builder: (context, scrollController) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Connect to Your Meter',
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.corporateBlue),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Select a meter that is already paired in your Android Bluetooth settings:',
-                    style: TextStyle(fontSize: 13, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: AnimatedBuilder(
-                      animation: btService,
-                      builder: (context, _) {
-                        final devices = btService.discovered;
-
-                        if (devices.isEmpty) {
-                          return Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  if (btService.isScanning) ...[
-                                    const CircularProgressIndicator(),
-                                    const SizedBox(height: 16),
-                                    const Text('Loading paired Bluetooth devices...'),
-                                  ] else ...[
-                                    Icon(
-                                      btService.scanError == null
-                                          ? Icons.bluetooth_disabled
-                                          : Icons.error_outline,
-                                      size: 42,
-                                      color: btService.scanError == null
-                                          ? AppTheme.statusUnknown
-                                          : AppTheme.statusWarning,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      btService.scanError ??
-                                          'No paired Bluetooth devices found. Pair your HC-05 meter in Android Bluetooth settings first.',
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    OutlinedButton.icon(
-                                      onPressed: btService.isScanning ? null : btService.startScan,
-                                      icon: const Icon(Icons.refresh),
-                                      label: const Text('Refresh paired devices'),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          );
-                        }
-
-                        return ListView.builder(
-                          controller: scrollController,
-                          itemCount: devices.length,
-                          itemBuilder: (context, index) {
-                            final info = devices[index];
-                            return Card(
-                              elevation: 1,
-                              margin: const EdgeInsets.symmetric(vertical: 6),
-                              child: ListTile(
-                                leading: Icon(
-                                  info.alreadyPaired
-                                      ? Icons.bluetooth_connected
-                                      : Icons.bluetooth_searching,
-                                  color: AppTheme.skyBlue,
-                                ),
-                                title: Text(
-                                  info.displayName,
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                                subtitle: Text(
-                                  info.alreadyPaired ? 'Paired (Ready)' : 'Nearby Device',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: info.alreadyPaired ? Colors.green : Colors.grey),
-                                ),
-                                trailing: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    minimumSize: const Size(60, 32),
-                                  ),
-                                  onPressed: () async {
-                                    await btService.connectToDevice(info);
-                                    if (context.mounted) Navigator.pop(context);
-                                  },
-                                  child: const Text('Connect', style: TextStyle(fontSize: 12)),
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }
@@ -1555,7 +1323,7 @@ class HistoryScreen extends StatelessWidget {
                   Padding(padding: const EdgeInsets.all(16), child: OutlinedButton.icon(
                     onPressed: () async {
                       final bt = _AppState.of(context).btService;
-                      if (bt.state != BtState.connected) {
+                      if (!bt.isConnected) {
                         if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connect to your meter first, then sync the live reading.')));
                         return;
                       }
@@ -1719,7 +1487,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (ok == true) widget.onLogout?.call();
   }
 
-  Future<void> _sendEmptyWeight(BluetoothService bt) async {
+  Future<void> _sendEmptyWeight(BluetoothMeterService bt) async {
     final size = double.tryParse(_sizeController.text.trim());
     if (size == null || size <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid cylinder size in kg.')));
@@ -1737,7 +1505,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } finally { if (mounted) setState(() => _busy = false); }
   }
 
-  Future<void> _calibrate(BluetoothService bt) async {
+  Future<void> _calibrate(BluetoothMeterService bt) async {
     setState(() => _busy = true);
     try {
       await bt.sendCommand('CALIBRATE_EMPTY');
@@ -1773,7 +1541,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return AnimatedBuilder(
       animation: bt,
       builder: (context, _) {
-        final connected = bt.state == BtState.connected;
+        final connected = bt.isConnected;
         final active = app.cylinders.where((c) => c.id == app.activeCylinderId).firstOrNull;
         return Scaffold(
           appBar: AppBar(title: const Text('Settings & Configuration')),
@@ -1782,13 +1550,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Card(child: ListTile(
               leading: Icon(connected ? Icons.bluetooth_connected : Icons.bluetooth_disabled, color: connected ? AppTheme.statusOK : AppTheme.statusUnknown),
               title: Text(connected ? 'Connected to meter' : 'Gas meter not connected', style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text(connected ? bt.connectedDevice ?? 'Bluetooth link active' : 'Pair and connect to enable calibration'),
-              trailing: IconButton(icon: const Icon(Icons.bluetooth_searching), onPressed: () async {
-                await bt.startScan();
-                if (!context.mounted) return;
-                showModalBottomSheet(context: context, isScrollControlled: true, useSafeArea: true,
-                  builder: (_) => _BluetoothSheet(bt: bt));
-              }),
+              subtitle: Text(connected ? bt.connectedDevice ?? 'Bluetooth link active' : meterStatusLabel(bt.status)),
+              trailing: IconButton(icon: const Icon(Icons.bluetooth_searching), onPressed: () => showMeterSheet(context, bt)),
             )),
             const SizedBox(height: 12),
             Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('Cylinder calibration', style: Theme.of(context).textTheme.labelSmall)),
@@ -1858,16 +1621,166 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 
-class _BluetoothSheet extends StatelessWidget {
-  final BluetoothService bt;
+// ─── Meter status card (Home) ───────────────────────────────────────────────
+class _MeterStatusCard extends StatelessWidget {
+  final BluetoothMeterService bt;
+  final DateTime? lastUpdated;
+  final bool live;
+  final VoidCallback onOpenSheet;
+  const _MeterStatusCard({required this.bt, required this.lastUpdated, required this.live, required this.onOpenSheet});
+
+  @override
+  Widget build(BuildContext context) {
+    final status = bt.status;
+    final (IconData icon, Color color) = switch (status) {
+      MeterLinkStatus.connected => (Icons.bluetooth_connected, AppTheme.statusOK),
+      MeterLinkStatus.connecting || MeterLinkStatus.lost => (Icons.bluetooth_searching, AppTheme.statusWarning),
+      MeterLinkStatus.bluetoothOff => (Icons.bluetooth_disabled, AppTheme.statusWarning),
+      MeterLinkStatus.permissionDenied => (Icons.block, AppTheme.statusCritical),
+      MeterLinkStatus.unsupported => (Icons.phone_android, AppTheme.statusUnknown),
+      _ => (Icons.bluetooth, AppTheme.statusUnknown),
+    };
+    final updated = lastUpdated == null
+        ? (status == MeterLinkStatus.connected ? 'Waiting for the first reading…' : 'No readings saved on this phone yet')
+        : '${live ? 'Live' : 'Saved on phone'} · last updated ${formatLastUpdated(lastUpdated!)}';
+    Widget? action;
+    switch (status) {
+      case MeterLinkStatus.bluetoothOff:
+        action = TextButton(onPressed: bt.enableBluetooth, child: const Text('Turn on'));
+      case MeterLinkStatus.permissionDenied:
+        action = TextButton(onPressed: () async { await bt.refreshDevices(); if (bt.status == MeterLinkStatus.permissionDenied) await bt.openPermissionSettings(); }, child: const Text('Allow'));
+      case MeterLinkStatus.connecting:
+      case MeterLinkStatus.lost:
+        action = const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2));
+      case MeterLinkStatus.unsupported:
+        action = null;
+      default:
+        action = TextButton(onPressed: onOpenSheet, child: Text(status == MeterLinkStatus.connected ? 'Manage' : 'Connect'));
+    }
+    return Card(
+      key: const Key('meter-status-card'),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: ListTile(
+        leading: Icon(icon, color: color),
+        title: Text(meterStatusLabel(status), style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(
+          [
+            if (bt.device != null && status != MeterLinkStatus.unsupported) bt.device!.displayName,
+            if (status == MeterLinkStatus.lost && bt.reconnectAttempt > 0) 'attempt ${bt.reconnectAttempt}',
+            updated,
+          ].join(' · '),
+          key: const Key('meter-last-updated'),
+        ),
+        trailing: action,
+      ),
+    );
+  }
+}
+
+/// Opens the meter connection sheet and refreshes paired devices.
+void showMeterSheet(BuildContext context, BluetoothMeterService bt) {
+  if (bt.isSupported) unawaited(bt.refreshDevices());
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (_) => _BluetoothSheet(bt: bt),
+  );
+}
+
+class _BluetoothSheet extends StatefulWidget {
+  final BluetoothMeterService bt;
   const _BluetoothSheet({required this.bt});
+
+  @override
+  State<_BluetoothSheet> createState() => _BluetoothSheetState();
+}
+
+class _BluetoothSheetState extends State<_BluetoothSheet> {
+  List<MeterDevice> _nearby = const [];
+  bool _searched = false;
+
+  BluetoothMeterService get bt => widget.bt;
+
+  Future<void> _discover() async {
+    final found = await bt.discoverNearby();
+    if (!mounted) return;
+    setState(() {
+      _searched = true;
+      _nearby = found.where((d) => !d.paired && !bt.devices.contains(d)).toList();
+    });
+  }
+
+  Future<void> _connect(MeterDevice d) async {
+    final ok = await bt.connect(d);
+    if (ok && mounted) Navigator.of(context).pop();
+  }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: bt,
       builder: (context, _) {
-        final devices = bt.discovered;
+        final status = bt.status;
+        final busy = status == MeterLinkStatus.connecting;
+        Widget body;
+        if (status == MeterLinkStatus.unsupported) {
+          body = const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Text('Bluetooth meter connection needs the Android app. Install XP Tech on an Android phone and open it near the meter.',
+                textAlign: TextAlign.center),
+          );
+        } else if (status == MeterLinkStatus.bluetoothOff) {
+          body = Column(mainAxisSize: MainAxisSize.min, children: [
+            const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Text('Bluetooth is off. Turn it on to reach your meter — no internet needed.', textAlign: TextAlign.center)),
+            ElevatedButton.icon(onPressed: bt.enableBluetooth, icon: const Icon(Icons.bluetooth), label: const Text('Turn on Bluetooth')),
+          ]);
+        } else if (status == MeterLinkStatus.permissionDenied) {
+          body = Column(mainAxisSize: MainAxisSize.min, children: [
+            Padding(padding: const EdgeInsets.symmetric(vertical: 16), child: Text(bt.lastError ?? 'Allow Bluetooth ("Nearby devices") so the app can talk to your meter.', textAlign: TextAlign.center)),
+            Wrap(spacing: 8, children: [
+              ElevatedButton(onPressed: bt.refreshDevices, child: const Text('Try again')),
+              OutlinedButton(onPressed: bt.openPermissionSettings, child: const Text('Open settings')),
+            ]),
+          ]);
+        } else {
+          final devices = bt.devices;
+          body = Flexible(
+            child: ListView(shrinkWrap: true, children: [
+              if (busy) const LinearProgressIndicator(),
+              if (bt.lastError != null && status != MeterLinkStatus.connected)
+                Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(bt.lastError!, style: const TextStyle(color: AppTheme.statusWarning))),
+              if (devices.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text('No paired meter yet. Tap "Find nearby meters" (HC-05, PIN usually 1234) or pair it in Android Bluetooth settings.', textAlign: TextAlign.center),
+                ),
+              for (final d in devices)
+                ListTile(
+                  leading: Icon(bt.device == d && bt.isConnected ? Icons.bluetooth_connected : Icons.bluetooth, color: AppTheme.skyBlue),
+                  title: Text(d.displayName),
+                  subtitle: Text('${d.address} • Paired${d.looksLikeMeter ? ' • Meter' : ''}'),
+                  trailing: bt.device == d && bt.isConnected
+                      ? TextButton(onPressed: bt.disconnect, child: const Text('Disconnect'))
+                      : TextButton(onPressed: busy ? null : () => _connect(d), child: const Text('Connect')),
+                ),
+              if (_searched && _nearby.isEmpty && !bt.isScanning)
+                const Padding(padding: EdgeInsets.all(8), child: Text('No new devices found nearby. Make sure the meter is powered on.', textAlign: TextAlign.center)),
+              for (final d in _nearby)
+                ListTile(
+                  leading: const Icon(Icons.bluetooth_searching, color: AppTheme.skyBlue),
+                  title: Text(d.displayName),
+                  subtitle: Text('${d.address} • Not paired'),
+                  trailing: TextButton(
+                    onPressed: () async {
+                      if (await bt.pair(d) && mounted) setState(() => _nearby = _nearby.where((x) => x != d).toList());
+                    },
+                    child: const Text('Pair'),
+                  ),
+                ),
+            ]),
+          );
+        }
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
@@ -1876,69 +1789,21 @@ class _BluetoothSheet extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Connect to your meter', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 4),
+                Text(meterStatusLabel(status), style: Theme.of(context).textTheme.bodyMedium),
                 const SizedBox(height: 8),
-                if (bt.state == BtState.connecting) const LinearProgressIndicator(),
-                if (bt.state == BtState.error && bt.scanError != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(bt.scanError!, style: const TextStyle(color: AppTheme.statusWarning)),
-                  ),
-                if (devices.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    child: Center(
-                      child: bt.isScanning
-                          ? const Column(mainAxisSize: MainAxisSize.min, children: [
-                              CircularProgressIndicator(),
-                              SizedBox(height: 12),
-                              Text('Loading paired Bluetooth devices...'),
-                            ])
-                          : Column(mainAxisSize: MainAxisSize.min, children: [
-                              Text(
-                                bt.scanError ?? 'No paired Bluetooth devices found. Pair the meter in Android Bluetooth settings first.',
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 12),
-                              OutlinedButton.icon(
-                                onPressed: bt.isScanning ? null : bt.startScan,
-                                icon: const Icon(Icons.refresh),
-                                label: const Text('Refresh'),
-                              ),
-                            ]),
+                body,
+                if (status == MeterLinkStatus.idle || status == MeterLinkStatus.notPaired || status == MeterLinkStatus.connected)
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    TextButton.icon(
+                      onPressed: bt.isScanning ? null : _discover,
+                      icon: bt.isScanning
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.radar),
+                      label: Text(bt.isScanning ? 'Searching…' : 'Find nearby meters'),
                     ),
-                  )
-                else
-                  Flexible(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: devices.length,
-                      itemBuilder: (context, index) {
-                        final info = devices[index];
-                        return ListTile(
-                          leading: const Icon(Icons.bluetooth_connected, color: AppTheme.skyBlue),
-                          title: Text(info.displayName),
-                          subtitle: Text('${info.address} • Paired'),
-                          trailing: TextButton(
-                            onPressed: bt.state == BtState.connecting ? null : () async {
-                              await bt.connectToDevice(info);
-                              if (context.mounted && bt.state == BtState.connected) {
-                                Navigator.of(context).pop();
-                              }
-                            },
-                            child: const Text('Connect'),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: bt.isScanning ? null : bt.startScan,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Reload paired devices'),
-                  ),
-                ),
+                    TextButton.icon(onPressed: bt.refreshDevices, icon: const Icon(Icons.refresh), label: const Text('Reload')),
+                  ]),
               ],
             ),
           ),
