@@ -1,6 +1,6 @@
 # XP Tech: handover notes
 
-_Last updated: 20 November 2026. These notes are for the next developer and the project owner._
+_Last updated: 20 November 2026 (evening, Africa/Lagos). These notes are for the next developer and the project owner._
 
 > **No secrets in this file.** Env vars are listed by **name only**. Real values live in Vercel project
 > settings, the Supabase dashboard, Sendchamp, Google Cloud and Hostinger. Never commit keys or passwords.
@@ -40,7 +40,7 @@ The app shows the gas level, sends low-gas alerts, keeps usage history and lists
 | **Backend API** | `xp-gastech-backend/` | Express app in `server.js`, served on Vercel through `api/index.js` (one function, rewrites all paths). Routes: `/health`, `/auth/*`, `/retailers`, `/businesses`, `/partner-stations/nearby`, and `/meters` (live; code is on the `offline-bluetooth` branch, see §4). |
 | **Web app** | Vercel project **xp-gastech-web**, https://xptechltd.com (`www.` redirects to the main domain) | Static Flutter web build plus `web/privacy.html`, `web/terms.html` and `web/vercel.json` (`cleanUrls`). There is no SPA catch-all; the Flutter app uses `/` only. |
 | **Database** | Supabase project **XP GAS TECH**, ref `byaphcwplmaugncbcius`, region **eu-west-2** | Plain Postgres used by the backend (not Supabase Auth). PostGIS for nearby search. RLS is on everywhere. Backend-only tables have **no** anon/authenticated access. |
-| **Messaging** | **Sendchamp**: SMS (OTP) and email (verification + welcome) | Same public key for both. There are no other providers (Twilio and Africa's Talking were removed). |
+| **Messaging** | **Sendchamp**: phone OTP via the **Verification API**; email (verification + welcome) as **plain text** | Same public key for both. There are no other providers (Twilio and Africa's Talking were removed). The `/api/v1/sms/send` path is not used for OTP (see §2 and §5). |
 | **Google Sign-In** | GCP project **xp-gastech**, OAuth consent screen **in production** | The web client ID is public (it's in `web/index.html` and `AppConfig`). Authorised JavaScript origins must include `https://xptechltd.com` and `https://www.xptechltd.com` (plus `http://localhost:<port>` for dev). |
 | **Domain, DNS, mail** | **Hostinger** | Domain `xptechltd.com` + DNS (points to Vercel). Mailboxes `admin@xptechltd.com` and `support@xptechltd.com`. |
 
@@ -67,6 +67,16 @@ All commits are on `main` unless noted otherwise.
 | 2026-11-20 | Privacy policy and terms pages: https://xptechltd.com/privacy, https://xptechltd.com/terms | `3cad2e2` |
 | 2026-11-20 | Google OAuth consent screen published (production) | (Google Cloud console, no commit) |
 | 2026-11-20 | Custom branded welcome + verification emails. Welcome email also goes to new Google sign-ups (best-effort, never blocks login). | `17b0956` |
+| 2026-11-20 | Sendchamp Silver email plan purchased (₦9,000, 10,000 emails). `SENDCHAMP_EMAIL_FROM=admin@xptechltd.com`, `SENDCHAMP_EMAIL_FROM_NAME=XP Tech`. Sender ID **XPTech** registered, still **Pending**. | (Sendchamp dashboard; no commit) |
+| 2026-11-20 | Emails switched to **plain text**. Sendchamp/Go54 delivers `/email/send` as `Content-Type: text/plain` even when `message_body.type` is `text/html` or `html`, so Gmail showed raw HTML tags. The From header is rewritten to `noreply@go54.com`. | (this patch set) |
+| 2026-11-20 | Phone OTP uses Sendchamp **Verification API** (`/verification/create` + `/confirm`, sender `Sendchamp` or `SENDCHAMP_OTP_SENDER`, 6-digit numeric, 10 min). The old app-generated code + `/sms/send` path remains as `SENDCHAMP_OTP_MODE=legacy` fallback. `sendchamp.js` is unchanged. | (this patch set) |
+
+**Signup behaviour (important):**
+- **Email sign-up** (`POST /auth/signup`): always sends a verification email (if email is configured). An optional phone, if provided, is **stored only** and is **not** OTP-verified. The user cannot sign in until they click the email link. After that, a welcome email is sent (best-effort).
+- **Phone sign-up** (`POST /auth/send-sms-code` then `/auth/verify-sms-code`): sends a plain-text OTP SMS via the Verification API, then creates/logs in the user and issues a session. No email is sent.
+- **Google sign-up** (`POST /auth/google`): first-time Google users get a welcome email (best-effort). No phone is collected and no SMS OTP is sent.
+- There is **no** profile endpoint that triggers phone verification if a user later adds a number.
+
 
 **Database migrations** (`xp-gastech-backend/sql/`):
 
@@ -80,9 +90,13 @@ All commits are on `main` unless noted otherwise.
 
 Check what's applied with: `select version, name from supabase_migrations.schema_migrations order by version;`
 
-**Current production deployments (20 Nov):**
-- API: `dpl_2AeeQnq5FN7yBeAWGu7Rz15WC9iQ`
+**Current production deployments (20 Nov, evening):**
+- API: `dpl_BrxneXFhfd9zN4VU2uJBLMKg6yLm` (Verification API OTP + plain-text email). Aliased to `https://api.xptechltd.com`.
 - Web: `dpl_egEvZjmdCHtD7ZXQjgN4PHfTJqaL`
+- Useful API rollbacks (promote in Vercel, do not force-push git):
+  - `dpl_HQ9x8cpV35kaPoC6xX9xAsJSBWmr` — plain-text email, old app-side OTP
+  - `dpl_8eu6z9dXvsrQaXWGusS9SysE7LXC` — branded HTML templates (will show as raw tags in Gmail)
+  - `dpl_2AeeQnq5FN7yBeAWGu7Rz15WC9iQ` — earlier production before the email/OTP work
 
 ---
 
@@ -187,10 +201,12 @@ flutter build web --release --dart-define=XP_API_BASE_URL=https://api.xptechltd.
 | `CORS_ORIGINS` | Comma-separated exact origins, e.g. `https://xptechltd.com,https://www.xptechltd.com` (localhost is always allowed) |
 | `GOOGLE_CLIENT_ID` | Google OAuth web client ID (audience check) |
 | `SENDCHAMP_PUBLIC_KEY` | Sendchamp API key (SMS + email) |
-| `SENDCHAMP_SENDER_NAME`, `SENDCHAMP_ROUTE` | SMS sender ID / route (`DND_NG` default) |
-| `SENDCHAMP_EMAIL_FROM`, `SENDCHAMP_EMAIL_FROM_NAME` | Email sender. Email is only sent when `SENDCHAMP_EMAIL_FROM` is set. |
+| `SENDCHAMP_SENDER_NAME`, `SENDCHAMP_ROUTE` | SMS *send* API sender ID / route (`DND_NG` default). Currently `SENDCHAMP_SENDER_NAME=Sendchamp`. Do not switch to `XPTech` until that sender ID is approved. |
+| `SENDCHAMP_OTP_SENDER` | Optional. Sender for the Verification API OTP (default `Sendchamp`, which works today). |
+| `SENDCHAMP_OTP_MODE` | Optional. Set to `legacy` to use the old app-generated code + `/sms/send` path. |
+| `SENDCHAMP_EMAIL_FROM`, `SENDCHAMP_EMAIL_FROM_NAME` | Requested email From (`admin@xptechltd.com` / `XP Tech`). Email is only sent when `SENDCHAMP_EMAIL_FROM` is set. Sendchamp currently rewrites the visible From to `noreply@go54.com`. |
 | `API_BASE_URL`, `APP_BASE_URL` | Used in email links (defaults `https://api.xptechltd.com`, `https://xptechltd.com`) |
-| `EMAIL_VERIFY_SUBJECT`, `EMAIL_VERIFY_HTML`, `EMAIL_WELCOME_SUBJECT`, `EMAIL_WELCOME_HTML`, `SMS_OTP_TEMPLATE` | Optional overrides for message text and templates |
+| `EMAIL_VERIFY_SUBJECT`, `EMAIL_VERIFY_HTML`, `EMAIL_VERIFY_TEXT`, `EMAIL_WELCOME_SUBJECT`, `EMAIL_WELCOME_HTML`, `EMAIL_WELCOME_TEXT`, `SMS_OTP_TEMPLATE` | Optional overrides for message text and templates. Live email uses the plain-text bodies. |
 | `PG_POOL_MAX`, `PORT`, `HOST`, `RUN_SERVER` | Optional runtime / local-dev settings |
 
 **Flutter (build-time `--dart-define`):** `XP_API_BASE_URL`, `GOOGLE_CLIENT_ID` (optional; defaults to the production web client).
@@ -227,14 +243,16 @@ TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/postgres npm test
 
 | # | Item | Impact | What to do |
 |---|---|---|---|
-| 1 | **Sendchamp wallet is ₦0.** SMS returns 407. | Phone OTP sign-in fails | Top up the Sendchamp wallet. Then test `/auth/send-sms-code` with a real number. |
-| 2 | **Email not active.** `/health` shows `emailConfigured: false`. | No verification or welcome emails are sent. Email sign-ups can't verify. | Subscribe to Sendchamp's Email plan, verify the sending domain/sender, then set `SENDCHAMP_EMAIL_FROM=no-reply@xptechltd.com` (optionally `SENDCHAMP_EMAIL_FROM_NAME=XP Tech`) in Vercel and redeploy. `/health` should then show `emailConfigured: true`. Send one test to an internal mailbox. |
+| 1 | **XPTech SMS sender ID is still Pending.** | Cannot brand OTP SMS as "XPTech" yet. The SMS *send* API also rejects the generic `Sendchamp` sender (400 invalid sender). | Wait for Sendchamp approval, then set `SENDCHAMP_OTP_SENDER=XPTech` (and later `SENDCHAMP_SENDER_NAME=XPTech` if you also use `/sms/send`) and redeploy. Phone OTP already works today via the Verification API with sender `Sendchamp`. |
+| 2 | **Sendchamp email cannot send HTML.** Gmail raw source is `Content-Type: text/plain`. The visible From is `noreply@go54.com`, not `admin@xptechltd.com`. | Emails work, but only as plain text, and they don't show the XP Tech mailbox. | Stay on the plain-text bodies in `sendchampEmail.js`. Ask Sendchamp/Go54 about HTML MIME and a custom From. Do not send HTML until a test arrives as `text/html`. |
 | 3 | **pg_cron not enabled** | Expired `auth_sessions` aren't purged daily (the backend still trims each user's stale sessions) | Supabase → Database → Extensions → enable `pg_cron`, then run `select cron.schedule('purge-auth-sessions','17 3 * * *','select public.purge_expired_auth_sessions()');` |
 | 4 | Verify-email **result page** (`GET /auth/verify-email`) still uses the old green "XP GasTech" style | Cosmetic, off-brand | Restyle `verifyPage()` in `src/routes/auth.js` to match the #0053BA email design |
 | 5 | **`xp-gastech-api.vercel.app` is stale.** It returns 404 on `/meters` and isn't this project's current domain. | Confusing if anyone uses it | Only use `https://api.xptechltd.com`. Remove or reassign that alias in Vercel. |
 | 6 | **Production `sendchamp.js` still has diagnostic probes** (extra logging, DNS/HTTPS probes on errors) that aren't in the repo | Noisy logs, slower failures | Deploy the clean repo version once `offline-bluetooth` is merged (see §4) |
 | 7 | **Legal pages use default wording** that the owner should confirm | Legal accuracy | Review `web/privacy.html` and `web/terms.html`: 30-day deletion/response windows, minimum age 18, liability cap (12 months' fees or NGN 10,000), Supabase EU region statement. Update the effective date if you change them. |
 | 8 | `offline-bluetooth` not merged | Phone Bluetooth + sync only on that branch | §3 checklist |
+| 9 | Optional phone on **email sign-up** is stored but not OTP-verified. Google sign-up has no phone step. | A user who types a number during email sign-up does not get an SMS. | If product wants that, call `sendSmsCode` after email signup (or after email verify) and add a verify-phone step in the app. |
+| 10 | Google welcome email still needs a **fresh** Google account test by the owner | Welcome on first Google sign-up not reconfirmed after the plain-text switch | Sign up once with a new Google account and confirm the welcome text arrives. |
 
 ---
 
