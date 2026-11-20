@@ -2,11 +2,15 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { pool } = require('../db/pool');
 const { sendSms, getSmsConfig } = require('./sendchamp');
+const { createVerification, confirmVerification } = require('./sendchampVerify');
 const { issueSession } = require('./sessions');
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const E164 = /^\+[1-9][0-9]{7,14}$/;
+// Stored in sms_verification_codes.code_hash for Verification API rows so
+// we can recover the Sendchamp reference (the actual OTP is never stored).
+const REF_PREFIX = 'scvr:';
 
 function normalizePhone(phone) {
   if (typeof phone !== 'string') return null;
@@ -17,7 +21,7 @@ function normalizePhone(phone) {
 
 const DEFAULT_OTP_TEMPLATE = 'Your XP GasTech verification code is {{code}}. It expires in 10 minutes.';
 
-// Customizable via SMS_OTP_TEMPLATE (must contain {{code}}); default is the original text.
+// Customizable via SMS_OTP_TEMPLATE (must contain {{code}}); used only by the legacy fallback.
 function buildOtpMessage(code) {
   const custom = (process.env.SMS_OTP_TEMPLATE || '').trim();
   const template = custom.includes('{{code}}') ? custom : DEFAULT_OTP_TEMPLATE;
@@ -26,6 +30,10 @@ function buildOtpMessage(code) {
 
 function generateCode() {
   return String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+}
+
+function useLegacyOtp() {
+  return (process.env.SENDCHAMP_OTP_MODE || '').trim().toLowerCase() === 'legacy';
 }
 
 async function upsertUserByPhone(client, phone) {
@@ -39,22 +47,10 @@ async function upsertUserByPhone(client, phone) {
   return inserted.rows[0];
 }
 
-async function sendSmsCode(phoneRaw) {
-  const phone = normalizePhone(phoneRaw);
-  if (!phone) {
-    const err = new Error('phone must be E.164, e.g. +2348012345678');
-    err.status = 400;
-    throw err;
-  }
-
-  const code = generateCode();
-  const codeHash = await bcrypt.hash(code, 10);
-  const expiresAt = new Date(Date.now() + CODE_TTL_MS);
-
+async function storeCodeRow(phone, codeHash, expiresAt) {
   const client = await pool.connect();
   try {
     await client.query('begin');
-    // Invalidate unused prior codes for this phone
     await client.query(
       `update sms_verification_codes
        set consumed_at = now()
@@ -73,13 +69,19 @@ async function sendSmsCode(phoneRaw) {
   } finally {
     client.release();
   }
+}
+
+async function sendSmsCodeLegacy(phone) {
+  const code = generateCode();
+  const codeHash = await bcrypt.hash(code, 10);
+  const expiresAt = new Date(Date.now() + CODE_TTL_MS);
+  await storeCodeRow(phone, codeHash, expiresAt);
 
   if (getSmsConfig().configured) {
     await sendSms(phone, buildOtpMessage(code));
     return { ok: true, phone, smsConfigured: true, expiresInSeconds: 600 };
   }
 
-  // Dev fallback when SMS provider env is empty — never log the code in production logs beyond this flag
   const payload = {
     ok: true,
     phone,
@@ -91,6 +93,25 @@ async function sendSmsCode(phoneRaw) {
     payload.devCode = code;
   }
   return payload;
+}
+
+async function sendSmsCode(phoneRaw) {
+  const phone = normalizePhone(phoneRaw);
+  if (!phone) {
+    const err = new Error('phone must be E.164, e.g. +2348012345678');
+    err.status = 400;
+    throw err;
+  }
+
+  if (useLegacyOtp() || !getSmsConfig().configured) {
+    return sendSmsCodeLegacy(phone);
+  }
+
+  const { reference } = await createVerification({ phone });
+  const expiresAt = new Date(Date.now() + CODE_TTL_MS);
+  await storeCodeRow(phone, REF_PREFIX + reference, expiresAt);
+  console.log('[sms] verification sent', { reference });
+  return { ok: true, phone, smsConfigured: true, expiresInSeconds: 600 };
 }
 
 async function verifySmsCode(phoneRaw, codeRaw, ctx = {}) {
@@ -148,16 +169,43 @@ async function verifySmsCode(phoneRaw, codeRaw, ctx = {}) {
       throw err;
     }
 
-    const match = await bcrypt.compare(code, row.code_hash);
-    if (!match) {
-      await client.query(
-        `update sms_verification_codes set attempt_count = attempt_count + 1 where id = $1`,
-        [row.id]
-      );
-      await client.query('commit');
-      const err = new Error('Invalid code');
-      err.status = 401;
-      throw err;
+    const isProvider = String(row.code_hash || '').startsWith(REF_PREFIX);
+    if (isProvider) {
+      const reference = row.code_hash.slice(REF_PREFIX.length);
+      try {
+        await confirmVerification({ reference, code });
+      } catch (e) {
+        if (e.code === 'OTP_INVALID') {
+          await client.query(
+            `update sms_verification_codes set attempt_count = attempt_count + 1 where id = $1`,
+            [row.id]
+          );
+          await client.query('commit');
+          const err = new Error('Invalid code');
+          err.status = 401;
+          throw err;
+        }
+        if (e.code === 'OTP_EXPIRED') {
+          await client.query(`update sms_verification_codes set consumed_at = now() where id = $1`, [row.id]);
+          await client.query('commit');
+          const err = new Error('Code expired. Request a new one.');
+          err.status = 400;
+          throw err;
+        }
+        throw e;
+      }
+    } else {
+      const match = await bcrypt.compare(code, row.code_hash);
+      if (!match) {
+        await client.query(
+          `update sms_verification_codes set attempt_count = attempt_count + 1 where id = $1`,
+          [row.id]
+        );
+        await client.query('commit');
+        const err = new Error('Invalid code');
+        err.status = 401;
+        throw err;
+      }
     }
 
     await client.query(
@@ -186,4 +234,4 @@ async function verifySmsCode(phoneRaw, codeRaw, ctx = {}) {
   };
 }
 
-module.exports = { sendSmsCode, verifySmsCode, normalizePhone, buildOtpMessage };
+module.exports = { sendSmsCode, verifySmsCode, normalizePhone, buildOtpMessage, REF_PREFIX };
