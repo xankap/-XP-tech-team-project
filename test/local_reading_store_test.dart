@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -25,6 +26,23 @@ void main() {
     expect(ids.every(re.hasMatch), isTrue);
     expect(ids.toSet().length, 500);
     expect(newClientReadingId(Random(1)), newClientReadingId(Random(1)));
+  });
+
+  test('sqflite store upgrades a v1 database without losing readings', () async {
+    final path = '${Directory.systemTemp.createTempSync('xpdb').path}/v1.db';
+    final v1 = await databaseFactoryFfi.openDatabase(path, options: OpenDatabaseOptions(version: 1, onCreate: (db, _) async {
+      await db.execute('''CREATE TABLE meter_readings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, client_reading_id TEXT NOT NULL UNIQUE, meter_id TEXT NOT NULL,
+        recorded_at INTEGER NOT NULL, percent REAL, weight_kg REAL, battery REAL, leak_level INTEGER,
+        source TEXT NOT NULL DEFAULT 'ble_offline', synced INTEGER NOT NULL DEFAULT 0, synced_at INTEGER,
+        UNIQUE (meter_id, recorded_at))''');
+    }));
+    await v1.insert('meter_readings', {'client_reading_id': 'old-1', 'meter_id': 'AA:AA', 'recorded_at': t0.millisecondsSinceEpoch, 'percent': 40});
+    await v1.close();
+    final s = await SqfliteReadingStore.open(factory: databaseFactoryFfi, path: path, now: () => t0);
+    expect((await s.unsynced()).single.clientReadingId, 'old-1');
+    expect(await s.markRejected({'old-1': 'bad'}), 1);
+    await s.close();
   });
 
   for (final kind in ['sqflite', 'memory']) {
@@ -91,6 +109,21 @@ void main() {
         expect(await store.markSynced(['id-0']), 0);
         expect(await store.count(synced: true), 2);
         expect((await store.unsynced()).map((r) => r.clientReadingId), ['id-2', 'id-3', 'id-4']);
+      });
+
+      test('per-meter queue, meters with pending data, and rejected readings', () async {
+        await store.insert(reading('AA:AA', t0.add(const Duration(minutes: 1)), id: 'a1'));
+        await store.insert(reading('BB:BB', t0, id: 'b1'));
+        await store.insert(reading('AA:AA', t0.add(const Duration(minutes: 2)), id: 'a2'));
+        expect(await store.unsyncedMeterIds(), ['BB:BB', 'AA:AA']);
+        expect((await store.unsynced(meterId: 'aa:aa')).map((r) => r.clientReadingId), ['a1', 'a2']);
+        expect(await store.markRejected({'a1': 'percent must be a number between 0 and 100'}), 1);
+        expect(await store.markRejected({'a1': 'again'}), 0, reason: 'only waiting rows change');
+        expect((await store.unsynced(meterId: 'AA:AA')).map((r) => r.clientReadingId), ['a2']);
+        expect(await store.count(synced: false), 2);
+        expect(await store.count(), 3, reason: 'rejected readings are kept');
+        await store.markSynced(['a2', 'b1']);
+        expect(await store.unsyncedMeterIds(), isEmpty);
       });
 
       test('prune drops old synced rows, then caps total keeping unsynced longest', () async {

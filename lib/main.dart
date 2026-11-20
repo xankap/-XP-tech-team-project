@@ -33,6 +33,7 @@ import 'services/xp_api.dart';
 import 'meter/bluetooth_meter_service.dart';
 import 'meter/local_reading_store.dart';
 import 'meter/meter_reading_parser.dart';
+import 'meter/meter_sync_service.dart';
 import 'meter/meter_transport.dart';
 import 'meter/reading_store_factory.dart';
 import 'widgets/business_gas_card.dart';
@@ -442,9 +443,13 @@ class _AppState extends StatefulWidget {
       ctx.findAncestorStateOfType<_AppStateData>()!;
 }
 
-class _AppStateData extends State<_AppState> {
+class _AppStateData extends State<_AppState> with WidgetsBindingObserver {
   final btService      = (debugMeterServiceFactory ??
       () => BluetoothMeterService(openStore: openPlatformReadingStore))();
+  late final MeterSyncService syncService = MeterSyncService(store: () async {
+    await btService.init();
+    return btService.store;
+  });
   final historyService = HistoryService();
   bool demoBusinessAccess = false;
   final List<GasCylinder> cylinders = [];
@@ -476,10 +481,15 @@ class _AppStateData extends State<_AppState> {
     super.initState();
     btService.addListener(_onBtUpdate);
     unawaited(btService.init());
+    WidgetsBinding.instance.addObserver(this);
+    SessionController.instance?.addListener(_onSessionChanged);
+    syncService.start();
     loadCylinders();
   }
 
   int _lastPacketCount = 0;
+  String? _registeredMac;
+  String? _lastStoredId;
 
   void _onBtUpdate() {
     // Only react to new packets, not to every status change.
@@ -487,11 +497,38 @@ class _AppStateData extends State<_AppState> {
       _lastPacketCount = btService.packetCount;
       historyService.recordReading(btService.latest);
     }
+    // Step 3: once connected (i.e. paired), register the meter to the account
+    // when online. Offline/signed-out it is retried by the next sync.
+    final d = btService.device;
+    if (btService.isConnected && d != null && d.address != _registeredMac) {
+      _registeredMac = d.address;
+      unawaited(syncService.ensureRegistered(d.address, label: d.name).then((_) {}, onError: (Object _) {
+        _registeredMac = null;
+      }));
+    }
+    // Step 4: a new reading was saved on the phone -> sync soon.
+    final stored = btService.lastStored?.clientReadingId;
+    if (stored != null && stored != _lastStoredId) {
+      _lastStoredId = stored;
+      syncService.requestSync();
+    }
+  }
+
+  void _onSessionChanged() {
+    if (SessionController.instance?.isSignedIn ?? false) unawaited(syncService.syncNow());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(syncService.syncNow());
   }
 
   @override
   void dispose() {
     btService.removeListener(_onBtUpdate);
+    WidgetsBinding.instance.removeObserver(this);
+    SessionController.instance?.removeListener(_onSessionChanged);
+    syncService.dispose();
     btService.dispose();
     super.dispose();
   }
@@ -1553,6 +1590,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: Text(connected ? bt.connectedDevice ?? 'Bluetooth link active' : meterStatusLabel(bt.status)),
               trailing: IconButton(icon: const Icon(Icons.bluetooth_searching), onPressed: () => showMeterSheet(context, bt)),
             )),
+            _CloudSyncTile(sync: app.syncService),
             const SizedBox(height: 12),
             Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('Cylinder calibration', style: Theme.of(context).textTheme.labelSmall)),
             Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1806,6 +1844,50 @@ class _BluetoothSheetState extends State<_BluetoothSheet> {
                   ]),
               ],
             ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Settings: readings waiting on the phone and the last upload.
+class _CloudSyncTile extends StatelessWidget {
+  final MeterSyncService sync;
+  const _CloudSyncTile({required this.sync});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: sync,
+      builder: (context, _) {
+        final s = sync.state;
+        final busy = s == MeterSyncState.syncing;
+        final title = switch (s) {
+          MeterSyncState.syncing => 'Syncing meter readings…',
+          MeterSyncState.upToDate => 'All readings synced',
+          MeterSyncState.signedOut => 'Sign in to sync readings',
+          MeterSyncState.waitingToRetry => 'Offline — will retry automatically',
+          MeterSyncState.attention => 'Some readings need attention',
+          MeterSyncState.idle => sync.pending == 0 ? 'All readings synced' : 'Readings waiting to sync',
+        };
+        final parts = <String>[
+          '${sync.pending} on this phone waiting',
+          if (sync.lastSyncAt != null) 'last synced ${formatLastUpdated(sync.lastSyncAt!)}',
+          if (sync.lastError != null && s != MeterSyncState.upToDate) sync.lastError!,
+        ];
+        return Card(
+          key: const Key('cloud-sync-tile'),
+          child: ListTile(
+            leading: Icon(
+              s == MeterSyncState.upToDate ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined,
+              color: s == MeterSyncState.attention ? AppTheme.statusWarning : AppTheme.skyBlue,
+            ),
+            title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text(parts.join(' · ')),
+            trailing: busy
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : IconButton(tooltip: 'Sync now', icon: const Icon(Icons.sync), onPressed: () => sync.syncNow()),
           ),
         );
       },

@@ -6,7 +6,9 @@
 //   recorded_at       when the phone received the packet (UTC)
 //   percent, weight_kg, battery, leak_level
 //   source            'ble_offline'
-//   synced / synced_at
+//   synced            0 = waiting, 1 = accepted by the server,
+//                     2 = rejected by the server as invalid (kept, not retried)
+//   synced_at, sync_error
 //
 // sqflite is used on Android/iOS: it is mature, has no code generation
 // (unlike drift), and plain SQL lets us express the de-duplication rules as
@@ -27,6 +29,8 @@ class LocalReading {
   final double? battery;
   final int? leakLevel;
   final String source;
+
+  /// True once the server answered for this reading (accepted or rejected).
   final bool synced;
 
   LocalReading({
@@ -66,7 +70,7 @@ class LocalReading {
         battery: (r['battery'] as num?)?.toDouble(),
         leakLevel: r['leak_level'] as int?,
         source: r['source'] as String,
-        synced: (r['synced'] as int? ?? 0) == 1,
+        synced: (r['synced'] as int? ?? 0) != 0,
       );
 
   /// JSON shape for the future upload endpoint (step 4).
@@ -107,8 +111,18 @@ abstract class ReadingStore {
   /// client_reading_id, or same meter + recorded_at) and nothing was written.
   Future<bool> insert(LocalReading r);
   Future<LocalReading?> latest({String? meterId});
-  Future<List<LocalReading>> unsynced({int limit = 500});
+  /// Waiting readings, oldest first, optionally for one meter.
+  Future<List<LocalReading>> unsynced({int limit = 500, String? meterId});
+
+  /// Meters that have readings waiting to be uploaded.
+  Future<List<String>> unsyncedMeterIds();
+
+  /// Marks readings the server accepted (stored, or already had).
   Future<int> markSynced(Iterable<String> clientReadingIds);
+
+  /// Marks readings the server rejected as invalid, so they are not retried
+  /// forever. They stay on the phone until normal pruning.
+  Future<int> markRejected(Map<String, String> errorsByClientReadingId);
   Future<int> count({bool? synced});
 
   /// Applies the retention policy. Returns the number of rows deleted.
@@ -125,7 +139,7 @@ class SqfliteReadingStore implements ReadingStore {
   int _insertsSincePrune = 0;
 
   static const fileName = 'xp_meter_readings.db';
-  static const _schemaVersion = 1;
+  static const _schemaVersion = 2;
 
   /// Opens (and creates/migrates) the store. [factory] and [path] are
   /// injectable for tests (sqflite_common_ffi + inMemoryDatabasePath).
@@ -138,7 +152,13 @@ class SqfliteReadingStore implements ReadingStore {
     final f = factory ?? databaseFactory;
     final p = path ?? '${await f.getDatabasesPath()}/$fileName';
     final db = await f.openDatabase(p,
-        options: OpenDatabaseOptions(version: _schemaVersion, onCreate: (db, v) => _create(db)));
+        options: OpenDatabaseOptions(
+          version: _schemaVersion,
+          onCreate: (db, v) => _create(db),
+          onUpgrade: (db, from, to) async {
+            if (from < 2) await db.execute('ALTER TABLE meter_readings ADD COLUMN sync_error TEXT');
+          },
+        ));
     final store = SqfliteReadingStore._(db, policy, now ?? DateTime.now);
     await store.prune();
     return store;
@@ -156,8 +176,9 @@ class SqfliteReadingStore implements ReadingStore {
         battery           REAL,
         leak_level        INTEGER CHECK (leak_level IS NULL OR leak_level BETWEEN 0 AND 2),
         source            TEXT    NOT NULL DEFAULT 'ble_offline',
-        synced            INTEGER NOT NULL DEFAULT 0,
+        synced            INTEGER NOT NULL DEFAULT 0 CHECK (synced IN (0, 1, 2)),
         synced_at         INTEGER,
+        sync_error        TEXT,
         UNIQUE (meter_id, recorded_at)
       )''');
     await db.execute('CREATE INDEX idx_meter_readings_unsynced ON meter_readings (synced, recorded_at)');
@@ -183,10 +204,36 @@ class SqfliteReadingStore implements ReadingStore {
   }
 
   @override
-  Future<List<LocalReading>> unsynced({int limit = 500}) async {
+  Future<List<LocalReading>> unsynced({int limit = 500, String? meterId}) async {
     final rows = await _db.query('meter_readings',
-        where: 'synced = 0', orderBy: 'recorded_at ASC, id ASC', limit: limit);
+        where: meterId == null ? 'synced = 0' : 'synced = 0 AND meter_id = ?',
+        whereArgs: meterId == null ? null : [normalizeMeterId(meterId)],
+        orderBy: 'recorded_at ASC, id ASC',
+        limit: limit);
     return rows.map(LocalReading.fromRow).toList();
+  }
+
+  @override
+  Future<List<String>> unsyncedMeterIds() async {
+    final rows = await _db.rawQuery(
+        'SELECT meter_id, MIN(recorded_at) first FROM meter_readings WHERE synced = 0 GROUP BY meter_id ORDER BY first');
+    return rows.map((r) => r['meter_id'] as String).toList();
+  }
+
+  @override
+  Future<int> markRejected(Map<String, String> errorsByClientReadingId) async {
+    if (errorsByClientReadingId.isEmpty) return 0;
+    var n = 0;
+    final at = _now().toUtc().millisecondsSinceEpoch;
+    await _db.transaction((txn) async {
+      for (final e in errorsByClientReadingId.entries) {
+        final err = e.value.length > 200 ? e.value.substring(0, 200) : e.value;
+        n += await txn.rawUpdate(
+            'UPDATE meter_readings SET synced = 2, synced_at = ?, sync_error = ? WHERE synced = 0 AND client_reading_id = ?',
+            [at, err, e.key]);
+      }
+    });
+    return n;
   }
 
   @override
@@ -209,8 +256,11 @@ class SqfliteReadingStore implements ReadingStore {
   @override
   Future<int> count({bool? synced}) async {
     final rows = await _db.rawQuery(
-        synced == null ? 'SELECT COUNT(*) c FROM meter_readings' : 'SELECT COUNT(*) c FROM meter_readings WHERE synced = ?',
-        synced == null ? null : [synced ? 1 : 0]);
+        synced == null
+            ? 'SELECT COUNT(*) c FROM meter_readings'
+            : synced
+                ? 'SELECT COUNT(*) c FROM meter_readings WHERE synced <> 0'
+                : 'SELECT COUNT(*) c FROM meter_readings WHERE synced = 0');
     return rows.first['c'] as int;
   }
 
@@ -218,13 +268,13 @@ class SqfliteReadingStore implements ReadingStore {
   Future<int> prune() async {
     _insertsSincePrune = 0;
     final cutoff = _now().toUtc().subtract(policy.keepSynced).millisecondsSinceEpoch;
-    var deleted = await _db.delete('meter_readings', where: 'synced = 1 AND recorded_at < ?', whereArgs: [cutoff]);
+    var deleted = await _db.delete('meter_readings', where: 'synced <> 0 AND recorded_at < ?', whereArgs: [cutoff]);
     final total = await count();
     final excess = total - policy.maxRows;
     if (excess > 0) {
       // Oldest synced rows go first, then (last resort) oldest unsynced.
       deleted += await _db.rawDelete(
-          'DELETE FROM meter_readings WHERE id IN (SELECT id FROM meter_readings ORDER BY synced DESC, recorded_at ASC, id ASC LIMIT ?)',
+          'DELETE FROM meter_readings WHERE id IN (SELECT id FROM meter_readings ORDER BY (synced <> 0) DESC, recorded_at ASC, id ASC LIMIT ?)',
           [excess]);
     }
     return deleted;
@@ -274,8 +324,29 @@ class MemoryReadingStore implements ReadingStore {
   }
 
   @override
-  Future<List<LocalReading>> unsynced({int limit = 500}) async =>
-      _sortedDesc().reversed.where((r) => !r.synced).take(limit).toList();
+  Future<List<LocalReading>> unsynced({int limit = 500, String? meterId}) async {
+    final m = meterId == null ? null : normalizeMeterId(meterId);
+    return _sortedDesc().reversed.where((r) => !r.synced && (m == null || r.meterId == m)).take(limit).toList();
+  }
+
+  @override
+  Future<List<String>> unsyncedMeterIds() async {
+    final out = <String>[];
+    for (final r in _sortedDesc().reversed) {
+      if (!r.synced && !out.contains(r.meterId)) out.add(r.meterId);
+    }
+    return out;
+  }
+
+  /// Server rejection messages (memory store keeps them for tests).
+  final Map<String, String> rejectedErrors = {};
+
+  @override
+  Future<int> markRejected(Map<String, String> errorsByClientReadingId) async {
+    final n = await markSynced(errorsByClientReadingId.keys);
+    rejectedErrors.addAll(errorsByClientReadingId);
+    return n;
+  }
 
   @override
   Future<int> markSynced(Iterable<String> clientReadingIds) async {

@@ -9,8 +9,16 @@ import 'session_controller.dart';
 /// Error with a user-facing [message].
 class XpApiException implements Exception {
   final String message;
+
+  /// HTTP status; null when the server could not be reached (offline/timeout).
   final int? statusCode;
-  const XpApiException(this.message, {this.statusCode});
+
+  /// Machine-readable error code from the server, e.g. METER_TAKEN.
+  final String? code;
+  const XpApiException(this.message, {this.statusCode, this.code});
+
+  /// Worth retrying later: offline, timeout, rate limit or server error.
+  bool get isTransient => statusCode == null || statusCode == 408 || statusCode == 429 || statusCode! >= 500;
   @override
   String toString() => message;
 }
@@ -57,6 +65,44 @@ class BusinessGasSummary {
   final DateTime? latestAt;
   final List<WeeklyGasUsage> weekly;
   const BusinessGasSummary({this.latestKg, this.latestPercent, this.latestAt, required this.weekly});
+}
+
+/// A gas meter registered to the signed-in account.
+class RemoteMeter {
+  final String id;
+  final String btAddress;
+  final String? label;
+  final double? cylinderSizeKg;
+  final DateTime? lastReadingAt;
+  const RemoteMeter({required this.id, required this.btAddress, this.label, this.cylinderSizeKg, this.lastReadingAt});
+
+  factory RemoteMeter.fromJson(Map<String, dynamic> j) => RemoteMeter(
+        id: j['id'].toString(),
+        btAddress: j['btAddress'].toString(),
+        label: j['label']?.toString(),
+        cylinderSizeKg: (j['cylinderSizeKg'] as num?)?.toDouble(),
+        lastReadingAt: j['lastReadingAt'] == null ? null : DateTime.tryParse(j['lastReadingAt'].toString()),
+      );
+}
+
+/// Server answer to a reading batch upload.
+class ReadingUploadResult {
+  /// Client ids the server now has (new or already stored) -> mark synced.
+  final List<String> accepted;
+
+  /// Client id -> reason, for readings the server will never accept.
+  final Map<String, String> rejected;
+  final int inserted;
+  const ReadingUploadResult({required this.accepted, required this.rejected, this.inserted = 0});
+
+  factory ReadingUploadResult.fromJson(Map<String, dynamic> j) => ReadingUploadResult(
+        accepted: (j['accepted'] as List? ?? const []).map((e) => e.toString()).toList(),
+        rejected: {
+          for (final r in (j['rejected'] as List? ?? const []))
+            if (r is Map && r['clientReadingId'] != null) r['clientReadingId'].toString(): r['error']?.toString() ?? 'rejected',
+        },
+        inserted: (j['inserted'] as num?)?.toInt() ?? 0,
+      );
 }
 
 /// Data API for xp-gastech-backend (retailers, business gas). Auth endpoints live in AuthApi.
@@ -112,7 +158,7 @@ class XpApi {
     } catch (_) {}
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw XpApiException(body['error']?.toString() ?? 'Request failed (${res.statusCode}).',
-          statusCode: res.statusCode);
+          statusCode: res.statusCode, code: body['code']?.toString());
     }
     return body;
   }
@@ -139,6 +185,49 @@ class XpApi {
             (m['kgUsed'] as num).toDouble(), (m['percentUsed'] as num).toDouble());
       }).toList(),
     );
+  }
+
+  // --- Meters (step 3) + offline reading sync (step 4) ---------------------
+
+  /// Registers a Bluetooth meter to my account (idempotent). Throws
+  /// XpApiException(code: 'METER_TAKEN') if another account owns it.
+  Future<RemoteMeter> registerMeter(String btAddress, {String? label, double? cylinderSizeKg}) async {
+    final body = await _sendAuthed((h) => _client.post(_uri('/meters'),
+        headers: h,
+        body: jsonEncode({
+          'btAddress': btAddress,
+          if (label != null && label.trim().isNotEmpty) 'label': label.trim(),
+          if (cylinderSizeKg != null) 'cylinderSizeKg': cylinderSizeKg,
+        })));
+    return RemoteMeter.fromJson(Map<String, dynamic>.from(body['meter'] as Map));
+  }
+
+  Future<List<RemoteMeter>> myMeters() async {
+    final body = await _sendAuthed((h) => _client.get(_uri('/meters'), headers: h));
+    return (body['meters'] as List? ?? const [])
+        .map((e) => RemoteMeter.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<RemoteMeter> updateMeter(String meterId, {String? label, double? cylinderSizeKg}) async {
+    final body = await _sendAuthed((h) => _client.patch(_uri('/meters/$meterId'),
+        headers: h,
+        body: jsonEncode({
+          if (label != null) 'label': label,
+          if (cylinderSizeKg != null) 'cylinderSizeKg': cylinderSizeKg,
+        })));
+    return RemoteMeter.fromJson(Map<String, dynamic>.from(body['meter'] as Map));
+  }
+
+  Future<void> removeMeter(String meterId) async {
+    await _sendAuthed((h) => _client.delete(_uri('/meters/$meterId'), headers: h));
+  }
+
+  /// Uploads up to 100 readings (JSON from LocalReading.toSyncJson()).
+  Future<ReadingUploadResult> uploadReadings(String meterId, List<Map<String, Object?>> readings) async {
+    final body = await _sendAuthed((h) => _client.post(_uri('/meters/$meterId/readings'),
+        headers: h, body: jsonEncode({'readings': readings})));
+    return ReadingUploadResult.fromJson(body);
   }
 
   Future<void> postGasReading({double? kgLeft, double? percentLeft, String? cylinderLabel}) async {

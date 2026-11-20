@@ -117,7 +117,6 @@ class BluetoothMeterService extends ChangeNotifier {
   Timer? _reconnectTimer;
   int _reconnectAttempt = 0;
   bool _userWantsConnection = false;
-  bool _initialized = false;
   bool _disposed = false;
   bool _scanning = false;
   final MeterLineFramer _framer = MeterLineFramer();
@@ -161,9 +160,10 @@ class BluetoothMeterService extends ChangeNotifier {
 
   /// Opens the store, loads the last reading and auto-connects to the last
   /// meter if Bluetooth is ready. Safe to call more than once.
-  Future<void> init() async {
-    if (_initialized) return;
-    _initialized = true;
+  Future<void> init() => _initFuture ??= _init();
+  Future<void>? _initFuture;
+
+  Future<void> _init() async {
     if (_openStore != null) {
       try {
         _store = await _openStore();
