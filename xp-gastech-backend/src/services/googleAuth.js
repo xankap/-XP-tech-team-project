@@ -70,7 +70,7 @@ async function loginWithGoogleIdToken(idToken, ctx = {}) {
   const picture = payload.picture || null;
 
   const existing = await pool.query(
-    `select id, email, phone, phone_verified_at, email_verified_at, created_at
+    `select id, email, phone, username, phone_verified_at, email_verified_at, created_at
      from users where email = $1`,
     [email]
   );
@@ -85,7 +85,7 @@ async function loginWithGoogleIdToken(idToken, ctx = {}) {
       `update users
        set email_verified_at = coalesce(email_verified_at, now())
        where id = $1
-       returning id, email, phone, phone_verified_at, email_verified_at, created_at`,
+       returning id, email, phone, username, phone_verified_at, email_verified_at, created_at`,
       [existing.rows[0].id]
     );
     user = updated.rows[0];
@@ -93,7 +93,7 @@ async function loginWithGoogleIdToken(idToken, ctx = {}) {
     const inserted = await pool.query(
       `insert into users (email, email_verified_at)
        values ($1, now())
-       returning id, email, phone, phone_verified_at, email_verified_at, created_at`,
+       returning id, email, phone, username, phone_verified_at, email_verified_at, created_at`,
       [email]
     );
     user = inserted.rows[0];

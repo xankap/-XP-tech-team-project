@@ -124,7 +124,7 @@ async function refreshSession(rawToken, ctx = {}) {
     await client.query('begin');
     const { rows } = await client.query(
       `select s.id, s.user_id, s.family_id, s.device_label, s.expires_at, s.revoked_at, s.revoked_reason,
-              u.email, u.phone
+              u.email, u.phone, u.username
          from public.auth_sessions s
          join public.users u on u.id = s.user_id
         where s.token_hash = $1
@@ -181,7 +181,7 @@ async function refreshSession(rawToken, ctx = {}) {
     );
     await client.query('commit');
 
-    const user = { id: row.user_id, email: row.email, phone: row.phone };
+    const user = { id: row.user_id, email: row.email, phone: row.phone, username: row.username || null };
     const token = signAccessToken(user, { sid: row.family_id });
     return sessionResponse(user, token, next.refreshToken);
   } catch (err) {

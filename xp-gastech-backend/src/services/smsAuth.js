@@ -4,6 +4,7 @@ const { pool } = require('../db/pool');
 const { sendSms, getSmsConfig } = require('./sendchamp');
 const { createVerification, confirmVerification } = require('./sendchampVerify');
 const { issueSession } = require('./sessions');
+const { publicUser } = require('./emailAuth');
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -37,11 +38,11 @@ function useLegacyOtp() {
 }
 
 async function upsertUserByPhone(client, phone) {
-  const existing = await client.query('select id, email, phone, created_at from users where phone = $1', [phone]);
+  const existing = await client.query('select id, email, phone, username, created_at from users where phone = $1', [phone]);
   if (existing.rows[0]) return existing.rows[0];
   const inserted = await client.query(
     `insert into users (phone) values ($1)
-     returning id, email, phone, created_at`,
+     returning id, email, phone, username, created_at`,
     [phone]
   );
   return inserted.rows[0];
@@ -230,7 +231,7 @@ async function verifySmsCode(phoneRaw, codeRaw, ctx = {}) {
   return {
     ok: true,
     ...session,
-    user: { id: user.id, email: user.email, phone: user.phone, created_at: user.created_at },
+    user: { ...publicUser(user), created_at: user.created_at },
   };
 }
 

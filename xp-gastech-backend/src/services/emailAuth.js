@@ -3,6 +3,14 @@ const crypto = require('crypto');
 const { pool } = require('../db/pool');
 const { getEmailConfig, sendEmail, verificationEmail, welcomeEmail } = require('./sendchampEmail');
 const { issueSession } = require('./sessions');
+const {
+  normalizeUsername,
+  isReserved,
+  invalidUsernameError,
+  takenUsernameError,
+  uniqueViolationKind,
+  isUsernameTaken,
+} = require('./usernames');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const E164 = /^\+[1-9][0-9]{7,14}$/;
@@ -33,6 +41,7 @@ function publicUser(row) {
     id: row.id,
     email: row.email,
     phone: row.phone,
+    username: row.username || null,
   };
 }
 
@@ -68,7 +77,7 @@ async function issueVerificationEmail(user) {
   }
 }
 
-async function signup({ email, password, phone }) {
+async function signup({ email, password, phone, username }) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) {
     const err = new Error('Valid email is required');
@@ -93,19 +102,28 @@ async function signup({ email, password, phone }) {
     throw err;
   }
 
+  const normalizedUsername = normalizeUsername(username);
+  if (normalizedUsername === undefined) {
+    throw invalidUsernameError();
+  }
+  if (normalizedUsername && isReserved(normalizedUsername)) {
+    throw invalidUsernameError('This username is not available');
+  }
+
   const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
 
   let user;
   try {
     const { rows } = await pool.query(
-      `insert into users (email, phone, password_hash)
-       values ($1, $2, $3)
-       returning id, email, phone, created_at`,
-      [normalizedEmail, normalizedPhone, passwordHash]
+      `insert into users (email, phone, password_hash, username)
+       values ($1, $2, $3, $4)
+       returning id, email, phone, username, created_at`,
+      [normalizedEmail, normalizedPhone, passwordHash, normalizedUsername]
     );
     user = rows[0];
   } catch (e) {
     if (e.code === '23505') {
+      if (uniqueViolationKind(e) === 'username') throw takenUsernameError();
       const err = new Error('Email or phone already registered');
       err.status = 409;
       throw err;
@@ -128,10 +146,10 @@ async function signup({ email, password, phone }) {
   };
 }
 
-async function login({ email, password }, ctx = {}) {
-  const normalizedEmail = normalizeEmail(email);
-  if (!normalizedEmail) {
-    const err = new Error('Valid email is required');
+async function login({ email, username, identifier, password }, ctx = {}) {
+  const rawId = [identifier, email, username].find((v) => typeof v === 'string' && v.trim());
+  if (!rawId) {
+    const err = new Error('Email or username is required');
     err.status = 400;
     throw err;
   }
@@ -141,20 +159,30 @@ async function login({ email, password }, ctx = {}) {
     throw err;
   }
 
+  const normalizedEmail = normalizeEmail(rawId);
+  const normalizedUsername = normalizedEmail ? null : normalizeUsername(rawId, { required: true });
+  if (!normalizedEmail && !normalizedUsername) {
+    const err = new Error('Enter a valid email or username');
+    err.status = 400;
+    throw err;
+  }
+
   const { rows } = await pool.query(
-    `select id, email, phone, password_hash, email_verified_at from users where email = $1`,
-    [normalizedEmail]
+    normalizedEmail
+      ? `select id, email, phone, username, password_hash, email_verified_at from users where email = $1`
+      : `select id, email, phone, username, password_hash, email_verified_at from users where username = $1`,
+    [normalizedEmail || normalizedUsername]
   );
   const row = rows[0];
   if (!row || !row.password_hash) {
-    const err = new Error('Invalid email or password');
+    const err = new Error('Invalid email, username or password');
     err.status = 401;
     throw err;
   }
 
   const ok = await bcrypt.compare(password, row.password_hash);
   if (!ok) {
-    const err = new Error('Invalid email or password');
+    const err = new Error('Invalid email, username or password');
     err.status = 401;
     throw err;
   }
@@ -226,4 +254,36 @@ async function resendVerification(emailRaw) {
   return { ok: true, message: 'If an account exists for that email and still needs verification, a new link has been sent.' };
 }
 
-module.exports = { signup, login, publicUser, verifyEmailToken, resendVerification, hashToken };
+
+async function checkUsernameAvailable(raw) {
+  const username = normalizeUsername(raw, { required: true });
+  if (!username) throw invalidUsernameError();
+  if (isReserved(username)) return { available: false, username };
+  const taken = await isUsernameTaken(pool, username);
+  return { available: !taken, username };
+}
+
+async function setUsername(userId, raw) {
+  const username = normalizeUsername(raw, { required: true });
+  if (!username) throw invalidUsernameError();
+  if (isReserved(username)) throw invalidUsernameError('This username is not available');
+  try {
+    const { rows } = await pool.query(
+      `update users set username = $1 where id = $2
+       returning id, email, phone, username, role, phone_verified_at, email_verified_at, created_at`,
+      [username, userId]
+    );
+    if (!rows[0]) {
+      const err = new Error('User not found');
+      err.status = 401;
+      throw err;
+    }
+    return { user: publicUser(rows[0]) };
+  } catch (e) {
+    if (e.status) throw e;
+    if (uniqueViolationKind(e) === 'username') throw takenUsernameError();
+    throw e;
+  }
+}
+
+module.exports = { signup, login, publicUser, verifyEmailToken, resendVerification, hashToken, checkUsernameAvailable, setUsername };

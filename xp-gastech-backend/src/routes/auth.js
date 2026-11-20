@@ -1,7 +1,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { sendSmsCode, verifySmsCode } = require('../services/smsAuth');
-const { signup, login, verifyEmailToken, resendVerification } = require('../services/emailAuth');
+const { signup, login, verifyEmailToken, resendVerification, checkUsernameAvailable, setUsername } = require('../services/emailAuth');
 const { getEmailConfig, esc, layout } = require('../services/sendchampEmail');
 const { loginWithGoogleIdToken } = require('../services/googleAuth');
 const jwt = require('jsonwebtoken');
@@ -17,7 +17,7 @@ function sendError(res, err, fallback, defaultStatus = 500) {
   if (!err.status) console.error(`[auth] ${fallback}:`, err);
   const message = err.status ? err.message || fallback : fallback;
   const body = { error: message };
-  if (err.status && ['EMAIL_NOT_VERIFIED', 'INVALID_REFRESH_TOKEN', 'REFRESH_RACE'].includes(err.code)) body.code = err.code;
+  if (err.status && ['EMAIL_NOT_VERIFIED', 'INVALID_REFRESH_TOKEN', 'REFRESH_RACE', 'USERNAME_TAKEN'].includes(err.code)) body.code = err.code;
   res.status(status).json(body);
 }
 
@@ -118,6 +118,7 @@ router.post('/signup', authLimiter, async (req, res) => {
       email: req.body?.email,
       password: req.body?.password,
       phone: req.body?.phone,
+      username: req.body?.username,
     });
     res.status(201).json(result);
   } catch (err) {
@@ -129,6 +130,8 @@ router.post('/login', authLimiter, async (req, res) => {
   try {
     const result = await login({
       email: req.body?.email,
+      username: req.body?.username,
+      identifier: req.body?.identifier,
       password: req.body?.password,
     }, sessionCtx(req));
     res.status(200).json(result);
@@ -137,6 +140,23 @@ router.post('/login', authLimiter, async (req, res) => {
   }
 });
 
+
+router.get('/username-available', authLimiter, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store').status(200).json(await checkUsernameAvailable(req.query?.u));
+  } catch (err) {
+    sendError(res, err, 'Could not check username');
+  }
+});
+
+router.patch('/me', requireAuth, async (req, res) => {
+  try {
+    const result = await setUsername(req.user.id, req.body?.username);
+    res.set('Cache-Control', 'no-store').status(200).json(result);
+  } catch (err) {
+    sendError(res, err, 'Could not update username');
+  }
+});
 
 router.post('/google', authLimiter, async (req, res) => {
   try {

@@ -37,7 +37,7 @@ async function requireAuth(req, res, next) {
                   where s.family_id = $2::uuid and s.revoked_at is null and s.expires_at > now())`
       : 'true';
     const { rows } = await pool.query(
-      `select u.id, u.email, u.phone, u.role, u.phone_verified_at, u.email_verified_at, u.created_at,
+      `select u.id, u.email, u.phone, u.username, u.role, u.phone_verified_at, u.email_verified_at, u.created_at,
               ${sessionCheck} as session_active
          from users u where u.id = $1`,
       sid ? [payload.sub, sid] : [payload.sub]
