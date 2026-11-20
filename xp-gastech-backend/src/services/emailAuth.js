@@ -184,7 +184,7 @@ async function verifyEmailToken(token) {
         set email_verified_at = coalesce(u.email_verified_at, now())
        from t
       where u.id = t.user_id
-      returning u.id, u.email`,
+      returning u.id, u.email, u.full_name`,
     [hashToken(token.toLowerCase())]
   );
   const user = rows[0];
@@ -192,7 +192,7 @@ async function verifyEmailToken(token) {
   // Best-effort welcome email: never fails verification.
   try {
     if (user.email && getEmailConfig().configured) {
-      await sendEmail({ to: user.email, ...welcomeEmail({ email: user.email }) });
+      await sendEmail({ to: user.email, ...welcomeEmail({ email: user.email, name: user.full_name }) });
     }
   } catch (e) {
     console.error('[email] welcome email failed:', e && e.code);

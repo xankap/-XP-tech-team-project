@@ -45,7 +45,7 @@ const sha = (t) => crypto.createHash('sha256').update(t).digest('hex');
 test('email config: configured only with key AND from address; defaults', () => {
   let c = mailer.getEmailConfig();
   assert.equal(c.configured, false);
-  assert.equal(c.fromName, 'XP GasTech');
+  assert.equal(c.fromName, 'XP Tech');
   assert.equal(c.apiBaseUrl, 'https://api.xptechltd.com');
   process.env.SENDCHAMP_PUBLIC_KEY = 'k';
   assert.equal(mailer.getEmailConfig().configured, false);
@@ -64,7 +64,7 @@ test('sendEmail: sends Sendchamp payload; errors map to EMAIL_SEND_FAILED', asyn
   assert.deepEqual(mails[0].payload, {
     subject: 'S',
     to: [{ email: 'a@b.co', name: 'Ann' }],
-    from: { email: 'no-reply@xptechltd.com', name: 'XP GasTech' },
+    from: { email: 'no-reply@xptechltd.com', name: 'XP Tech' },
     message_body: { type: 'text/html', value: '<p>h</p>' },
   });
   mailer.setTransport(async () => ({ status: 400, text: '{"status":"failed","code":400,"message":"no active subscription. Please subscribe on dashboard"}' }));
@@ -79,18 +79,47 @@ test('sendEmail: sends Sendchamp payload; errors map to EMAIL_SEND_FAILED', asyn
 
 test('templates: placeholders rendered + escaped; env override works', () => {
   const v = mailer.verificationEmail({ email: 'ann<x>@b.co', link: 'https://api.x/auth/verify-email?token=abc&a=1' });
-  assert.match(v.html, /Hi ann&lt;x&gt;,/);
+  assert.match(v.html, /Confirm your email, ann&lt;x&gt;/);
   assert.match(v.html, /href="https:\/\/api\.x\/auth\/verify-email\?token=abc&amp;a=1"/);
   assert.ok(!/\{\{/.test(v.html));
-  assert.equal(v.subject, 'Verify your XP GasTech email');
+  assert.equal(v.subject, 'Verify your email for XP Tech');
   process.env.EMAIL_VERIFY_SUBJECT = 'Custom';
   process.env.EMAIL_VERIFY_HTML = '<b>{{name}}|{{link}}</b>';
   const c = mailer.verificationEmail({ email: 'bob@b.co', link: 'L' });
   assert.equal(c.subject, 'Custom');
   assert.equal(c.html, '<b>bob|L</b>');
   const w = mailer.welcomeEmail({ email: 'bob@b.co' });
-  assert.match(w.html, /Hi bob,/);
+  assert.match(w.html, /Welcome to XP Tech, bob/);
   assert.match(w.html, /https:\/\/xptechltd\.com/);
+  assert.equal(w.subject, 'Welcome to XP Tech, bob');
+  const named = mailer.welcomeEmail({ email: 'bob@b.co', name: '  Ada <b>  ' });
+  assert.equal(named.name, 'Ada <b>');
+  assert.match(named.html, /Welcome to XP Tech, Ada &lt;b&gt;/);
+});
+
+test('default templates: every placeholder filled, branding, links and safety line', () => {
+  const v = mailer.verificationEmail({ email: 'ann@b.co', link: 'https://api.xptechltd.com/auth/verify-email?token=' + 'a'.repeat(64) });
+  const w = mailer.welcomeEmail({ email: 'ann@b.co', name: 'Ann' });
+  for (const m of [v, w]) {
+    assert.ok(!/\{\{/.test(m.html), 'no unrendered placeholders');
+    assert.match(m.html, /src="https:\/\/xptechltd\.com\/assets\/assets\/images\/xp_logo\.png"/);
+    assert.match(m.html, /#0053BA/);
+    assert.match(m.html, /call <strong>112<\/strong>/);
+    assert.match(m.html, /support@xptechltd\.com/);
+    assert.match(m.html, /href="https:\/\/xptechltd\.com\/privacy"/);
+    assert.match(m.html, /href="https:\/\/xptechltd\.com\/terms"/);
+    assert.match(m.html, /max-width:600px/);
+  }
+  assert.equal((v.html.match(/token=a{64}/g) || []).length, 4, 'button (VML + html) and fallback link');
+  assert.match(v.html, />Verify my email</);
+  assert.match(v.html, /24 hours/);
+  assert.match(v.html, /ignore this email/);
+  assert.match(w.html, /Welcome to XP Tech, Ann/);
+  assert.match(w.html, />Open XP Tech</);
+  assert.match(w.html, /href="https:\/\/xptechltd\.com"/);
+  for (const s of ['Live gas level', 'Low-gas alerts', 'Nearby refill', 'Usage history', 'Connect your meter', 'cylinder size', 'Turn on alerts']) {
+    assert.ok(w.html.includes(s), s);
+  }
 });
 
 test('SMS OTP text: default is exactly the original; env template customizes', () => {

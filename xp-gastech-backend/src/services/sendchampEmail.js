@@ -5,7 +5,7 @@ const { getSmsConfig } = require('./sendchamp');
 
 const EMAIL_HOST = 'api.sendchamp.com';
 const EMAIL_PATH = '/api/v1/email/send';
-const DEFAULT_FROM_NAME = 'XP GasTech';
+const DEFAULT_FROM_NAME = 'XP Tech';
 const DEFAULT_API_BASE = 'https://api.xptechltd.com';
 const DEFAULT_APP_BASE = 'https://xptechltd.com';
 
@@ -137,7 +137,11 @@ function render(template, vars) {
   return String(template).replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_, k) => (vars[k] === undefined ? '' : esc(vars[k])));
 }
 
-function displayName(email) {
+// Friendly name for greetings: the given name if we have one (e.g. from
+// Google), otherwise the part of the email before the @.
+function displayName(email, name) {
+  const given = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+  if (given) return given;
   const local = String(email || '').split('@')[0];
   return local || 'there';
 }
@@ -146,26 +150,28 @@ function displayName(email) {
  * Overridable via env: EMAIL_VERIFY_SUBJECT, EMAIL_VERIFY_HTML (full HTML with
  * {{name}} {{link}} {{app_url}}), EMAIL_WELCOME_SUBJECT, EMAIL_WELCOME_HTML.
  */
-function verificationEmail({ email, link }) {
+function verificationEmail({ email, link, name: givenName }) {
   const { appBaseUrl } = getEmailConfig();
+  const name = displayName(email, givenName);
   const tpl = loadTemplate(
     'verification.html',
     'EMAIL_VERIFY_HTML',
-    '<p>Hi {{name}}, verify your email: <a href="{{link}}">{{link}}</a></p>'
+    '<p>Hi {{name}}, verify your email for XP Tech: <a href="{{link}}">{{link}}</a></p>'
   );
-  const subject = (process.env.EMAIL_VERIFY_SUBJECT || '').trim() || 'Verify your XP GasTech email';
-  return { name: displayName(email), subject, html: render(tpl, { name: displayName(email), link, app_url: appBaseUrl }) };
+  const subject = (process.env.EMAIL_VERIFY_SUBJECT || '').trim() || 'Verify your email for XP Tech';
+  return { name, subject, html: render(tpl, { name, link, app_url: appBaseUrl }) };
 }
 
-function welcomeEmail({ email }) {
+function welcomeEmail({ email, name: givenName }) {
   const { appBaseUrl } = getEmailConfig();
+  const name = displayName(email, givenName);
   const tpl = loadTemplate(
     'welcome.html',
     'EMAIL_WELCOME_HTML',
-    '<p>Hi {{name}}, welcome to XP GasTech. <a href="{{app_url}}">Open the app</a></p>'
+    '<p>Welcome to XP Tech, {{name}}. <a href="{{app_url}}">Open XP Tech</a></p>'
   );
-  const subject = (process.env.EMAIL_WELCOME_SUBJECT || '').trim() || 'Welcome to XP GasTech';
-  return { name: displayName(email), subject, html: render(tpl, { name: displayName(email), app_url: appBaseUrl }) };
+  const subject = (process.env.EMAIL_WELCOME_SUBJECT || '').trim() || `Welcome to XP Tech, ${name}`;
+  return { name, subject, html: render(tpl, { name, app_url: appBaseUrl }) };
 }
 
 module.exports = {

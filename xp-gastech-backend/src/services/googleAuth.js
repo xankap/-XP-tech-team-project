@@ -2,6 +2,25 @@ const { OAuth2Client } = require('google-auth-library');
 const { pool } = require('../db/pool');
 const { publicUser } = require('./emailAuth');
 const { issueSession } = require('./sessions');
+const { getEmailConfig, sendEmail, welcomeEmail } = require('./sendchampEmail');
+
+// Longest we hold the login response for the welcome email. Sending is
+// best-effort: errors are logged and never fail or block sign-in.
+const WELCOME_WAIT_MS = 2500;
+
+async function sendGoogleWelcome(email, name) {
+  try {
+    if (!getEmailConfig().configured) return;
+    const send = sendEmail({ to: email, ...welcomeEmail({ email, name }) }).catch((e) => {
+      console.error('[google] welcome email failed:', e && e.code);
+    });
+    let timer;
+    await Promise.race([send, new Promise((r) => { timer = setTimeout(r, WELCOME_WAIT_MS); })]);
+    clearTimeout(timer);
+  } catch (e) {
+    console.error('[google] welcome email failed:', e && e.code);
+  }
+}
 
 function getGoogleClientId() {
   return (process.env.GOOGLE_CLIENT_ID || '').trim();
@@ -57,7 +76,11 @@ async function loginWithGoogleIdToken(idToken, ctx = {}) {
   );
 
   let user;
+  // Welcome new accounts, and existing ones whose email was never verified
+  // (they signed up with email but never got the welcome email).
+  let welcome = false;
   if (existing.rows[0]) {
+    welcome = !existing.rows[0].email_verified_at;
     const updated = await pool.query(
       `update users
        set email_verified_at = coalesce(email_verified_at, now())
@@ -74,9 +97,13 @@ async function loginWithGoogleIdToken(idToken, ctx = {}) {
       [email]
     );
     user = inserted.rows[0];
+    welcome = true;
   }
 
   const session = await issueSession(user, ctx);
+  if (welcome) {
+    await sendGoogleWelcome(email, payload.given_name || fullName);
+  }
   return {
     user: {
       ...publicUser(user),
