@@ -3,8 +3,11 @@ const path = require('path');
 const https = require('https');
 const { getSmsConfig } = require('./sendchamp');
 
-const EMAIL_HOST = 'api.sendchamp.com';
-const EMAIL_PATH = '/api/v1/email/send';
+const SENDCHAMP_EMAIL_HOST = 'api.sendchamp.com';
+const SENDCHAMP_EMAIL_PATH = '/api/v1/email/send';
+const RESEND_HOST = 'api.resend.com';
+const RESEND_PATH = '/emails';
+const DEFAULT_FROM_EMAIL = 'admin@xptechltd.com';
 const DEFAULT_FROM_NAME = 'XP Tech';
 const DEFAULT_API_BASE = 'https://api.xptechltd.com';
 const DEFAULT_APP_BASE = 'https://xptechltd.com';
@@ -14,27 +17,58 @@ function stripSlash(v) {
 }
 
 /**
- * Email goes through Sendchamp's Email API using the same SENDCHAMP_PUBLIC_KEY as SMS.
- * Configured = key present AND SENDCHAMP_EMAIL_FROM set.
+ * Email configuration:
+ * Prioritizes Resend if RESEND_API_KEY is present (delivers rich HTML + plain-text fallback).
+ * Otherwise falls back to Sendchamp Email API if SENDCHAMP_PUBLIC_KEY and SENDCHAMP_EMAIL_FROM are set.
  */
 function getEmailConfig() {
-  const apiKey = getSmsConfig().publicKey;
-  const fromEmail = (process.env.SENDCHAMP_EMAIL_FROM || '').trim();
-  const fromName = (process.env.SENDCHAMP_EMAIL_FROM_NAME || '').trim() || DEFAULT_FROM_NAME;
+  const resendApiKey = (process.env.RESEND_API_KEY || '').trim();
+  const sendchampKey = getSmsConfig().publicKey;
+  const sendchampFrom = (process.env.SENDCHAMP_EMAIL_FROM || '').trim();
+
+  let provider = 'none';
+  if (resendApiKey) {
+    provider = 'resend';
+  } else if (sendchampKey && sendchampFrom) {
+    provider = 'sendchamp';
+  }
+
+  const fromEmail = (
+    process.env.EMAIL_FROM ||
+    (provider === 'sendchamp' ? sendchampFrom : (process.env.SENDCHAMP_EMAIL_FROM || DEFAULT_FROM_EMAIL))
+  ).trim();
+  const fromName = (
+    process.env.EMAIL_FROM_NAME ||
+    process.env.SENDCHAMP_EMAIL_FROM_NAME ||
+    ''
+  ).trim() || DEFAULT_FROM_NAME;
   const apiBaseUrl = stripSlash((process.env.API_BASE_URL || '').trim() || DEFAULT_API_BASE);
   const appBaseUrl = stripSlash((process.env.APP_BASE_URL || '').trim() || DEFAULT_APP_BASE);
-  return { apiKey, fromEmail, fromName, apiBaseUrl, appBaseUrl, configured: Boolean(apiKey && fromEmail) };
+
+  return {
+    apiKey: provider === 'resend' ? resendApiKey : sendchampKey,
+    provider,
+    fromEmail,
+    fromName,
+    apiBaseUrl,
+    appBaseUrl,
+    configured: provider !== 'none',
+  };
 }
 
 // Plain https.request transport (fetch-with-body is unreliable on the Vercel runtime).
-function defaultTransport({ apiKey, payload }) {
+function defaultTransport({ apiKey, payload, provider = 'sendchamp' }) {
+  const isResend = provider === 'resend';
+  const hostname = isResend ? RESEND_HOST : SENDCHAMP_EMAIL_HOST;
+  const path = isResend ? RESEND_PATH : SENDCHAMP_EMAIL_PATH;
+
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(payload);
     const req = https.request(
       {
         method: 'POST',
-        hostname: EMAIL_HOST,
-        path: EMAIL_PATH,
+        hostname,
+        path,
         timeout: 15000,
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -71,14 +105,18 @@ function emailError(message, code, providerResponse) {
 function summarize(text) {
   try {
     const p = JSON.parse(text);
-    if (p && typeof p === 'object') return { status: p.status, code: p.code, message: p.message };
+    if (p && typeof p === 'object') {
+      return {
+        status: p.status || p.statusCode,
+        code: p.code || p.name,
+        message: p.message,
+      };
+    }
   } catch (_) {}
   return undefined;
 }
 
-// Sendchamp/Go54 delivers every /email/send message as text/plain (confirmed
-// in Gmail raw source for both type "text/html" and type "html"). HTML is
-// shown as visible tags, so we send a clean plain-text body.
+// Strip HTML tags for clean plain-text fallback
 function htmlToText(html) {
   return String(html || '')
     .replace(/<br\s*\/?>/gi, '\n')
@@ -101,25 +139,55 @@ function htmlToText(html) {
 }
 
 /**
- * Send one email through Sendchamp. Throws EMAIL_NOT_CONFIGURED / EMAIL_SEND_FAILED.
+ * Send one email. Delivers rich HTML (+ plain-text alternative) via Resend if configured,
+ * or plain-text fallback via Sendchamp.
+ * Throws EMAIL_NOT_CONFIGURED / EMAIL_SEND_FAILED.
  * Never logs the key or the message body.
  * @param {{to: string, name?: string, subject: string, html?: string, text?: string}} msg
  */
 async function sendEmail({ to, name, subject, html, text }) {
-  const { apiKey, fromEmail, fromName, configured } = getEmailConfig();
-  if (!configured) {
-    throw emailError('Email is not configured. Set SENDCHAMP_PUBLIC_KEY and SENDCHAMP_EMAIL_FROM.', 'EMAIL_NOT_CONFIGURED');
+  const cfg = getEmailConfig();
+  if (!cfg.configured) {
+    throw emailError(
+      'Email is not configured. Set RESEND_API_KEY (or SENDCHAMP_PUBLIC_KEY and SENDCHAMP_EMAIL_FROM).',
+      'EMAIL_NOT_CONFIGURED'
+    );
   }
+
+  if (cfg.provider === 'resend') {
+    const payload = {
+      from: `${cfg.fromName} <${cfg.fromEmail}>`,
+      to: [to],
+      subject,
+      html: html || undefined,
+      text: text || (html ? htmlToText(html) : undefined),
+    };
+    let res;
+    try {
+      res = await transport({ apiKey: cfg.apiKey, payload, provider: 'resend' });
+    } catch (e) {
+      console.error('[resend-email] request failed:', e && e.code, e && e.message);
+      throw emailError('Could not reach the email provider.', 'EMAIL_SEND_FAILED');
+    }
+    const summary = summarize(res && res.text);
+    if (!res || res.status < 200 || res.status >= 300) {
+      console.error('[resend-email] provider rejected:', res && res.status, JSON.stringify(summary));
+      throw emailError('The email provider rejected the request.', 'EMAIL_SEND_FAILED', summary);
+    }
+    return true;
+  }
+
+  // Fallback: Sendchamp (plain text delivery)
   const value = (text && String(text).trim()) || htmlToText(html);
   const payload = {
     subject,
     to: [{ email: to, name: name || to }],
-    from: { email: fromEmail, name: fromName },
+    from: { email: cfg.fromEmail, name: cfg.fromName },
     message_body: { type: 'text', value },
   };
   let res;
   try {
-    res = await transport({ apiKey, payload });
+    res = await transport({ apiKey: cfg.apiKey, payload, provider: 'sendchamp' });
   } catch (e) {
     console.error('[sendchamp-email] request failed:', e && e.code, e && e.message);
     throw emailError('Could not reach the email provider.', 'EMAIL_SEND_FAILED');
@@ -140,10 +208,10 @@ function esc(s) {
 }
 
 function layout(title, bodyHtml) {
-  return `<!doctype html><html><body style="margin:0;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a">
+  return `<!doctype html><html><body style="margin:0;background:#eef2f7;font-family:Arial,Helvetica,sans-serif;color:#1b2430">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px">
-<table role="presentation" width="480" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:8px;padding:32px;max-width:480px">
-<tr><td><h2 style="margin:0 0 16px;color:#0b6b3a">XP GasTech</h2><h3 style="margin:0 0 12px">${esc(title)}</h3>${bodyHtml}</td></tr></table></td></tr></table></body></html>`;
+<table role="presentation" width="480" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:12px;padding:32px;max-width:480px;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
+<tr><td><h2 style="margin:0 0 16px;color:#0053BA">XP Tech</h2><h3 style="margin:0 0 12px;color:#1b2430">${esc(title)}</h3>${bodyHtml}</td></tr></table></td></tr></table></body></html>`;
 }
 
 function loadTemplate(file, envName, fallback) {

@@ -7,7 +7,7 @@ const { pool } = require('../src/db/pool');
 const mailer = require('../src/services/sendchampEmail');
 const auth = require('../src/services/emailAuth');
 
-const ENV = ['SENDCHAMP_PUBLIC_KEY', 'SENDCHAMP_EMAIL_FROM', 'SENDCHAMP_EMAIL_FROM_NAME', 'API_BASE_URL', 'APP_BASE_URL', 'EMAIL_VERIFY_SUBJECT', 'EMAIL_VERIFY_HTML', 'EMAIL_WELCOME_HTML', 'EMAIL_WELCOME_SUBJECT', 'SMS_OTP_TEMPLATE'];
+const ENV = ['SENDCHAMP_PUBLIC_KEY', 'SENDCHAMP_EMAIL_FROM', 'SENDCHAMP_EMAIL_FROM_NAME', 'API_BASE_URL', 'APP_BASE_URL', 'EMAIL_VERIFY_SUBJECT', 'EMAIL_VERIFY_HTML', 'EMAIL_WELCOME_HTML', 'EMAIL_WELCOME_SUBJECT', 'SMS_OTP_TEMPLATE', 'RESEND_API_KEY', 'EMAIL_FROM', 'EMAIL_FROM_NAME'];
 const saved = {};
 const realQuery = pool.query;
 let queries;
@@ -75,6 +75,38 @@ test('sendEmail: sends Sendchamp payload; errors map to EMAIL_SEND_FAILED', asyn
   await assert.rejects(mailer.sendEmail({ to: 'a@b.co', subject: 's', html: 'h' }), { code: 'EMAIL_SEND_FAILED' });
   mailer.setTransport(async () => ({ status: 200, text: '' }));
   assert.equal(await mailer.sendEmail({ to: 'a@b.co', subject: 's', html: 'h' }), true);
+});
+
+test('sendEmail with Resend: sends rich HTML + text payload to Resend', async () => {
+  process.env.RESEND_API_KEY = 're_test_key';
+  const c = mailer.getEmailConfig();
+  assert.equal(c.configured, true);
+  assert.equal(c.provider, 'resend');
+  assert.equal(c.fromEmail, 'admin@xptechltd.com');
+
+  await mailer.sendEmail({
+    to: 'customer@example.com',
+    name: 'Customer',
+    subject: 'Welcome to XP Tech',
+    html: '<p>Welcome <b>Customer</b></p>',
+    text: 'Welcome Customer',
+  });
+
+  assert.equal(mails.length, 1);
+  assert.equal(mails[0].apiKey, 're_test_key');
+  assert.deepEqual(mails[0].payload, {
+    from: 'XP Tech <admin@xptechltd.com>',
+    to: ['customer@example.com'],
+    subject: 'Welcome to XP Tech',
+    html: '<p>Welcome <b>Customer</b></p>',
+    text: 'Welcome Customer',
+  });
+
+  mailer.setTransport(async () => ({ status: 422, text: '{"statusCode":422,"message":"Domain not found","name":"validation_error"}' }));
+  await assert.rejects(
+    mailer.sendEmail({ to: 'customer@example.com', subject: 's', html: 'h' }),
+    (e) => e.code === 'EMAIL_SEND_FAILED' && e.providerResponse.status === 422
+  );
 });
 
 test('templates: placeholders rendered + escaped; env override works', () => {

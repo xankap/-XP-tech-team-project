@@ -78,9 +78,9 @@ function verifyPage(ok) {
   const { appBaseUrl } = getEmailConfig();
   const title = ok ? 'Email verified' : 'Link invalid or expired';
   const body = ok
-    ? `<p>Your email is verified. You can now sign in to XP GasTech.</p>`
-    : `<p>This verification link is invalid, already used, or expired. Open the app, sign in and request a new verification email.</p>`;
-  return layout(title, `${body}<p><a href="${esc(appBaseUrl)}" style="display:inline-block;background:#0b6b3a;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none">Go to XP GasTech</a></p>`);
+    ? `<p style="font-size:15px;line-height:24px;color:#1b2430">Your email has been verified. You can now sign in to your XP Tech account.</p>`
+    : `<p style="font-size:15px;line-height:24px;color:#1b2430">This verification link is invalid, already used, or expired. Open the app, sign in, and request a new verification email.</p>`;
+  return layout(title, `${body}<p style="margin-top:24px"><a href="${esc(appBaseUrl)}" style="display:inline-block;background:#0053BA;color:#ffffff;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none">Open XP Tech</a></p>`);
 }
 
 router.get('/verify-email', verifyLimiter, async (req, res) => {
