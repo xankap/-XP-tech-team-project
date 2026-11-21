@@ -1,13 +1,13 @@
 # XP Tech: handover notes
 
-_Last updated: 20 November 2026 (evening, Africa/Lagos). These notes are for the next developer and the project owner._
+_Last updated: 21 November 2026 (morning, Africa/Lagos). These notes are for the next developer and the project owner._
 
 > **No secrets in this file.** Env vars are listed by **name only**. Real values live in Vercel project
 > settings, the Supabase dashboard, Sendchamp, Google Cloud and Hostinger. Never commit keys or passwords.
 
 **Contents**
 1. [Overview and architecture](#1-overview-and-architecture)
-2. [What's done](#2-whats-done-2026-11-19--20)
+2. [What's done](#2-whats-done-2026-11-19--21)
 3. [Branches](#3-branches)
 4. [Deploying, env vars and tests](#4-deploying-env-vars-and-tests)
 5. [Blockers and pending items](#5-blockers-and-pending-items)
@@ -51,7 +51,7 @@ The app shows the gas level, sends low-gas alerts, keeps usage history and lists
 
 ---
 
-## 2. What's done (2026-11-19 → 20)
+## 2. What's done (2026-11-19 → 21)
 
 All commits are on `main` unless noted otherwise.
 
@@ -68,9 +68,11 @@ All commits are on `main` unless noted otherwise.
 | 2026-11-20 | Google OAuth consent screen published (production) | (Google Cloud console, no commit) |
 | 2026-11-20 | Custom branded welcome + verification emails. Welcome email also goes to new Google sign-ups (best-effort, never blocks login). | `17b0956` |
 | 2026-11-20 | Sendchamp Silver email plan purchased (₦9,000, 10,000 emails). `SENDCHAMP_EMAIL_FROM=admin@xptechltd.com`, `SENDCHAMP_EMAIL_FROM_NAME=XP Tech`. Sender ID **XPTech** registered, still **Pending**. | (Sendchamp dashboard; no commit) |
-| 2026-11-20 | Emails switched to **plain text**. Sendchamp/Go54 delivers `/email/send` as `Content-Type: text/plain` even when `message_body.type` is `text/html` or `html`, so Gmail showed raw HTML tags. The From header is rewritten to `noreply@go54.com`. | (this patch set) |
-| 2026-11-20 | Phone OTP uses Sendchamp **Verification API** (`/verification/create` + `/confirm`, sender `Sendchamp` or `SENDCHAMP_OTP_SENDER`, 6-digit numeric, 10 min). The old app-generated code + `/sms/send` path remains as `SENDCHAMP_OTP_MODE=legacy` fallback. `sendchamp.js` is unchanged. | (this patch set) |
-| 2026-11-20 | **Usernames:** users can sign up with a username, log in with email or username, and see it on the dashboard. Migration **008** `users.username` (nullable, lowercase, unique, 3–20 `[a-z0-9._]`). `POST /auth/signup` accepts optional `username` (409 if taken). `GET /auth/username-available?u=`. `POST /auth/login` accepts `identifier` (or `email` / `username`). `PATCH /auth/me` sets/changes it (for Google/phone users too). Username is included in login, refresh, `/auth/me`, and session user objects. Email login is unchanged. `sendchamp.js` was not modified. | (this patch set) |
+| 2026-11-20 | Emails switched to **plain text**. Sendchamp/Go54 delivers `/email/send` as `Content-Type: text/plain` even when `message_body.type` is `text/html` or `html`, so Gmail showed raw HTML tags. The From header is rewritten to `noreply@go54.com`. | `479c3da` |
+| 2026-11-20 | Phone OTP uses Sendchamp **Verification API** (`/verification/create` + `/confirm`, sender `Sendchamp` or `SENDCHAMP_OTP_SENDER`, 6-digit numeric, 10 min). The old app-generated code + `/sms/send` path remains as `SENDCHAMP_OTP_MODE=legacy` fallback. `sendchamp.js` is unchanged. | `32b5bbc` |
+| 2026-11-20 | **Usernames (API):** users can sign up with a username and log in with email or username. Migration **008** `users.username` (nullable, lowercase, unique, 3–20 `[a-z0-9._]`). `POST /auth/signup` accepts optional `username` (409 `USERNAME_TAKEN` if taken). `GET /auth/username-available?u=`. `POST /auth/login` accepts `identifier` (or `email` / `username`). `PATCH /auth/me` sets/changes it (for Google/phone users too). Username is included in login, refresh, `/auth/me`, and session user objects. Email login is unchanged. `sendchamp.js` was not modified. | `2d96ba8` |
+| 2026-11-20 | **Usernames (app):** email signup requires a username. Login uses “Email or username”. The dashboard greets the user by username (falling back to name/email). Settings can set or change it. Phone and Google users are prompted if none is set. | `65165b6` |
+| 2026-11-21 | **Web at xptechltd.com** redeployed with the username UI. Live: `dpl_99Nh3mj16XyWoTuyiaqqSdqSwMHp` (00:32 Africa/Lagos). Rollback: `dpl_egEvZjmdCHtD7ZXQjgN4PHfTJqaL`. No new app commit; this is the `65165b6` Flutter web build. | (Vercel only) |
 
 **Signup behaviour (important):**
 - **Email sign-up** (`POST /auth/signup`): always sends a verification email (if email is configured). An optional `username` is stored (validated, unique, lowercase). An optional phone, if provided, is **stored only** and is **not** OTP-verified. The user cannot sign in until they click the email link. After that, a welcome email is sent (best-effort). Login then works with email or username plus password.
@@ -93,14 +95,15 @@ All commits are on `main` unless noted otherwise.
 
 Check what's applied with: `select version, name from supabase_migrations.schema_migrations order by version;`
 
-**Current production deployments (20 Nov, 23:52 Africa/Lagos):**
-- API: `dpl_oa3LDXfXDEwHEkefhNqn5mBpJYYP` (usernames + Verification API OTP + plain-text email). Aliased to `https://api.xptechltd.com`.
-- Web: `dpl_egEvZjmdCHtD7ZXQjgN4PHfTJqaL` (does **not** yet include the username UI). A release web build was made; uploading `build/web` through the file API failed because CanvasKit `.wasm` files are over the 8 MB upload limit. Deploy from a machine with the Vercel CLI: `flutter build web --release --dart-define=XP_API_BASE_URL=https://api.xptechltd.com` then deploy `build/web/` to production project `xp-gastech-web`.
-- Useful API rollbacks (promote in Vercel, do not force-push git):
-  - `dpl_BrxneXFhfd9zN4VU2uJBLMKg6yLm` — Verification API OTP + plain-text email, **no usernames**
-  - `dpl_HQ9x8cpV35kaPoC6xX9xAsJSBWmr` — plain-text email, old app-side OTP
-  - `dpl_8eu6z9dXvsrQaXWGusS9SysE7LXC` — branded HTML templates (will show as raw tags in Gmail)
-  - `dpl_2AeeQnq5FN7yBeAWGu7Rz15WC9iQ` — earlier production before the email/OTP work
+**Current production deployments (21 Nov, 00:32 Africa/Lagos):**
+- API: `dpl_oa3LDXfXDEwHEkefhNqn5mBpJYYP` (usernames + Verification API OTP + plain-text email + `/meters`). Aliased to `https://api.xptechltd.com`. This is a mixed file set (see §4) — not a straight deploy from `main`.
+- Web: `dpl_99Nh3mj16XyWoTuyiaqqSdqSwMHp` (username UI from `65165b6`: “Email or username” on login, username on signup, dashboard greeting). Aliased to `https://xptechltd.com` and `https://www.xptechltd.com` (`www` redirects to the apex domain). If an old login screen still appears, hard-refresh or clear site data (Flutter's service worker caches the previous build).
+- Useful rollbacks (promote in Vercel, do not force-push git):
+  - Web: `dpl_egEvZjmdCHtD7ZXQjgN4PHfTJqaL` — previous production web (**no** username UI)
+  - API: `dpl_BrxneXFhfd9zN4VU2uJBLMKg6yLm` — Verification API OTP + plain-text email, **no usernames**
+  - API: `dpl_HQ9x8cpV35kaPoC6xX9xAsJSBWmr` — plain-text email, old app-side OTP
+  - API: `dpl_8eu6z9dXvsrQaXWGusS9SysE7LXC` — branded HTML templates (will show as raw tags in Gmail)
+  - API: `dpl_2AeeQnq5FN7yBeAWGu7Rz15WC9iQ` — earlier production before the email/OTP work
 
 ---
 
@@ -108,7 +111,7 @@ Check what's applied with: `select version, name from supabase_migrations.schema
 
 | Branch | What it is | Status |
 |---|---|---|
-| `main` | Everything in §2 except the meter sync code | Deployed (web from `main`; the API is a mix, see §4) |
+| `main` | Everything in §2 except the meter sync code | Deployed (web from `main`, including usernames; the API is a mix, see §4) |
 | `offline-bluetooth` | `b0d6fe8` offline Bluetooth meter mode + `a89f21f` meter registration and offline reading sync | **NOT merged.** Needs a real hardware test first. |
 | `sendchamp-sms` | Old working branch for the Sendchamp switch | Already merged; can be deleted |
 
@@ -149,13 +152,13 @@ Once these pass: merge `offline-bluetooth` into `main`. After that, the repo mat
 
 ### ⚠️ CRITICAL: what code is where
 
-| Item | Repo `main` | Branch `offline-bluetooth` | Production API (`dpl_2AeeQnq5…`) |
+| Item | Repo `main` | Branch `offline-bluetooth` | Production API (`dpl_oa3LDXf…`, checked 21 Nov) |
 |---|---|---|---|
-| `src/routes/meters.js`, `/meters` route in `server.js`, `DELETE` in CORS | ❌ | ✅ | ✅ |
-| `src/services/sessions.js` (persistent login) | ✅ | ✅ (based on an older `main`, before the email work) | ✅ |
-| New email templates + Google welcome (`17b0956`) | ✅ | ❌ | ✅ |
-| `src/services/sendchamp.js` | clean version | clean version | **has extra diagnostic probes** (see §5) |
+| `src/routes/meters.js`, `/meters` route, `DELETE` in CORS | ❌ (`server.js` on `main` has no `/meters`) | ✅ | ✅ `meters.js` matches the branch. `server.js` is a **merge** of `main` + the `/meters` route (SHA matches neither branch alone). |
+| Persistent login, plain-text email, Verification API OTP, usernames (`sendchampEmail.js`, `sendchampVerify.js`, `smsAuth.js`, `usernames.js`, `routes/auth.js`) | ✅ | ❌ (older `main`, before this work) | ✅ files match `main` |
+| `src/services/sendchamp.js` | clean version | clean version | **has extra diagnostic probes** — SHA does not match the repo (see §5) |
 | `sql/007_meters_readings.sql` | ❌ | ✅ | applied |
+| `sql/008_users_username.sql` | ✅ | ❌ | applied |
 
 **Rules until `offline-bluetooth` is merged:**
 - **Never deploy the API from `main` alone.** That would delete `/meters` from production.
@@ -168,7 +171,14 @@ Once these pass: merge `offline-bluetooth` into `main`. After that, the repo mat
 
 ### How deploys are done
 
-Both projects are deployed by uploading files to Vercel (CLI `vercel deploy --prod`, or the REST/MCP `create_deployment` with a file list). There is no Git auto-deploy.
+There is no Git auto-deploy. Both projects are deployed by uploading files to Vercel.
+
+A `vcp_` token is stored in the `VERCEL_TOKEN` environment variable on the machine that deploys. **Never commit or print it.** That token type has two important limitations:
+
+- `npx vercel --prod` and `npx vercel link` fail with `User not found` (404). Do not use the regular CLI deploy/`link` flow with this token.
+- The Vercel MCP `upload_file` tool cannot upload files over 8 MB, which blocks Flutter's CanvasKit `.wasm` files. Do not use MCP to upload the web build.
+
+The method that works is to call the Vercel REST API with that token, via `npx vercel api` (or an equivalent HTTPS client): upload each file, then create a production deployment for the right project and team (`team_bckZnj331VhchWtQ6T78uq8Q`, slug `papagedonlabs-4556s-projects`). Confirm the production aliases moved, then hard-refresh the site.
 
 **API (`xp-gastech-api`):**
 - Deploy the contents of `xp-gastech-backend/` (`server.js`, `api/index.js`, `src/**`, `package.json`, `package-lock.json`, `vercel.json`) to production.
@@ -180,18 +190,29 @@ Both projects are deployed by uploading files to Vercel (CLI `vercel deploy --pr
   - Runtime logs show no errors.
 - Rollback: Vercel → Deployments → previous production → "Promote" / "Instant Rollback".
 
-**Web (`xp-gastech-web`):**
+**Web (`xp-gastech-web`, project `prj_n3yGZuKS0KJ01LQt7R1AfTU1DdMK`):**
 ```bash
 flutter build web --release --dart-define=XP_API_BASE_URL=https://api.xptechltd.com
-# deploy build/web/ to production (it already contains privacy.html, terms.html, vercel.json, icons, manifest)
+# Then upload every file under build/web/ (including canvaskit/*.wasm, privacy.html,
+# terms.html, vercel.json, icons, manifest) through the Vercel Files API and create
+# a production deployment with npx vercel api, as described above.
+# Do not commit build/web/.
 ```
 - Deploy web from **`main`**. The Bluetooth branch isn't hardware-tested, and web has no Bluetooth anyway.
 - Verify after deploying:
-  - `/` loads the app.
+  - `/` loads the app. Login shows “Email or username”. A hard refresh may be needed if a previous build is cached.
   - `/privacy` and `/terms` return 200 `text/html`.
   - `/manifest.json` and `/icons/Icon-192.png` return 200.
+  - Aliases `xptechltd.com` and `www.xptechltd.com` point at the new deployment.
 
-**Android:** `flutter build apk --release --dart-define=XP_API_BASE_URL=https://api.xptechltd.com`. Needs JDK 17+ and the Android SDK. The Maps key goes in `android/local.properties` (see `docs/GOOGLE_MAPS_KEY.md`). Release signing is not set up yet (see §6).
+**Android:** `flutter build apk --release --dart-define=XP_API_BASE_URL=https://api.xptechltd.com`. Needs JDK 17+ and the Android SDK. The Maps key goes in `android/local.properties` (see `docs/GOOGLE_MAPS_KEY.md`). Release signing is not set up yet (see §6). The last APK on the PC predates the username UI and should be rebuilt (see §5).
+
+### Test accounts
+
+Used for email, SMS and username checks. **Passwords are not recorded here.**
+
+- `papagedonlabs+xptest1@gmail.com` through `papagedonlabs+xptest7@gmail.com` (Gmail plus-aliases of the PAPAGEDON Labs mailbox).
+- `xptest7` was marked verified in the database for login testing and has username `xptest7`.
 
 ### Environment variables (names only)
 
@@ -257,6 +278,7 @@ TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/postgres npm test
 | 8 | `offline-bluetooth` not merged | Phone Bluetooth + sync only on that branch | §3 checklist |
 | 9 | Optional phone on **email sign-up** is stored but not OTP-verified. Google sign-up has no phone step. | A user who types a number during email sign-up does not get an SMS. | If product wants that, call `sendSmsCode` after email signup (or after email verify) and add a verify-phone step in the app. |
 | 10 | Google welcome email still needs a **fresh** Google account test by the owner | Welcome on first Google sign-up not reconfirmed after the plain-text switch | Sign up once with a new Google account and confirm the welcome text arrives. |
+| 11 | **Android APK needs a rebuild** on the PC | The last APK predates usernames and the latest API/SMS work | On the PC (Flutter + JDK 17+ + Android SDK): `flutter build apk --release --dart-define=XP_API_BASE_URL=https://api.xptechltd.com`. |
 
 ---
 
