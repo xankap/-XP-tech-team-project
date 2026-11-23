@@ -1,6 +1,6 @@
 # XP Tech: handover notes
 
-_Last updated: 21 November 2026 (morning, Africa/Lagos). These notes are for the next developer and the project owner._
+_Last updated: 23 November 2026 (Africa/Lagos). These notes are for the next developer and the project owner._
 
 > **No secrets in this file.** Env vars are listed by **name only**. Real values live in Vercel project
 > settings, the Supabase dashboard, Sendchamp, Google Cloud and Hostinger. Never commit keys or passwords.
@@ -73,6 +73,8 @@ All commits are on `main` unless noted otherwise.
 | 2026-11-20 | **Usernames (API):** users can sign up with a username and log in with email or username. Migration **008** `users.username` (nullable, lowercase, unique, 3–20 `[a-z0-9._]`). `POST /auth/signup` accepts optional `username` (409 `USERNAME_TAKEN` if taken). `GET /auth/username-available?u=`. `POST /auth/login` accepts `identifier` (or `email` / `username`). `PATCH /auth/me` sets/changes it (for Google/phone users too). Username is included in login, refresh, `/auth/me`, and session user objects. Email login is unchanged. `sendchamp.js` was not modified. | `2d96ba8` |
 | 2026-11-20 | **Usernames (app):** email signup requires a username. Login uses “Email or username”. The dashboard greets the user by username (falling back to name/email). Settings can set or change it. Phone and Google users are prompted if none is set. | `65165b6` |
 | 2026-11-21 | **Web at xptechltd.com** redeployed with the username UI. Live: `dpl_99Nh3mj16XyWoTuyiaqqSdqSwMHp` (00:32 Africa/Lagos). Rollback: `dpl_egEvZjmdCHtD7ZXQjgN4PHfTJqaL`. No new app commit; this is the `65165b6` Flutter web build. | (Vercel only) |
+| 2026-11-23 | **Gas Plant / Station Registration (Roadmap #5):** Added `lib/screens/retailer_registration_screen.dart` with smart Nigerian phone normalization (`080...` / `+234...`), 36 Nigerian states dropdown, GPS detection via `Geolocator`, profile status card (Approved, Pending, Rejected with revision flow), and live `isAvailable` stock toggle. Added `XpApi` client methods (`getMyRetailer`, `registerRetailer`, `updateRetailer`) + tests in `test/xp_api_test.dart`. Enhanced backend `PATCH /retailers/me` with `state` and `cityLga` update support + validation tests in `xp-gastech-backend/test/retailers.test.js`. Linked in Settings. | Local / `main` |
+| 2026-11-23 | **Consolidated `offline-bluetooth` into `main` (Roadmap #1):** Aligned repo with production. Brought `src/routes/meters.js`, `sql/007_meters_readings.sql`, and `test/meters.test.js` to `main`; mounted `/meters` and added `DELETE` in CORS in `server.js`. Extracted all `lib/meter/` offline services, SQLite buffer, and serial parser. Added all meter unit tests. Updated Android manifest permissions (Classic Bluetooth + Android 12+ runtime permissions + `POST_NOTIFICATIONS` + fixed XML comment syntax) and `MainActivity.kt` (`xp/device` MethodChannel). Switched `pubspec.yaml` to `flutter_blue_classic` + `sqflite`. Updated `XpApi` with `RemoteMeter`, `ReadingUploadResult`, and meter CRUD/sync methods. | Local / `main` |
 
 **Signup behaviour (important):**
 - **Email sign-up** (`POST /auth/signup`): always sends a verification email (if email is configured). An optional `username` is stored (validated, unique, lowercase). An optional phone, if provided, is **stored only** and is **not** OTP-verified. The user cannot sign in until they click the email link. After that, a welcome email is sent (best-effort). Login then works with email or username plus password.
@@ -150,24 +152,20 @@ Once these pass: merge `offline-bluetooth` into `main`. After that, the repo mat
 
 ## 4. Deploying, env vars and tests
 
-### ⚠️ CRITICAL: what code is where
+### ⚠️ Code alignment status (Updated 23 Nov)
 
 | Item | Repo `main` | Branch `offline-bluetooth` | Production API (`dpl_oa3LDXf…`, checked 21 Nov) |
 |---|---|---|---|
-| `src/routes/meters.js`, `/meters` route, `DELETE` in CORS | ❌ (`server.js` on `main` has no `/meters`) | ✅ | ✅ `meters.js` matches the branch. `server.js` is a **merge** of `main` + the `/meters` route (SHA matches neither branch alone). |
+| `src/routes/meters.js`, `/meters` route, `DELETE` in CORS | ✅ (Ported to `main`) | ✅ | ✅ `meters.js` matches. `server.js` mounts `/meters`. |
 | Persistent login, plain-text email, Verification API OTP, usernames (`sendchampEmail.js`, `sendchampVerify.js`, `smsAuth.js`, `usernames.js`, `routes/auth.js`) | ✅ | ❌ (older `main`, before this work) | ✅ files match `main` |
 | `src/services/sendchamp.js` | clean version | clean version | **has extra diagnostic probes** — SHA does not match the repo (see §5) |
-| `sql/007_meters_readings.sql` | ❌ | ✅ | applied |
+| `sql/007_meters_readings.sql` | ✅ (Ported to `main`) | ✅ | applied |
 | `sql/008_users_username.sql` | ✅ | ❌ | applied |
+| Gas station & plant registration (`routes/retailers.js`, `RetailerRegistrationScreen`) | ✅ (`main`) | ❌ | `routes/retailers.js` live (PATCH updated) |
 
-**Rules until `offline-bluetooth` is merged:**
-- **Never deploy the API from `main` alone.** That would delete `/meters` from production.
-- **Never deploy it from `offline-bluetooth` alone either.** That would roll back the new emails.
-- Build the API deploy from the **current live file set**:
-  1. Vercel → xp-gastech-api → Deployments → current production → Source, or the `list_deployment_files` API.
-  2. Change only the files you mean to change.
-  3. Compare SHA-1s with the live files before deploying.
-- After merging, deploy from `main` and remove the diagnostic probes from `sendchamp.js` at the same time.
+**Codebase is now aligned:**
+- `main` now includes all `/meters` endpoints and SQL migrations. Deploying API from `main` is safe and will not drop `/meters`.
+- `offline-bluetooth` services (`lib/meter/`) and Android configs are on `main`. Hardware testing with a physical HC-05 can now proceed directly from `main`.
 
 ### How deploys are done
 
@@ -275,10 +273,11 @@ TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/postgres npm test
 | 5 | **`xp-gastech-api.vercel.app` is stale.** It returns 404 on `/meters` and isn't this project's current domain. | Confusing if anyone uses it | Only use `https://api.xptechltd.com`. Remove or reassign that alias in Vercel. |
 | 6 | **Production `sendchamp.js` still has diagnostic probes** (extra logging, DNS/HTTPS probes on errors) that aren't in the repo | Noisy logs, slower failures | Deploy the clean repo version once `offline-bluetooth` is merged (see §4) |
 | 7 | **Legal pages use default wording** that the owner should confirm | Legal accuracy | Review `web/privacy.html` and `web/terms.html`: 30-day deletion/response windows, minimum age 18, liability cap (12 months' fees or NGN 10,000), Supabase EU region statement. Update the effective date if you change them. |
-| 8 | `offline-bluetooth` not merged | Phone Bluetooth + sync only on that branch | §3 checklist |
+| 8 | `offline-bluetooth` code merged into `main` | Phone Bluetooth + sync code and backend endpoints are now unified on `main`. Requires on-device HC-05 hardware verification. | Run §3 hardware test checklist on two Android devices with a real meter. |
 | 9 | Optional phone on **email sign-up** is stored but not OTP-verified. Google sign-up has no phone step. | A user who types a number during email sign-up does not get an SMS. | If product wants that, call `sendSmsCode` after email signup (or after email verify) and add a verify-phone step in the app. |
 | 10 | Google welcome email still needs a **fresh** Google account test by the owner | Welcome on first Google sign-up not reconfirmed after the plain-text switch | Sign up once with a new Google account and confirm the welcome text arrives. |
-| 11 | **Android APK needs a rebuild** on the PC | The last APK predates usernames and the latest API/SMS work | On the PC (Flutter + JDK 17+ + Android SDK): `flutter build apk --release --dart-define=XP_API_BASE_URL=https://api.xptechltd.com`. |
+| 11 | **Android APK needs a rebuild** on the PC | The last APK predates usernames, retailer registration, and the latest Bluetooth sync work | On the PC (Flutter + JDK 17+ + Android SDK): `flutter build apk --release --dart-define=XP_API_BASE_URL=https://api.xptechltd.com`. |
+| 12 | **Gas Plant / Retailer Registration Polish** | Core registration screen, API methods, and backend routes are complete. Polish needed for interactive map pin picker, consumer map cards, and admin approval script. | See Muse Code prompt in handover summary to implement remaining polish tasks. |
 
 ---
 
@@ -286,11 +285,10 @@ TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/postgres npm test
 
 Each stage lists its acceptance criteria. Don't start the next stage until the current one meets them.
 
-### 1. Hardware test + merge `offline-bluetooth`
+### 1. Hardware test on `main` (HC-05 meter)
+- Code is consolidated onto `main`. `flutter_blue_classic` + `sqflite` offline reading queue and background sync service are ready.
 - §3 checklist passes on two or more Android devices with a real HC-05 meter.
-- Merged to `main`. `flutter test` and backend tests are green.
-- API redeployed from `main`, and its files match the live set (including `meters.js`, now without the `sendchamp.js` probes).
-- The meter line format is documented in the repo.
+- Release APK builds and connects to physical hardware.
 
 ### 2. Android release build, signing and Play Store
 - Upload keystore created and stored safely (not in the repo). `key.properties` is git-ignored. Play App Signing enabled.
@@ -311,9 +309,12 @@ Each stage lists its acceptance criteria. Don't start the next stage until the c
 - Tested with the app in the background and killed.
 
 ### 5. Retailer sign-up / approval + map polish
-- A retailer can sign up, submit business details and location, and appears as `pending`.
-- An admin approves or rejects. Only `approved` retailers appear publicly (RLS already enforces this).
-- The map shows nearby approved retailers with distance, price/stock if provided, and call/directions buttons. It handles location permission denial gracefully.
+- ✅ **Done**: Registration UI (`RetailerRegistrationScreen`), Nigerian phone normalisation, 36 states dropdown, GPS detection, `XpApi` client (`getMyRetailer`, `registerRetailer`, `updateRetailer`), and backend routes (`routes/retailers.js`).
+- ✅ **Done**: Status dashboard with real-time `isAvailable` stock toggle for approved stations, pending verification notice, and rejected revision flow.
+- ⏳ **Remaining Polish**:
+  - Interactive Map Pin Picker (`GoogleMap` widget) inside registration screen to drag/pinpoint plant entrance.
+  - Consumer Refill Map cards with call and directions buttons.
+  - Admin review CLI script / UI (`/:id/review`) to approve/reject pending registrations.
 
 ### 6. Admin dashboard
 - Web-only admin area (role `admin`, checked server-side) to approve retailers, look up users and meters, and see recent errors.

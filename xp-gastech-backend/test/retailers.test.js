@@ -76,9 +76,11 @@ test('integration: register, PATCH /me, review -> nearby visibility', { skip: !D
     name: 'Test Gas Plant (LPG Refill Plant)', phone: '+2348012345678',
     address: '12 Station Road', state: 'Rivers', cityLga: 'Port Harcourt',
     latitude: 4.8156, longitude: 7.0498,
+    pricePerKg: 1400,
   });
   assert.equal(reg.status, 201);
   assert.equal(reg.body.retailer.status, 'pending');
+  assert.equal(reg.body.retailer.pricePerKg, 1400);
   const retailerId = reg.body.retailer.id;
   const nearby = () => call(null, 'GET', '/retailers/nearby?lat=4.8156&lng=7.0498&radius=10000');
   assert.deepEqual((await nearby()).body.stations, [], 'pending station is not listed');
@@ -104,12 +106,18 @@ test('integration: register, PATCH /me, review -> nearby visibility', { skip: !D
   assert.equal(approved.length, 1);
   assert.equal(approved[0].id, retailerId);
 
-  // toggling isAvailable:false excludes it; re-enabling restores it (review kept)
+  // toggling isAvailable:false keeps it visible as an out-of-stock station.
   assert.equal((await call(owner, 'PATCH', '/retailers/me', { isAvailable: false })).status, 200);
-  assert.deepEqual((await nearby()).body.stations, [], 'unavailable station is not listed');
+  assert.equal((await nearby()).body.stations[0].isAvailable, false);
+  assert.equal((await nearby()).body.stations[0].pricePerKg, 1400);
   r = await call(owner, 'PATCH', '/retailers/me', { isAvailable: true });
   assert.equal(r.body.retailer.status, 'approved');
   assert.equal((await nearby()).body.stations.length, 1);
+
+  // Price changes do not require another approval review.
+  r = await call(owner, 'PATCH', '/retailers/me', { pricePerKg: 1450 });
+  assert.equal(r.body.retailer.status, 'approved');
+  assert.equal(r.body.retailer.pricePerKg, 1450);
 
   // rejecting excludes it again; rejections need a reason
   assert.equal((await call(admin, 'POST', `/retailers/${retailerId}/review`, { decision: 'rejected' })).status, 400);

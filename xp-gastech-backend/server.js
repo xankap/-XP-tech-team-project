@@ -5,6 +5,7 @@ const { pool } = require('./src/db/pool');
 const authRoutes = require('./src/routes/auth');
 const retailerRoutes = require('./src/routes/retailers');
 const businessRoutes = require('./src/routes/businesses');
+const meterRoutes = require('./src/routes/meters');
 const { getSmsConfig } = require('./src/services/sendchamp');
 const { getEmailConfig } = require('./src/services/sendchampEmail');
 
@@ -37,7 +38,7 @@ app.use((req, res, next) => {
   if (origin && isAllowedOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Max-Age', '600');
   }
@@ -62,6 +63,7 @@ app.get('/health', (_req, res) => {
 app.use('/auth', authRoutes);
 app.use('/retailers', retailerRoutes);
 app.use('/businesses', businessRoutes);
+app.use('/meters', meterRoutes);
 // Flutter map contract alias: GET /partner-stations/nearby?latitude&longitude&radiusKm
 app.get('/partner-stations/nearby', retailerRoutes.nearbyHandler);
 

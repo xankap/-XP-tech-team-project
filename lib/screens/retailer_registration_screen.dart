@@ -6,24 +6,59 @@ import '../services/xp_api.dart';
 import '../theme/app_theme.dart';
 
 const List<String> _kNigerianStates = [
-  'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno',
-  'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu', 'FCT - Abuja', 'Gombe',
-  'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara', 'Lagos',
-  'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers', 'Sokoto',
-  'Taraba', 'Yobe', 'Zamfara'
+  'Abia',
+  'Adamawa',
+  'Akwa Ibom',
+  'Anambra',
+  'Bauchi',
+  'Bayelsa',
+  'Benue',
+  'Borno',
+  'Cross River',
+  'Delta',
+  'Ebonyi',
+  'Edo',
+  'Ekiti',
+  'Enugu',
+  'FCT - Abuja',
+  'Gombe',
+  'Imo',
+  'Jigawa',
+  'Kaduna',
+  'Kano',
+  'Katsina',
+  'Kebbi',
+  'Kogi',
+  'Kwara',
+  'Lagos',
+  'Nasarawa',
+  'Niger',
+  'Ogun',
+  'Ondo',
+  'Osun',
+  'Oyo',
+  'Plateau',
+  'Rivers',
+  'Sokoto',
+  'Taraba',
+  'Yobe',
+  'Zamfara'
 ];
 
 /// Screen allowing gas plants, refill stations, and retailers to register or manage their listing.
 class RetailerRegistrationScreen extends StatefulWidget {
   final String? initialName;
   final String? initialPhone;
-  const RetailerRegistrationScreen({super.key, this.initialName, this.initialPhone});
+  const RetailerRegistrationScreen(
+      {super.key, this.initialName, this.initialPhone});
 
   @override
-  State<RetailerRegistrationScreen> createState() => _RetailerRegistrationScreenState();
+  State<RetailerRegistrationScreen> createState() =>
+      _RetailerRegistrationScreenState();
 }
 
-class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen> {
+class _RetailerRegistrationScreenState
+    extends State<RetailerRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -31,6 +66,7 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
   final _cityController = TextEditingController();
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
+  final _priceController = TextEditingController();
 
   String? _selectedState;
   String _selectedFacilityType = 'LPG Refill Plant';
@@ -64,6 +100,7 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
     _cityController.dispose();
     _latController.dispose();
     _lngController.dispose();
+    _priceController.dispose();
     super.dispose();
   }
 
@@ -105,6 +142,7 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
     _cityController.text = p.cityLga ?? '';
     _latController.text = p.latitude.toStringAsFixed(6);
     _lngController.text = p.longitude.toStringAsFixed(6);
+    _priceController.text = p.pricePerKg?.toStringAsFixed(2) ?? '';
 
     if (p.state != null && _kNigerianStates.contains(p.state)) {
       _selectedState = p.state;
@@ -130,7 +168,8 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        throw Exception('Location services are disabled. Please enable GPS on your device.');
+        throw Exception(
+            'Location services are disabled. Please enable GPS on your device.');
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
@@ -141,11 +180,13 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
         }
       }
       if (permission == LocationPermission.deniedForever) {
-        throw Exception('Location permissions are permanently denied. Please enable them in device settings.');
+        throw Exception(
+            'Location permissions are permanently denied. Please enable them in device settings.');
       }
 
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.high),
       );
       if (!mounted) return;
       _latController.text = pos.latitude.toStringAsFixed(6);
@@ -189,6 +230,56 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
     }
   }
 
+  Future<void> _savePrice() async {
+    final controller = TextEditingController(text: _priceController.text);
+    final price = await showDialog<double>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Update price per kg'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration:
+              const InputDecoration(prefixText: '₦ ', suffixText: ' / kg'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              final value =
+                  double.tryParse(controller.text.replaceAll(',', '').trim());
+              if (value == null || value < 0) return;
+              Navigator.pop(context, value);
+            },
+            child: const Text('Save Price'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (price == null) return;
+    setState(() => _submitting = true);
+    try {
+      final updated = await _api.updateRetailer(pricePerKg: price);
+      if (!mounted) return;
+      setState(() {
+        _currentProfile = updated;
+        _priceController.text = price.toStringAsFixed(2);
+        _submitting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Price saved for your station.')));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Could not save price: $e')));
+    }
+  }
+
   /// Opens a full-screen map to fine-tune the plant's gate/entrance pin.
   /// Optional: if Maps is unavailable the manual fields and Auto-Detect GPS
   /// below keep working as fallbacks.
@@ -196,7 +287,12 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
     var initial = const LatLng(4.8156, 7.0498); // Port Harcourt fallback
     final lat = double.tryParse(_latController.text.trim());
     final lng = double.tryParse(_lngController.text.trim());
-    if (lat != null && lat >= -90 && lat <= 90 && lng != null && lng >= -180 && lng <= 180) {
+    if (lat != null &&
+        lat >= -90 &&
+        lat <= 90 &&
+        lng != null &&
+        lng >= -180 &&
+        lng <= 180) {
       initial = LatLng(lat, lng);
     }
     try {
@@ -214,7 +310,8 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                 body: Stack(
                   children: [
                     GoogleMap(
-                      initialCameraPosition: CameraPosition(target: initial, zoom: 15),
+                      initialCameraPosition:
+                          CameraPosition(target: initial, zoom: 15),
                       markers: {
                         Marker(
                           markerId: const MarkerId('plant-pin'),
@@ -233,7 +330,8 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                       top: 16,
                       child: Card(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
                           child: Text(
                             'Tap or drag the pin to your refill gate/entrance.\n'
                             '${current.latitude.toStringAsFixed(6)}, ${current.longitude.toStringAsFixed(6)}',
@@ -256,10 +354,12 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                           backgroundColor: AppTheme.corporateBlue,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
                         child: const Text('Use this location',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ),
@@ -279,7 +379,8 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Map is unavailable — type coordinates manually or use Auto-Detect GPS.')),
+            content: Text(
+                'Map is unavailable — type coordinates manually or use Auto-Detect GPS.')),
       );
     }
   }
@@ -288,17 +389,27 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
     if (!_formKey.currentState!.validate()) return;
     final lat = double.tryParse(_latController.text.trim());
     final lng = double.tryParse(_lngController.text.trim());
+    final pricePerKg =
+        double.tryParse(_priceController.text.replaceAll(',', '').trim());
 
     if (lat == null || lat < -90 || lat > 90) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid latitude between -90 and 90')),
+        const SnackBar(
+            content: Text('Enter a valid latitude between -90 and 90')),
       );
       return;
     }
     if (lng == null || lng < -180 || lng > 180) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid longitude between -180 and 180')),
+        const SnackBar(
+            content: Text('Enter a valid longitude between -180 and 180')),
       );
+      return;
+    }
+    if (_priceController.text.trim().isNotEmpty &&
+        (pricePerKg == null || pricePerKg < 0)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a valid price per kg.')));
       return;
     }
 
@@ -316,10 +427,13 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
           name: _nameController.text.trim(),
           phone: formattedPhone,
           address: _addressController.text.trim(),
-          cityLga: _cityController.text.trim().isEmpty ? null : _cityController.text.trim(),
+          cityLga: _cityController.text.trim().isEmpty
+              ? null
+              : _cityController.text.trim(),
           state: _selectedState,
           latitude: lat,
           longitude: lng,
+          pricePerKg: pricePerKg,
         );
       } else {
         // New registration
@@ -327,10 +441,13 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
           name: fullName,
           phone: formattedPhone,
           address: _addressController.text.trim(),
-          cityLga: _cityController.text.trim().isEmpty ? null : _cityController.text.trim(),
+          cityLga: _cityController.text.trim().isEmpty
+              ? null
+              : _cityController.text.trim(),
           state: _selectedState,
           latitude: lat,
           longitude: lng,
+          pricePerKg: pricePerKg,
         );
       }
 
@@ -354,7 +471,8 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
       if (msg.contains('already have a retailer profile')) {
         _loadProfile();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(msg)));
       }
     }
   }
@@ -365,7 +483,9 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
       appBar: AppBar(
         title: Text(_currentProfile != null && !_isEditing
             ? 'Gas Plant Dashboard'
-            : (_isEditing ? 'Edit Station Details' : 'Gas Plant & Retailer Sign-up')),
+            : (_isEditing
+                ? 'Edit Station Details'
+                : 'Gas Plant & Retailer Sign-up')),
         backgroundColor: AppTheme.corporateBlue,
         foregroundColor: Colors.white,
         actions: [
@@ -397,7 +517,8 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_rounded, size: 56, color: AppTheme.statusCritical),
+            const Icon(Icons.cloud_off_rounded,
+                size: 56, color: AppTheme.statusCritical),
             const SizedBox(height: 16),
             const Text(
               'Could not load station status',
@@ -432,20 +553,23 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
         statusColor = AppTheme.statusOK;
         statusIcon = Icons.check_circle_rounded;
         statusTitle = 'Plant Verified & Active';
-        statusSubtitle = 'Your station is live on the XP Tech refill network. Nearby customers can see your location and request refills.';
+        statusSubtitle =
+            'Your station is live on the XP Tech refill network. Nearby customers can see your location and request refills.';
         break;
       case 'rejected':
         statusColor = AppTheme.statusCritical;
         statusIcon = Icons.error_outline_rounded;
         statusTitle = 'Verification Needs Correction';
-        statusSubtitle = p.statusReason ?? 'Please update your station coordinates or business info and re-submit.';
+        statusSubtitle = p.statusReason ??
+            'Please update your station coordinates or business info and re-submit.';
         break;
       case 'pending':
       default:
         statusColor = const Color(0xFFD97706);
         statusIcon = Icons.pending_actions_rounded;
         statusTitle = 'Awaiting Admin Approval';
-        statusSubtitle = 'Your gas plant profile has been submitted. Our team validates coordinates and contact details before publishing to customers.';
+        statusSubtitle =
+            'Your gas plant profile has been submitted. Our team validates coordinates and contact details before publishing to customers.';
         break;
     }
 
@@ -457,7 +581,8 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
           // Status card
           Card(
             elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -466,13 +591,19 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                   const SizedBox(height: 12),
                   Text(
                     statusTitle,
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: statusColor),
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: statusColor),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     statusSubtitle,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.4),
+                    style: const TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.textSecondary,
+                        height: 1.4),
                   ),
                   if (p.status == 'approved') ...[
                     const Divider(height: 32),
@@ -484,10 +615,14 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                p.isAvailable ? 'Status: OPEN (In Stock)' : 'Status: CLOSED (Out of Stock)',
+                                p.isAvailable
+                                    ? 'Status: OPEN (In Stock)'
+                                    : 'Status: CLOSED (Out of Stock)',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: p.isAvailable ? AppTheme.statusOK : AppTheme.statusCritical,
+                                  color: p.isAvailable
+                                      ? AppTheme.statusOK
+                                      : AppTheme.statusCritical,
                                 ),
                               ),
                               const SizedBox(height: 2),
@@ -495,13 +630,18 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                                 p.isAvailable
                                     ? 'Cylinder owners can route to your plant'
                                     : 'Station is hidden from active refill search',
-                                style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppTheme.textSecondary),
                               ),
                             ],
                           ),
                         ),
                         if (_togglingAvailability)
-                          const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                          const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2))
                         else
                           Switch(
                             value: p.isAvailable,
@@ -518,9 +658,11 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                         _populateFormWithProfile(p);
                         setState(() => _isEditing = true);
                       },
-                      icon: const Icon(Icons.edit_rounded, color: AppTheme.statusCritical),
+                      icon: const Icon(Icons.edit_rounded,
+                          color: AppTheme.statusCritical),
                       label: const Text('Edit & Re-submit'),
-                      style: OutlinedButton.styleFrom(foregroundColor: AppTheme.statusCritical),
+                      style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.statusCritical),
                     ),
                   ],
                 ],
@@ -532,7 +674,8 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
           // Business Details card
           Card(
             elevation: 1,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -542,7 +685,8 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                     children: [
                       const CircleAvatar(
                         backgroundColor: Color(0xFFEFF6FF),
-                        child: Icon(Icons.local_gas_station_rounded, color: AppTheme.corporateBlue),
+                        child: Icon(Icons.local_gas_station_rounded,
+                            color: AppTheme.corporateBlue),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -551,12 +695,14 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                           children: [
                             Text(
                               p.name,
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               'ID: ${p.id.substring(0, 8)}...',
-                              style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                              style: const TextStyle(
+                                  fontSize: 12, color: AppTheme.textMuted),
                             ),
                           ],
                         ),
@@ -571,6 +717,12 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                         '${p.cityLga ?? ''}${p.cityLga != null && p.state != null ? ', ' : ''}${p.state ?? ''}'),
                   _infoRow(Icons.gps_fixed_rounded, 'GPS Coordinates',
                       '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}'),
+                  _infoRow(
+                      Icons.payments_outlined,
+                      'LPG Price',
+                      p.pricePerKg == null
+                          ? 'Not set'
+                          : '₦${p.pricePerKg!.toStringAsFixed(2)} / kg'),
                   if (p.createdAt != null)
                     _infoRow(Icons.calendar_today_rounded, 'Registered On',
                         '${p.createdAt!.day}/${p.createdAt!.month}/${p.createdAt!.year}'),
@@ -580,22 +732,37 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
           ),
           const SizedBox(height: 20),
 
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _submitting ? null : _savePrice,
+              icon: const Icon(Icons.sell_outlined),
+              label: const Text('Save Price per Kg'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.corporateBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
           // Action buttons
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    _populateFormWithProfile(p);
-                    setState(() => _isEditing = true);
-                  },
-                  icon: const Icon(Icons.edit_location_alt_rounded),
-                  label: const Text('Update Details'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  )
-                ),
+                    onPressed: () {
+                      _populateFormWithProfile(p);
+                      setState(() => _isEditing = true);
+                    },
+                    icon: const Icon(Icons.edit_location_alt_rounded),
+                    label: const Text('Update Details'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    )),
               ),
             ],
           ),
@@ -616,9 +783,13 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppTheme.textMuted)),
                 const SizedBox(height: 2),
-                Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                Text(value,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w500)),
               ],
             ),
           ),
@@ -641,7 +812,8 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                   color: AppTheme.corporateBlue.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.local_gas_station_rounded, color: AppTheme.corporateBlue, size: 30),
+                child: const Icon(Icons.local_gas_station_rounded,
+                    color: AppTheme.corporateBlue, size: 30),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -649,13 +821,19 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _isEditing ? 'Update Plant Information' : 'Register LPG Plant or Firm',
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                      _isEditing
+                          ? 'Update Plant Information'
+                          : 'Register LPG Plant or Firm',
+                      style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimary),
                     ),
                     const SizedBox(height: 2),
                     const Text(
                       'Partner with XP Tech to connect with cooking gas consumers.',
-                      style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                      style: TextStyle(
+                          fontSize: 13, color: AppTheme.textSecondary),
                     ),
                   ],
                 ),
@@ -670,7 +848,8 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
               decoration: InputDecoration(
                 labelText: 'Facility Type *',
                 prefixIcon: const Icon(Icons.business_rounded),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               items: _facilityTypes
                   .map((t) => DropdownMenuItem(value: t, child: Text(t)))
@@ -688,11 +867,14 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
               labelText: 'Plant or Business Name *',
               hintText: 'e.g. Apex Energy Gas Plant',
               prefixIcon: const Icon(Icons.storefront_rounded),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
             validator: (v) {
-              if (v == null || v.trim().length < 2) return 'Enter a valid name (min 2 characters)';
-              if (v.trim().length > 120) return 'Name cannot exceed 120 characters';
+              if (v == null || v.trim().length < 2)
+                return 'Enter a valid name (min 2 characters)';
+              if (v.trim().length > 120)
+                return 'Name cannot exceed 120 characters';
               return null;
             },
           ),
@@ -706,15 +888,37 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
               hintText: '08012345678 or +2348012345678',
               helperText: 'Nigerian format (e.g. 080... or +234...)',
               prefixIcon: const Icon(Icons.phone_rounded),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
             validator: (v) {
-              if (v == null || v.trim().isEmpty) return 'Phone number is required';
+              if (v == null || v.trim().isEmpty)
+                return 'Phone number is required';
               final normalized = _normalizePhone(v.trim());
               if (!RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(normalized)) {
                 return 'Enter a valid phone number (e.g. 08012345678 or +2348012345678)';
               }
               return null;
+            },
+          ),
+          const SizedBox(height: 16),
+
+          TextFormField(
+            controller: _priceController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: 'Price per kg (₦ / kg)',
+              hintText: 'e.g. 1400',
+              prefixText: '₦ ',
+              suffixText: ' / kg',
+              prefixIcon: const Icon(Icons.payments_outlined),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return null;
+              final price = double.tryParse(v.replaceAll(',', '').trim());
+              return price == null || price < 0 ? 'Enter a valid price' : null;
             },
           ),
           const SizedBox(height: 16),
@@ -726,11 +930,14 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
               labelText: 'Facility Physical Address *',
               hintText: 'Plot 4, Industrial Layout, Off Express Way',
               prefixIcon: const Icon(Icons.place_rounded),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
             validator: (v) {
-              if (v == null || v.trim().length < 3) return 'Enter a valid address (min 3 characters)';
-              if (v.trim().length > 200) return 'Address cannot exceed 200 characters';
+              if (v == null || v.trim().length < 3)
+                return 'Enter a valid address (min 3 characters)';
+              if (v.trim().length > 200)
+                return 'Address cannot exceed 200 characters';
               return null;
             },
           ),
@@ -744,13 +951,17 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                   isExpanded: true,
                   decoration: InputDecoration(
                     labelText: 'State *',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   items: _kNigerianStates
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s, overflow: TextOverflow.ellipsis)))
+                      .map((s) => DropdownMenuItem(
+                          value: s,
+                          child: Text(s, overflow: TextOverflow.ellipsis)))
                       .toList(),
                   onChanged: (v) => setState(() => _selectedState = v),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Select state' : null,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Select state' : null,
                 ),
               ),
               const SizedBox(width: 12),
@@ -760,7 +971,8 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                   decoration: InputDecoration(
                     labelText: 'City / LGA',
                     hintText: 'e.g. Ikeja',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
               ),
@@ -784,18 +996,25 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                   children: [
                     const Row(
                       children: [
-                        Icon(Icons.gps_fixed_rounded, size: 20, color: AppTheme.corporateBlue),
+                        Icon(Icons.gps_fixed_rounded,
+                            size: 20, color: AppTheme.corporateBlue),
                         SizedBox(width: 8),
-                        Text('GPS Coordinates *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        Text('GPS Coordinates *',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15)),
                       ],
                     ),
                     TextButton.icon(
                       onPressed: _fetchingLocation ? null : _getCurrentLocation,
                       icon: _fetchingLocation
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.my_location_rounded, size: 16),
                       label: const Text('Auto-Detect GPS'),
-                      style: TextButton.styleFrom(foregroundColor: AppTheme.corporateBlue),
+                      style: TextButton.styleFrom(
+                          foregroundColor: AppTheme.corporateBlue),
                     ),
                   ],
                 ),
@@ -810,30 +1029,36 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                     Expanded(
                       child: TextFormField(
                         controller: _latController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true, signed: true),
                         decoration: InputDecoration(
                           labelText: 'Latitude',
                           hintText: '6.4520',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12)),
                           filled: true,
                           fillColor: Colors.white,
                         ),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty) ? 'Required' : null,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextFormField(
                         controller: _lngController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true, signed: true),
                         decoration: InputDecoration(
                           labelText: 'Longitude',
                           hintText: '7.5105',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12)),
                           filled: true,
                           fillColor: Colors.white,
                         ),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty) ? 'Required' : null,
                       ),
                     ),
                   ],
@@ -853,7 +1078,8 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.corporateBlue,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ),
@@ -865,10 +1091,13 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
               if (_isEditing) ...[
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: _submitting ? null : () => setState(() => _isEditing = false),
+                    onPressed: _submitting
+                        ? null
+                        : () => setState(() => _isEditing = false),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                     child: const Text('Cancel'),
                   ),
@@ -883,17 +1112,22 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                     backgroundColor: AppTheme.corporateBlue,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   child: _submitting
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2),
                         )
                       : Text(
-                          _isEditing ? 'Save Station Changes' : 'Submit for Verification',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          _isEditing
+                              ? 'Save Station Changes'
+                              : 'Submit for Verification',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                 ),
               ),

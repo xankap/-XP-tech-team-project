@@ -133,7 +133,10 @@ class _DGMAppState extends State<DGMApp> {
           homeBuilder: (onLogout, user) => _ThemeScope(
             themeMode: _themeMode,
             onThemeModeChanged: _setThemeMode,
-            child: MainShell(onLogout: onLogout, accountLabel: user.displayName, session: widget.session),
+            child: MainShell(
+                onLogout: onLogout,
+                accountLabel: user.displayName,
+                session: widget.session),
           ),
         ),
       ),
@@ -157,7 +160,6 @@ class _ThemeScope extends InheritedWidget {
   bool updateShouldNotify(covariant _ThemeScope oldWidget) =>
       themeMode != oldWidget.themeMode;
 }
-
 
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -185,10 +187,10 @@ class GasReading {
       double gas = 0, weight = 0, bat = 0;
       int leak = 0;
       for (final p in parts) {
-        if (p.startsWith('GAS:'))  gas    = double.parse(p.substring(4));
-        if (p.startsWith('W:'))    weight = double.parse(p.substring(2));
-        if (p.startsWith('BAT:'))  bat    = double.parse(p.substring(4));
-        if (p.startsWith('LEAK:')) leak   = int.parse(p.substring(5));
+        if (p.startsWith('GAS:')) gas = double.parse(p.substring(4));
+        if (p.startsWith('W:')) weight = double.parse(p.substring(2));
+        if (p.startsWith('BAT:')) bat = double.parse(p.substring(4));
+        if (p.startsWith('LEAK:')) leak = int.parse(p.substring(5));
       }
       final status = leak == 2
           ? LeakStatus.critical
@@ -196,11 +198,11 @@ class GasReading {
               ? LeakStatus.warning
               : LeakStatus.ok;
       return GasReading(
-        percentage:  gas.clamp(0, 100),
-        weightKg:    weight,
-        batterySoc:  bat.clamp(0, 100),
-        leakStatus:  status,
-        timestamp:   DateTime.now(),
+        percentage: gas.clamp(0, 100),
+        weightKg: weight,
+        batterySoc: bat.clamp(0, 100),
+        leakStatus: status,
+        timestamp: DateTime.now(),
       );
     } catch (_) {
       return GasReading.empty();
@@ -208,11 +210,11 @@ class GasReading {
   }
 
   factory GasReading.empty() => GasReading(
-        percentage:  0,
-        weightKg:    0,
-        batterySoc:  0,
-        leakStatus:  LeakStatus.unknown,
-        timestamp:   DateTime.now(),
+        percentage: 0,
+        weightKg: 0,
+        batterySoc: 0,
+        leakStatus: LeakStatus.unknown,
+        timestamp: DateTime.now(),
       );
 }
 
@@ -222,9 +224,7 @@ class CookingSession {
   final double gasUsedKg;
 
   CookingSession(
-      {required this.start,
-      required this.end,
-      required this.gasUsedKg});
+      {required this.start, required this.end, required this.gasUsedKg});
 
   Duration get duration => end.difference(start);
 
@@ -253,7 +253,7 @@ class BtDeviceInfo {
     final name = device.name;
     return name != null && name.isNotEmpty ? name : device.address;
   }
-  
+
   String get address => device.address;
 }
 
@@ -285,7 +285,8 @@ class BluetoothService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      List<BluetoothDevice> bondedDevices = await FlutterBluetoothSerial.instance.getBondedDevices();
+      List<BluetoothDevice> bondedDevices =
+          await FlutterBluetoothSerial.instance.getBondedDevices();
       for (var d in bondedDevices) {
         _discovered.add(BtDeviceInfo(device: d, alreadyPaired: true));
       }
@@ -304,7 +305,7 @@ class BluetoothService extends ChangeNotifier {
 
     try {
       _connection = await BluetoothConnection.toAddress(info.address);
-      
+
       _connectedDevice = info.displayName;
       _connectedAddress = info.address;
       _scanError = null;
@@ -324,9 +325,9 @@ class BluetoothService extends ChangeNotifier {
       _sub!.onDone(() {
         disconnect();
       });
-
     } catch (e) {
-      _scanError = 'Could not connect to ${info.displayName}: ${e.toString().replaceFirst('Exception: ', '')}';
+      _scanError =
+          'Could not connect to ${info.displayName}: ${e.toString().replaceFirst('Exception: ', '')}';
       _connectedDevice = null;
       _connectedAddress = null;
       _connection = null;
@@ -336,8 +337,8 @@ class BluetoothService extends ChangeNotifier {
   }
 
   Future<void> connect(String deviceName) async {
-    final match = _discovered.where((d) =>
-        d.displayName.toLowerCase().contains(deviceName.toLowerCase()));
+    final match = _discovered.where(
+        (d) => d.displayName.toLowerCase().contains(deviceName.toLowerCase()));
     if (match.isNotEmpty) {
       await connectToDevice(match.first);
     } else {
@@ -363,7 +364,7 @@ class BluetoothService extends ChangeNotifier {
     _sub = null;
     await _connection?.close();
     _connection = null;
-    
+
     _connectedDevice = null;
     _connectedAddress = null;
     _state = BtState.disconnected;
@@ -385,7 +386,7 @@ class BluetoothService extends ChangeNotifier {
 
 class NotificationService {
   static bool _lowGasFired = false;
-  static bool _leakFired   = false;
+  static bool _leakFired = false;
 
   // [FIX-07] No BuildContext needed — push notifications work off-widget
   static void evaluate(GasReading reading) {
@@ -406,8 +407,7 @@ class NotificationService {
     }
   }
 
-  static Future<void> _push(
-      int id, String title, String body) async {
+  static Future<void> _push(int id, String title, String body) async {
     await notificationsPlugin.show(
       id: id,
       title: title,
@@ -448,7 +448,9 @@ class HistoryService extends ChangeNotifier {
   List<double> get dailyUsage => List.unmodifiable(_dailyUsage);
   bool get isLoaded => _loaded;
 
-  HistoryService() { load(); }
+  HistoryService() {
+    load();
+  }
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -476,24 +478,31 @@ class HistoryService extends ChangeNotifier {
   }
 
   void _rebuildDailyUsage() {
-    for (var i = 0; i < 7; i++) { _dailyUsage[i] = 0; }
+    for (var i = 0; i < 7; i++) {
+      _dailyUsage[i] = 0;
+    }
     final now = DateTime.now();
     for (final session in _sessions) {
       final age = DateTime(now.year, now.month, now.day)
-          .difference(DateTime(session.end.year, session.end.month, session.end.day)).inDays;
+          .difference(
+              DateTime(session.end.year, session.end.month, session.end.day))
+          .inDays;
       if (age >= 0 && age < 7) _dailyUsage[6 - age] += session.gasUsedKg;
     }
   }
 
   Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_storageKey, jsonEncode(_sessions.map((s) => {
-      'start': s.start.toIso8601String(),
-      'end': s.end.toIso8601String(),
-      'gasUsedKg': s.gasUsedKg,
-    }).toList()));
+    await prefs.setString(
+        _storageKey,
+        jsonEncode(_sessions
+            .map((s) => {
+                  'start': s.start.toIso8601String(),
+                  'end': s.end.toIso8601String(),
+                  'gasUsedKg': s.gasUsedKg,
+                })
+            .toList()));
   }
-
 
   void recordReading(GasReading r) {
     if (r.weightKg <= 0) return;
@@ -504,8 +513,10 @@ class HistoryService extends ChangeNotifier {
     if (_sessionStart != null && r.weightKg >= (_lastWeight! - 0.005)) {
       final used = _lastWeight! - r.weightKg;
       if (used > 0.01) {
-        _sessions.insert(0, CookingSession(
-          start: _sessionStart!, end: DateTime.now(), gasUsedKg: used));
+        _sessions.insert(
+            0,
+            CookingSession(
+                start: _sessionStart!, end: DateTime.now(), gasUsedKg: used));
         _rebuildDailyUsage();
         _persist();
         notifyListeners();
@@ -522,16 +533,26 @@ class GasCylinder {
   String location;
   String meterAddress;
   double cylinderSizeKg;
-  GasCylinder({required this.id, required this.name, required this.location,
-    required this.meterAddress, this.cylinderSizeKg = 0});
-  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'location': location,
-    'meterAddress': meterAddress, 'cylinderSizeKg': cylinderSizeKg};
+  GasCylinder(
+      {required this.id,
+      required this.name,
+      required this.location,
+      required this.meterAddress,
+      this.cylinderSizeKg = 0});
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'location': location,
+        'meterAddress': meterAddress,
+        'cylinderSizeKg': cylinderSizeKg
+      };
   factory GasCylinder.fromJson(Map<String, dynamic> j) => GasCylinder(
-    id: j['id'] as String, name: j['name'] as String,
-    location: j['location'] as String, meterAddress: j['meterAddress'] as String,
-    cylinderSizeKg: (j['cylinderSizeKg'] as num? ?? 0).toDouble());
+      id: j['id'] as String,
+      name: j['name'] as String,
+      location: j['location'] as String,
+      meterAddress: j['meterAddress'] as String,
+      cylinderSizeKg: (j['cylinderSizeKg'] as num? ?? 0).toDouble());
 }
-
 
 // ════════════════════════════════════════════════════════════════════════════
 // 6. APP STATE  [FIX-03] Moved before MainShell so it compiles in order
@@ -549,7 +570,7 @@ class _AppState extends StatefulWidget {
 }
 
 class _AppStateData extends State<_AppState> {
-  final btService      = BluetoothService();
+  final btService = BluetoothService();
   final historyService = HistoryService();
   bool demoBusinessAccess = false;
   final List<GasCylinder> cylinders = [];
@@ -564,7 +585,7 @@ class _AppStateData extends State<_AppState> {
         cylinders
           ..clear()
           ..addAll((jsonDecode(raw) as List<dynamic>).map((e) =>
-            GasCylinder.fromJson(Map<String, dynamic>.from(e as Map))));
+              GasCylinder.fromJson(Map<String, dynamic>.from(e as Map))));
         activeCylinderId ??= cylinders.isEmpty ? null : cylinders.first.id;
         if (mounted) setState(() {});
       } catch (_) {}
@@ -573,7 +594,8 @@ class _AppStateData extends State<_AppState> {
 
   Future<void> saveCylinders() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_cylindersKey, jsonEncode(cylinders.map((c) => c.toJson()).toList()));
+    await prefs.setString(
+        _cylindersKey, jsonEncode(cylinders.map((c) => c.toJson()).toList()));
   }
 
   @override
@@ -622,7 +644,10 @@ class _MainShellState extends State<MainShell> {
         DashboardScreen(accountLabel: widget.accountLabel),
         const MapScreen(),
         const HistoryScreen(),
-        SettingsScreen(onLogout: widget.onLogout, accountLabel: widget.accountLabel, session: widget.session),
+        SettingsScreen(
+            onLogout: widget.onLogout,
+            accountLabel: widget.accountLabel,
+            session: widget.session),
       ];
 
   @override
@@ -673,9 +698,11 @@ class _MainShellState extends State<MainShell> {
         child: BottomNavigationBar(
           currentIndex: _index,
           onTap: (i) {
-            if ((i == 1 || i == 2) && !_AppState.of(context).demoBusinessAccess) {
+            if ((i == 1 || i == 2) &&
+                !_AppState.of(context).demoBusinessAccess) {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Sign in or enable developer demo access in Settings to use this feature.')));
+                  content: Text(
+                      'Sign in or enable developer demo access in Settings to use this feature.')));
               return;
             }
             setState(() => _index = i);
@@ -684,8 +711,7 @@ class _MainShellState extends State<MainShell> {
             BottomNavigationBarItem(
                 icon: Icon(Icons.speed_rounded), label: 'Dashboard'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.location_on_rounded),
-                label: 'Find Refill'),
+                icon: Icon(Icons.location_on_rounded), label: 'Find Refill'),
             BottomNavigationBarItem(
                 icon: Icon(Icons.bar_chart_rounded), label: 'History'),
             BottomNavigationBarItem(
@@ -721,14 +747,13 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.initState();
     _requestPermissions(); // [FIX-08] now calls a proper instance method
 
-    _pulseCtrl = AnimationController(
-        vsync: this, duration: const Duration(seconds: 2))
-      ..repeat(reverse: true);
+    _pulseCtrl =
+        AnimationController(vsync: this, duration: const Duration(seconds: 2))
+          ..repeat(reverse: true);
     // _pulseAnim = Tween(begin: 0.95, end: 1.05).animate(
-        // CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+    // CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
   }
 
-  
   Future<void> _requestPermissions() async {
     await [
       Permission.bluetoothScan,
@@ -750,7 +775,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return AnimatedBuilder(
       animation: appState.btService,
       builder: (context, _) {
-        final bt      = appState.btService;
+        final bt = appState.btService;
         final reading = bt.latest;
         if (bt.state == BtState.connected) {
           NotificationService.evaluate(reading); // [FIX-09] no context arg
@@ -763,14 +788,18 @@ class _DashboardScreenState extends State<DashboardScreen>
               SliverToBoxAdapter(
                 child: Column(
                   children: [
-                    if (widget.accountLabel != null && widget.accountLabel!.trim().isNotEmpty)
+                    if (widget.accountLabel != null &&
+                        widget.accountLabel!.trim().isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
                             'Hi, ${widget.accountLabel}',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
                                   fontWeight: FontWeight.w700,
                                   color: AppTheme.corporateBlue,
                                 ),
@@ -785,8 +814,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     const SizedBox(height: 4),
                     _buildMetricsRow(reading, bt.state),
                     const SizedBox(height: 16),
-                    if (bt.state != BtState.connected)
-                      _buildConnectPrompt(bt),
+                    if (bt.state != BtState.connected) _buildConnectPrompt(bt),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -799,65 +827,65 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildAppBar(BluetoothService bt, GasReading r) {
-  final connected = bt.state == BtState.connected;
-  return SliverAppBar(
-    expandedHeight: 80,
-    pinned: true,
-    backgroundColor: AppTheme.corporateBlue,
-    flexibleSpace: FlexibleSpaceBar(
-      titlePadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-      title: Row(
-        children: [
-          const Icon(Icons.gas_meter_rounded,
-              color: Colors.white70, size: 22),
-          const SizedBox(width: 8),
-          const Flexible( // <-- Wrapped with Flexible to prevent overflow
-            child: Text(
-              'Digital Gas Meter',
-              overflow: TextOverflow.ellipsis, // Optional: handles truncation gracefully
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white),
+    final connected = bt.state == BtState.connected;
+    return SliverAppBar(
+      expandedHeight: 80,
+      pinned: true,
+      backgroundColor: AppTheme.corporateBlue,
+      flexibleSpace: FlexibleSpaceBar(
+        titlePadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        title: Row(
+          children: [
+            const Icon(Icons.gas_meter_rounded,
+                color: Colors.white70, size: 22),
+            const SizedBox(width: 8),
+            const Flexible(
+              // <-- Wrapped with Flexible to prevent overflow
+              child: Text(
+                'Digital Gas Meter',
+                overflow: TextOverflow
+                    .ellipsis, // Optional: handles truncation gracefully
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white),
+              ),
             ),
-          ),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: connected
-                  ? Colors.green.shade400
-                  : Colors.white
-                      .withValues(alpha: 0.25),
-              borderRadius: BorderRadius.circular(20),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: connected
+                    ? Colors.green.shade400
+                    : Colors.white.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    connected
+                        ? Icons.bluetooth_connected
+                        : Icons.bluetooth_disabled,
+                    size: 13,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    connected ? 'Live' : 'Offline',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  connected
-                      ? Icons.bluetooth_connected
-                      : Icons.bluetooth_disabled,
-                  size: 13,
-                  color: Colors.white,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  connected ? 'Live' : 'Offline',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildGaugeCard(GasReading r, BtState state) {
     final connected = state == BtState.connected;
@@ -874,21 +902,20 @@ class _DashboardScreenState extends State<DashboardScreen>
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            Text('GAS LEVEL',
-                style: Theme.of(context).textTheme.labelSmall),
+            Text('GAS LEVEL', style: Theme.of(context).textTheme.labelSmall),
             const SizedBox(height: 20),
             SizedBox(
               height: 200,
-              width:  200,
+              width: 200,
               child: _GaugePainter(percentage: pct, color: color),
             ),
             const SizedBox(height: 16),
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 300),
               style: TextStyle(
-                fontSize:    48,
-                fontWeight:  FontWeight.w800,
-                color:       color,
+                fontSize: 48,
+                fontWeight: FontWeight.w800,
+                color: color,
                 letterSpacing: -1,
               ),
               child: Text(
@@ -920,15 +947,26 @@ class _DashboardScreenState extends State<DashboardScreen>
     final connected = state == BtState.connected;
     final leak = connected ? r.leakStatus : LeakStatus.unknown;
     final (label, icon, color) = switch (leak) {
-      LeakStatus.ok =>
-        ('No Leak', Icons.check_circle_rounded, AppTheme.statusOK),
-      LeakStatus.warning =>
-        ('Possible Leak', Icons.warning_rounded, AppTheme.statusWarning),
-      LeakStatus.critical =>
-        ('Gas Leak!', Icons.dangerous_rounded, AppTheme.statusCritical),
-      LeakStatus.unknown =>
-        ('Status Unknown', Icons.help_outline_rounded,
-            AppTheme.statusUnknown),
+      LeakStatus.ok => (
+          'No Leak',
+          Icons.check_circle_rounded,
+          AppTheme.statusOK
+        ),
+      LeakStatus.warning => (
+          'Possible Leak',
+          Icons.warning_rounded,
+          AppTheme.statusWarning
+        ),
+      LeakStatus.critical => (
+          'Gas Leak!',
+          Icons.dangerous_rounded,
+          AppTheme.statusCritical
+        ),
+      LeakStatus.unknown => (
+          'Status Unknown',
+          Icons.help_outline_rounded,
+          AppTheme.statusUnknown
+        ),
     };
 
     return Card(
@@ -941,8 +979,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       ),
       elevation: 0,
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Row(
           children: [
             Icon(icon, color: color, size: 28),
@@ -964,8 +1001,8 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
             if (leak == LeakStatus.critical)
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: AppTheme.statusCritical,
                   borderRadius: BorderRadius.circular(10),
@@ -1002,9 +1039,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                             size: 16, color: AppTheme.skyBlue),
                         const SizedBox(width: 6),
                         Text('WEIGHT',
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelSmall),
+                            style: Theme.of(context).textTheme.labelSmall),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -1040,16 +1075,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                             size: 16, color: AppTheme.skyBlue),
                         const SizedBox(width: 6),
                         Text('BATTERY',
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelSmall),
+                            style: Theme.of(context).textTheme.labelSmall),
                       ],
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      connected
-                          ? '${r.batterySoc.toStringAsFixed(0)}%'
-                          : '--%',
+                      connected ? '${r.batterySoc.toStringAsFixed(0)}%' : '--%',
                       style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
@@ -1089,8 +1120,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                             fontWeight: FontWeight.w700)),
                     SizedBox(height: 4),
                     Text('Tap to pair and link your digital gas meter.',
-                        style: TextStyle(
-                            color: Colors.white70, fontSize: 13)),
+                        style: TextStyle(color: Colors.white70, fontSize: 13)),
                   ],
                 ),
               ),
@@ -1175,7 +1205,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   if (btService.isScanning) ...[
                                     const CircularProgressIndicator(),
                                     const SizedBox(height: 16),
-                                    const Text('Loading paired Bluetooth devices...'),
+                                    const Text(
+                                        'Loading paired Bluetooth devices...'),
                                   ] else ...[
                                     Icon(
                                       btService.scanError == null
@@ -1194,9 +1225,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     ),
                                     const SizedBox(height: 12),
                                     OutlinedButton.icon(
-                                      onPressed: btService.isScanning ? null : btService.startScan,
+                                      onPressed: btService.isScanning
+                                          ? null
+                                          : btService.startScan,
                                       icon: const Icon(Icons.refresh),
-                                      label: const Text('Refresh paired devices'),
+                                      label:
+                                          const Text('Refresh paired devices'),
                                     ),
                                   ],
                                 ],
@@ -1222,24 +1256,31 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 ),
                                 title: Text(
                                   info.displayName,
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600),
                                 ),
                                 subtitle: Text(
-                                  info.alreadyPaired ? 'Paired (Ready)' : 'Nearby Device',
+                                  info.alreadyPaired
+                                      ? 'Paired (Ready)'
+                                      : 'Nearby Device',
                                   style: TextStyle(
                                       fontSize: 12,
-                                      color: info.alreadyPaired ? Colors.green : Colors.grey),
+                                      color: info.alreadyPaired
+                                          ? Colors.green
+                                          : Colors.grey),
                                 ),
                                 trailing: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
                                     minimumSize: const Size(60, 32),
                                   ),
                                   onPressed: () async {
                                     await btService.connectToDevice(info);
                                     if (context.mounted) Navigator.pop(context);
                                   },
-                                  child: const Text('Connect', style: TextStyle(fontSize: 12)),
+                                  child: const Text('Connect',
+                                      style: TextStyle(fontSize: 12)),
                                 ),
                               ),
                             );
@@ -1291,12 +1332,8 @@ class _GaugeCircularPainter extends CustomPainter {
       ..strokeWidth = 14
       ..strokeCap = StrokeCap.round;
 
-    canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        startAngle,
-        sweepAngle,
-        false,
-        bgPaint);
+    canvas.drawArc(Rect.fromCircle(center: center, radius: radius), startAngle,
+        sweepAngle, false, bgPaint);
 
     final fgPaint = Paint()
       ..color = color
@@ -1305,12 +1342,8 @@ class _GaugeCircularPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     final currentSweep = sweepAngle * (percentage / 100);
-    canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        startAngle,
-        currentSweep,
-        false,
-        fgPaint);
+    canvas.drawArc(Rect.fromCircle(center: center, radius: radius), startAngle,
+        currentSweep, false, fgPaint);
   }
 
   @override
@@ -1346,17 +1379,19 @@ class _MapScreenState extends State<MapScreen> {
     try {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(fallbackMessage)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(fallbackMessage)));
       }
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(fallbackMessage)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(fallbackMessage)));
     }
   }
 
   Widget _buildStationCard(PartnerStation s) {
     final open = s.isAvailable;
-    final stockColor = open ? AppTheme.statusOK : AppTheme.statusCritical;
+    final stockColor = open ? AppTheme.statusOK : Colors.grey.shade700;
     final address = (s.address == null || s.address!.trim().isEmpty)
         ? 'Address not provided'
         : s.address!.trim();
@@ -1377,11 +1412,13 @@ class _MapScreenState extends State<MapScreen> {
                     child: Text(s.displayName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 15)),
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: AppTheme.corporateBlue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
@@ -1398,7 +1435,8 @@ class _MapScreenState extends State<MapScreen> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: stockColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(20),
@@ -1406,33 +1444,52 @@ class _MapScreenState extends State<MapScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(open ? Icons.check_circle_rounded : Icons.remove_circle_rounded,
-                            size: 13, color: stockColor),
+                        Icon(
+                            open
+                                ? Icons.check_circle_rounded
+                                : Icons.remove_circle_rounded,
+                            size: 13,
+                            color: stockColor),
                         const SizedBox(width: 4),
                         Text(open ? 'In Stock · Open' : 'Out of Stock · Closed',
-                            style:
-                                TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: stockColor)),
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: stockColor)),
                       ],
                     ),
                   ),
                   if (s.distanceLabel.isNotEmpty) ...[
                     const SizedBox(width: 8),
-                    const Icon(Icons.directions_walk_rounded, size: 13, color: AppTheme.textSecondary),
+                    const Icon(Icons.directions_walk_rounded,
+                        size: 13, color: AppTheme.textSecondary),
                     const SizedBox(width: 2),
                     Flexible(
                       child: Text(s.distanceLabel,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                          style: const TextStyle(
+                              fontSize: 12, color: AppTheme.textSecondary)),
                     ),
                   ],
                 ],
               ),
               const SizedBox(height: 6),
+              Text(
+                s.pricePerKg == null
+                    ? 'Price available on request'
+                    : '₦${s.pricePerKg!.toStringAsFixed(2)} / kg',
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.corporateBlue),
+              ),
+              const SizedBox(height: 6),
               Text(address,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                  style: const TextStyle(
+                      fontSize: 12, color: AppTheme.textSecondary)),
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -1441,32 +1498,39 @@ class _MapScreenState extends State<MapScreen> {
                       onPressed: () {
                         final tel = s.telUrl;
                         if (tel == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                              content: Text('This station has no phone number yet.')));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text(
+                                      'This station has no phone number yet.')));
                         } else {
                           _openUrl(tel, 'Could not open the phone dialer.');
                         }
                       },
                       icon: const Icon(Icons.call_rounded, size: 16),
-                      label: const Text('Call Station', style: TextStyle(fontSize: 12)),
+                      label: const Text('Call Station',
+                          style: TextStyle(fontSize: 12)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppTheme.corporateBlue,
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => _openUrl(s.directionsUrl, 'Could not open Maps.'),
+                      onPressed: () =>
+                          _openUrl(s.directionsUrl, 'Could not open Maps.'),
                       icon: const Icon(Icons.directions_rounded, size: 16),
-                      label: const Text('Directions', style: TextStyle(fontSize: 12)),
+                      label: const Text('Directions',
+                          style: TextStyle(fontSize: 12)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.corporateBlue,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),
@@ -1481,31 +1545,58 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _loadPartnerStations() async {
     if (_loadingPartners) return;
-    setState(() { _loadingPartners = true; _partnerError = null; });
+    setState(() {
+      _loadingPartners = true;
+      _partnerError = null;
+    });
     try {
-      final stations = await _api.nearbyStations(_currentPos.latitude, _currentPos.longitude, radiusKm: 10);
-      final markers = stations.map((s) => Marker(
-        markerId: MarkerId('xp_${s.id}'),
-        position: LatLng(s.latitude, s.longitude),
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-            s.isAvailable ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueRed),
-        infoWindow: InfoWindow(
-          title: s.name,
-          snippet: [s.distanceLabel, s.address ?? s.phone ?? ''].where((e) => e.isNotEmpty).join(' · '),
-        ),
-      )).toSet();
+      final stations = await _api.nearbyStations(
+          _currentPos.latitude, _currentPos.longitude,
+          radiusKm: 10);
+      final markers = stations
+          .map((s) => Marker(
+                markerId: MarkerId('xp_${s.id}'),
+                position: LatLng(s.latitude, s.longitude),
+                icon: BitmapDescriptor.defaultMarkerWithHue(s.isAvailable
+                    ? BitmapDescriptor.hueGreen
+                    : BitmapDescriptor.hueAzure),
+                infoWindow: InfoWindow(
+                  title: s.name,
+                  snippet: [
+                    s.isAvailable ? 'In Stock' : 'Out of Stock',
+                    if (s.pricePerKg != null)
+                      '₦${s.pricePerKg!.toStringAsFixed(0)}/kg',
+                    s.distanceLabel,
+                  ].where((e) => e.isNotEmpty).join(' · '),
+                  onTap: () {
+                    if (!mounted) return;
+                    setState(() => _stations = [
+                          s,
+                          ..._stations.where((station) => station.id != s.id)
+                        ]);
+                  },
+                ),
+              ))
+          .toSet();
       if (!mounted) return;
       setState(() {
-        _markers..clear()..addAll(markers);
+        _markers
+          ..clear()
+          ..addAll(markers);
         _stations = stations;
         _loadingPartners = false;
-        if (stations.isEmpty) _partnerError = 'No open XP Tech partner stations within 10 km yet.';
+        if (stations.isEmpty)
+          _partnerError =
+              'No approved XP Tech partner stations within 10 km yet.';
       });
     } catch (e) {
-      if (mounted) setState(() { _loadingPartners = false; _partnerError = e.toString(); });
+      if (mounted)
+        setState(() {
+          _loadingPartners = false;
+          _partnerError = e.toString();
+        });
     }
   }
-
 
   @override
   void initState() {
@@ -1564,7 +1655,9 @@ class _MapScreenState extends State<MapScreen> {
             markers: _markers,
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
-            onMapCreated: (ctrl) { _mapCtrl = ctrl; },
+            onMapCreated: (ctrl) {
+              _mapCtrl = ctrl;
+            },
           ),
           if (_stations.isNotEmpty && !_locLoading)
             Positioned(
@@ -1583,19 +1676,37 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           if (_partnerError != null)
-            Positioned(left: 16, right: 16, top: 16, child: Card(child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
-              child: Row(children: [
-                Expanded(child: Text(_partnerError!)),
-                TextButton(onPressed: _loadPartnerStations, child: const Text('Retry')),
-              ])))),
+            Positioned(
+                left: 16,
+                right: 16,
+                top: 16,
+                child: Card(
+                    child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+                        child: Row(children: [
+                          Expanded(child: Text(_partnerError!)),
+                          TextButton(
+                              onPressed: _loadPartnerStations,
+                              child: const Text('Retry')),
+                        ])))),
           if (_loadingPartners)
-            const Positioned(top: 16, right: 16, child: Card(child: Padding(
-              padding: EdgeInsets.all(8), child: SizedBox(width: 20, height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2))))),
+            const Positioned(
+                top: 16,
+                right: 16,
+                child: Card(
+                    child: Padding(
+                        padding: EdgeInsets.all(8),
+                        child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child:
+                                CircularProgressIndicator(strokeWidth: 2))))),
           if (_locLoading)
             Container(
-              color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.7), // [FIX-06]
+              color: Theme.of(context)
+                  .colorScheme
+                  .surface
+                  .withValues(alpha: 0.7), // [FIX-06]
               child: const Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1621,7 +1732,6 @@ bool appBusinessSyncAvailable(BuildContext context) =>
     _AppState.of(context).demoBusinessAccess &&
     const String.fromEnvironment('XP_API_BASE_URL').isNotEmpty;
 
-
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
 
@@ -1646,112 +1756,148 @@ class HistoryScreen extends StatelessWidget {
                 if (sessions.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(28),
-                    child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.history_rounded, size: 42, color: AppTheme.statusUnknown),
+                    child: Center(
+                        child:
+                            Column(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.history_rounded,
+                          size: 42, color: AppTheme.statusUnknown),
                       SizedBox(height: 8),
-                      Text('No history recorded yet.', style: TextStyle(fontWeight: FontWeight.w600)),
+                      Text('No history recorded yet.',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
                       SizedBox(height: 4),
-                      Text('Cooking sessions will appear here after real meter readings are recorded.', textAlign: TextAlign.center),
+                      Text(
+                          'Cooking sessions will appear here after real meter readings are recorded.',
+                          textAlign: TextAlign.center),
                     ])),
                   )
                 else ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('Weekly Consumption (kg)',
-                      style: Theme.of(context).textTheme.titleLarge),
-                ),
-                const SizedBox(height: 8),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: SizedBox(
-                      height: 160,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: List.generate(usage.length, (i) {
-                          final val = usage[i];
-                          final maxVal = usage.isEmpty
-                              ? 1.0
-                              : usage.reduce(max);
-                          final heightFactor =
-                              maxVal == 0 ? 0.0 : (val / maxVal).clamp(0.0, 1.0);
-                          const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                          return Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Text('${val.toStringAsFixed(1)}kg',
-                                  style: const TextStyle(
-                                      fontSize: 10, color: AppTheme.skyBlue)),
-                              const SizedBox(height: 4),
-                              Container(
-                                width: 24,
-                                height: (100 * heightFactor).clamp(10.0, 100.0),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.skyBlue,
-                                  borderRadius: BorderRadius.circular(6),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('Weekly Consumption (kg)',
+                        style: Theme.of(context).textTheme.titleLarge),
+                  ),
+                  const SizedBox(height: 8),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: SizedBox(
+                        height: 160,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: List.generate(usage.length, (i) {
+                            final val = usage[i];
+                            final maxVal =
+                                usage.isEmpty ? 1.0 : usage.reduce(max);
+                            final heightFactor = maxVal == 0
+                                ? 0.0
+                                : (val / maxVal).clamp(0.0, 1.0);
+                            const days = [
+                              'Mon',
+                              'Tue',
+                              'Wed',
+                              'Thu',
+                              'Fri',
+                              'Sat',
+                              'Sun'
+                            ];
+                            return Column(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Text('${val.toStringAsFixed(1)}kg',
+                                    style: const TextStyle(
+                                        fontSize: 10, color: AppTheme.skyBlue)),
+                                const SizedBox(height: 4),
+                                Container(
+                                  width: 24,
+                                  height:
+                                      (100 * heightFactor).clamp(10.0, 100.0),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.skyBlue,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(days[i % days.length],
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelSmall),
-                            ],
-                          );
-                        }),
+                                const SizedBox(height: 8),
+                                Text(days[i % days.length],
+                                    style:
+                                        Theme.of(context).textTheme.labelSmall),
+                              ],
+                            );
+                          }),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('Recent Cooking Sessions',
-                      style: Theme.of(context).textTheme.titleLarge),
-                ),
-                const SizedBox(height: 8),
-                sessions.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Center(
-                          child: Text('No cooking sessions recorded yet.'),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('Recent Cooking Sessions',
+                        style: Theme.of(context).textTheme.titleLarge),
+                  ),
+                  const SizedBox(height: 8),
+                  sessions.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.all(32),
+                          child: Center(
+                            child: Text('No cooking sessions recorded yet.'),
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: sessions.length,
+                          itemBuilder: (context, index) {
+                            final session = sessions[index];
+                            return _SessionTile(session: session);
+                          },
                         ),
-                      )
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: sessions.length,
-                        itemBuilder: (context, index) {
-                          final session = sessions[index];
-                          return _SessionTile(session: session);
-                        },
-                      ),
-                if (appBusinessSyncAvailable(context))
-                  Padding(padding: const EdgeInsets.all(16), child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final bt = _AppState.of(context).btService;
-                      if (bt.state != BtState.connected) {
-                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connect to your meter first, then sync the live reading.')));
-                        return;
-                      }
-                      try {
-                        final reading = bt.latest;
-                        final appState = _AppState.of(context);
-                        final active = appState.cylinders.where((c) => c.id == appState.activeCylinderId);
-                        await XpApi().postGasReading(
-                          percentLeft: reading.percentage,
-                          kgLeft: reading.weightKg > 0 ? reading.weightKg : null,
-                          cylinderLabel: active.isEmpty ? null : active.first.name,
-                        );
-                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Live reading synced to XP Tech.')));
-                      } on XpApiException catch (e) {
-                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
-                      } catch (_) {
-                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sync failed. Check your connection and API configuration.')));
-                      }
-                    }, icon: const Icon(Icons.cloud_upload_outlined), label: const Text('Sync live reading to XP Tech'))),
-                const SizedBox(height: 32),
+                  if (appBusinessSyncAvailable(context))
+                    Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: OutlinedButton.icon(
+                            onPressed: () async {
+                              final bt = _AppState.of(context).btService;
+                              if (bt.state != BtState.connected) {
+                                if (context.mounted)
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text(
+                                              'Connect to your meter first, then sync the live reading.')));
+                                return;
+                              }
+                              try {
+                                final reading = bt.latest;
+                                final appState = _AppState.of(context);
+                                final active = appState.cylinders.where(
+                                    (c) => c.id == appState.activeCylinderId);
+                                await XpApi().postGasReading(
+                                  percentLeft: reading.percentage,
+                                  kgLeft: reading.weightKg > 0
+                                      ? reading.weightKg
+                                      : null,
+                                  cylinderLabel:
+                                      active.isEmpty ? null : active.first.name,
+                                );
+                                if (context.mounted)
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text(
+                                              'Live reading synced to XP Tech.')));
+                              } on XpApiException catch (e) {
+                                if (context.mounted)
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(e.message)));
+                              } catch (_) {
+                                if (context.mounted)
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text(
+                                              'Sync failed. Check your connection and API configuration.')));
+                              }
+                            },
+                            icon: const Icon(Icons.cloud_upload_outlined),
+                            label: const Text('Sync live reading to XP Tech'))),
+                  const SizedBox(height: 32),
                 ],
               ],
             ),
@@ -1768,22 +1914,19 @@ class _SessionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final timeStr =
-        '${session.start.hour.toString().padLeft(2, '0')}:'
+    final timeStr = '${session.start.hour.toString().padLeft(2, '0')}:'
         '${session.start.minute.toString().padLeft(2, '0')}';
     final dateStr =
         '${session.start.day}/${session.start.month}/${session.start.year}';
 
     return Card(
-      margin: const EdgeInsets.symmetric(
-          horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
             Container(
-              width:  44,
+              width: 44,
               height: 44,
               decoration: BoxDecoration(
                   color: AppTheme.offWhite,
@@ -1793,13 +1936,12 @@ class _SessionTile extends StatelessWidget {
                 children: [
                   Text(timeStr,
                       style: const TextStyle(
-                          fontSize:   12,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color:      AppTheme.corporateBlue)),
+                          color: AppTheme.corporateBlue)),
                   Text(dateStr,
                       style: const TextStyle(
-                          fontSize: 8,
-                          color:    AppTheme.skyBlue)),
+                          fontSize: 8, color: AppTheme.skyBlue)),
                 ],
               ),
             ),
@@ -1809,20 +1951,16 @@ class _SessionTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('Cooking Session',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize:   14)),
+                      style:
+                          TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                   const SizedBox(height: 3),
                   Row(
                     children: [
                       const Icon(Icons.timer_outlined,
-                          size:  12,
-                          color: AppTheme.skyBlue),
+                          size: 12, color: AppTheme.skyBlue),
                       const SizedBox(width: 4),
                       Text(session.formattedDuration,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium),
+                          style: Theme.of(context).textTheme.bodyMedium),
                     ],
                   ),
                 ],
@@ -1835,13 +1973,12 @@ class _SessionTile extends StatelessWidget {
                   '${session.gasUsedKg.toStringAsFixed(3)} kg',
                   style: const TextStyle(
                       fontWeight: FontWeight.w700,
-                      fontSize:   14,
-                      color:      AppTheme.corporateBlue),
+                      fontSize: 14,
+                      color: AppTheme.corporateBlue),
                 ),
                 const Text('used',
-                    style: TextStyle(
-                        fontSize: 10,
-                        color:    AppTheme.statusUnknown)),
+                    style:
+                        TextStyle(fontSize: 10, color: AppTheme.statusUnknown)),
               ],
             ),
           ],
@@ -1859,7 +1996,8 @@ class SettingsScreen extends StatefulWidget {
   final VoidCallback? onLogout;
   final String? accountLabel;
   final SessionController? session;
-  const SettingsScreen({super.key, this.onLogout, this.accountLabel, this.session});
+  const SettingsScreen(
+      {super.key, this.onLogout, this.accountLabel, this.session});
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
@@ -1872,7 +2010,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    _sizeController.dispose(); _nameController.dispose(); _locationController.dispose();
+    _sizeController.dispose();
+    _nameController.dispose();
+    _locationController.dispose();
     super.dispose();
   }
 
@@ -1880,7 +2020,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final session = widget.session;
     if (session == null || session.accessToken == null) return;
     final messenger = ScaffoldMessenger.of(context);
-    final controller = TextEditingController(text: session.user?.username ?? '');
+    final controller =
+        TextEditingController(text: session.user?.username ?? '');
     final username = await showDialog<String>(
       context: context,
       builder: (ctx) {
@@ -1895,7 +2036,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel')),
             TextButton(
               onPressed: () => Navigator.pop(ctx, controller.text.trim()),
               child: const Text('Save'),
@@ -1908,12 +2051,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (username == null || !mounted) return;
     if (!RegExp(r'^[a-zA-Z0-9._]{3,20}$').hasMatch(username)) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Username must be 3–20 characters: letters, numbers, _ or .')),
+        const SnackBar(
+            content: Text(
+                'Username must be 3–20 characters: letters, numbers, _ or .')),
       );
       return;
     }
     try {
-      final profile = await AuthApi().setUsername(accessToken: session.accessToken!, username: username);
+      final profile = await AuthApi()
+          .setUsername(accessToken: session.accessToken!, username: username);
       await session.updateProfile(profile);
       if (!mounted) return;
       setState(() {});
@@ -1923,7 +2069,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('Could not save username: $e')));
+      messenger
+          .showSnackBar(SnackBar(content: Text('Could not save username: $e')));
     }
   }
 
@@ -1935,11 +2082,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: const Text(
             'This removes your saved login from this device. You will need an internet connection to log in again.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
           TextButton(
             key: const Key('confirm-logout'),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Log out', style: TextStyle(color: AppTheme.statusCritical)),
+            child: const Text('Log out',
+                style: TextStyle(color: AppTheme.statusCritical)),
           ),
         ],
       ),
@@ -1950,7 +2100,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _sendEmptyWeight(BluetoothService bt) async {
     final size = double.tryParse(_sizeController.text.trim());
     if (size == null || size <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid cylinder size in kg.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a valid cylinder size in kg.')));
       return;
     }
     setState(() => _busy = true);
@@ -1958,40 +2109,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await bt.sendCommand('SET_EMPTY:${size.toStringAsFixed(2)}');
       if (!mounted) return;
       final app = _AppState.of(context);
-      final active = app.cylinders.where((c) => c.id == app.activeCylinderId).firstOrNull;
-      if (active != null) { active.cylinderSizeKg = size; await app.saveCylinders(); }
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cylinder size sent to meter.')));
+      final active =
+          app.cylinders.where((c) => c.id == app.activeCylinderId).firstOrNull;
+      if (active != null) {
+        active.cylinderSizeKg = size;
+        await app.saveCylinders();
+      }
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cylinder size sent to meter.')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not send command: $e')));
-    } finally { if (mounted) setState(() => _busy = false); }
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not send command: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _calibrate(BluetoothService bt) async {
     setState(() => _busy = true);
     try {
       await bt.sendCommand('CALIBRATE_EMPTY');
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Empty-cylinder calibration command sent.')));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Empty-cylinder calibration command sent.')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not send command: $e')));
-    } finally { if (mounted) setState(() => _busy = false); }
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not send command: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _addCylinder(_AppStateData app) async {
     if (!_AppState.of(context).demoBusinessAccess) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Business access is required to manage multiple cylinders.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Business access is required to manage multiple cylinders.')));
       return;
     }
     final name = _nameController.text.trim();
     final location = _locationController.text.trim();
     if (name.isEmpty || location.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a cylinder name and location.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a cylinder name and location.')));
       return;
     }
     final id = DateTime.now().microsecondsSinceEpoch.toString();
-    app.cylinders.add(GasCylinder(id: id, name: name, location: location, meterAddress: app.btService.connectedAddress ?? 'Not linked', cylinderSizeKg: double.tryParse(_sizeController.text) ?? 0));
+    app.cylinders.add(GasCylinder(
+        id: id,
+        name: name,
+        location: location,
+        meterAddress: app.btService.connectedAddress ?? 'Not linked',
+        cylinderSizeKg: double.tryParse(_sizeController.text) ?? 0));
     app.activeCylinderId = id;
     await app.saveCylinders();
-    _nameController.clear(); _locationController.clear();
+    _nameController.clear();
+    _locationController.clear();
     if (mounted) setState(() {});
   }
 
@@ -2005,113 +2181,242 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final connected = bt.state == BtState.connected;
         return Scaffold(
           appBar: AppBar(title: const Text('Settings & Configuration')),
-          body: ListView(padding: const EdgeInsets.symmetric(vertical: 16), children: [
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('Hardware Connection', style: Theme.of(context).textTheme.labelSmall)),
-            Card(child: ListTile(
-              leading: Icon(connected ? Icons.bluetooth_connected : Icons.bluetooth_disabled, color: connected ? AppTheme.statusOK : AppTheme.statusUnknown),
-              title: Text(connected ? 'Connected to meter' : 'Gas meter not connected', style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text(connected ? bt.connectedDevice ?? 'Bluetooth link active' : 'Pair and connect to enable calibration'),
-              trailing: IconButton(icon: const Icon(Icons.bluetooth_searching), onPressed: () async {
-                await bt.startScan();
-                if (!context.mounted) return;
-                showModalBottomSheet(context: context, isScrollControlled: true, useSafeArea: true,
-                  builder: (_) => _BluetoothSheet(bt: bt));
-              }),
-            )),
-            const SizedBox(height: 12),
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('Cylinder calibration', style: Theme.of(context).textTheme.labelSmall)),
-            Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Cylinder size / empty weight (kg)', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              TextField(controller: _sizeController, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))], decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'e.g. 5.42', helperText: 'Sends SET_EMPTY:5.42 to the connected meter. Use the value expected by your firmware.')),
-              const SizedBox(height: 10),
-              SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: connected && !_busy ? () => _sendEmptyWeight(bt) : null, icon: const Icon(Icons.send), label: const Text('Send cylinder value'))),
-              SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: connected && !_busy ? () => _calibrate(bt) : null, icon: const Icon(Icons.tune), label: const Text('Calibrate empty cylinder'))),
-              if (!connected) const Text('Connect to a gas meter to enable calibration controls.', style: TextStyle(color: AppTheme.statusWarning)),
-            ]))),
-            if (app.demoBusinessAccess) ...[
-              const SizedBox(height: 12),
-              Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('Business cylinders', style: Theme.of(context).textTheme.labelSmall)),
-              Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
-                if (app.cylinders.isEmpty) const ListTile(title: Text('No cylinders added yet'), subtitle: Text('Add a cylinder and assign its location and meter.')),
-                ...app.cylinders.map((c) => RadioListTile<String>(value: c.id, groupValue: app.activeCylinderId, onChanged: (v) => setState(() => app.activeCylinderId = v), title: Text(c.name), subtitle: Text('${c.location} • ${c.meterAddress}'), secondary: Text('${c.cylinderSizeKg.toStringAsFixed(2)} kg'))),
-                TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Cylinder / site name')),
-                TextField(controller: _locationController, decoration: const InputDecoration(labelText: 'Location / branch')),
-                const SizedBox(height: 8),
-                SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => _addCylinder(app), icon: const Icon(Icons.add), label: const Text('Add cylinder'))),
-              ]))),
-            ],
-            const SizedBox(height: 12),
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('Developer testing', style: Theme.of(context).textTheme.labelSmall)),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.brightness_6_rounded, color: AppTheme.skyBlue),
-                title: const Text('Theme mode'),
-                subtitle: Text({
-                  ThemeMode.system: 'System',
-                  ThemeMode.light: 'Light',
-                  ThemeMode.dark: 'Dark',
-                }[_ThemeScope.of(context).themeMode]!),
-                trailing: DropdownButton<ThemeMode>(
-                  value: _ThemeScope.of(context).themeMode,
-                  underline: const SizedBox.shrink(),
-                  onChanged: (mode) {
-                    if (mode != null) _ThemeScope.of(context).onThemeModeChanged(mode);
-                  },
-                  items: const [
-                    DropdownMenuItem(value: ThemeMode.system, child: Text('System')),
-                    DropdownMenuItem(value: ThemeMode.light, child: Text('Light')),
-                    DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark')),
-                  ],
-                ),
-              ),
-            ),
-            if (widget.session != null)
-              Card(
-                child: ListTile(
-                  leading: const Icon(Icons.alternate_email_rounded, color: AppTheme.corporateBlue),
-                  title: const Text('Username'),
-                  subtitle: Text(
-                    (widget.session!.user?.username != null && widget.session!.user!.username!.trim().isNotEmpty)
-                        ? widget.session!.user!.username!
-                        : 'Not set — tap to choose one for login and the dashboard',
+          body: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              children: [
+                Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('Hardware Connection',
+                        style: Theme.of(context).textTheme.labelSmall)),
+                Card(
+                    child: ListTile(
+                  leading: Icon(
+                      connected
+                          ? Icons.bluetooth_connected
+                          : Icons.bluetooth_disabled,
+                      color: connected
+                          ? AppTheme.statusOK
+                          : AppTheme.statusUnknown),
+                  title: Text(
+                      connected
+                          ? 'Connected to meter'
+                          : 'Gas meter not connected',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(connected
+                      ? bt.connectedDevice ?? 'Bluetooth link active'
+                      : 'Pair and connect to enable calibration'),
+                  trailing: IconButton(
+                      icon: const Icon(Icons.bluetooth_searching),
+                      onPressed: () async {
+                        await bt.startScan();
+                        if (!context.mounted) return;
+                        showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            useSafeArea: true,
+                            builder: (_) => _BluetoothSheet(bt: bt));
+                      }),
+                )),
+                const SizedBox(height: 12),
+                Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('Cylinder calibration',
+                        style: Theme.of(context).textTheme.labelSmall)),
+                Card(
+                    child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Cylinder size / empty weight (kg)',
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium),
+                              const SizedBox(height: 8),
+                              TextField(
+                                  controller: _sizeController,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                          decimal: true),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(
+                                        RegExp(r'[0-9.]'))
+                                  ],
+                                  decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      hintText: 'e.g. 5.42',
+                                      helperText:
+                                          'Sends SET_EMPTY:5.42 to the connected meter. Use the value expected by your firmware.')),
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                      onPressed: connected && !_busy
+                                          ? () => _sendEmptyWeight(bt)
+                                          : null,
+                                      icon: const Icon(Icons.send),
+                                      label:
+                                          const Text('Send cylinder value'))),
+                              SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                      onPressed: connected && !_busy
+                                          ? () => _calibrate(bt)
+                                          : null,
+                                      icon: const Icon(Icons.tune),
+                                      label: const Text(
+                                          'Calibrate empty cylinder'))),
+                              if (!connected)
+                                const Text(
+                                    'Connect to a gas meter to enable calibration controls.',
+                                    style: TextStyle(
+                                        color: AppTheme.statusWarning)),
+                            ]))),
+                if (app.demoBusinessAccess) ...[
+                  const SizedBox(height: 12),
+                  Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text('Business cylinders',
+                          style: Theme.of(context).textTheme.labelSmall)),
+                  Card(
+                      child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(children: [
+                            if (app.cylinders.isEmpty)
+                              const ListTile(
+                                  title: Text('No cylinders added yet'),
+                                  subtitle: Text(
+                                      'Add a cylinder and assign its location and meter.')),
+                            ...app.cylinders.map((c) => RadioListTile<String>(
+                                value: c.id,
+                                groupValue: app.activeCylinderId,
+                                onChanged: (v) =>
+                                    setState(() => app.activeCylinderId = v),
+                                title: Text(c.name),
+                                subtitle:
+                                    Text('${c.location} • ${c.meterAddress}'),
+                                secondary: Text(
+                                    '${c.cylinderSizeKg.toStringAsFixed(2)} kg'))),
+                            TextField(
+                                controller: _nameController,
+                                decoration: const InputDecoration(
+                                    labelText: 'Cylinder / site name')),
+                            TextField(
+                                controller: _locationController,
+                                decoration: const InputDecoration(
+                                    labelText: 'Location / branch')),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                    onPressed: () => _addCylinder(app),
+                                    icon: const Icon(Icons.add),
+                                    label: const Text('Add cylinder'))),
+                          ]))),
+                ],
+                const SizedBox(height: 12),
+                Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('Developer testing',
+                        style: Theme.of(context).textTheme.labelSmall)),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.brightness_6_rounded,
+                        color: AppTheme.skyBlue),
+                    title: const Text('Theme mode'),
+                    subtitle: Text({
+                      ThemeMode.system: 'System',
+                      ThemeMode.light: 'Light',
+                      ThemeMode.dark: 'Dark',
+                    }[_ThemeScope.of(context).themeMode]!),
+                    trailing: DropdownButton<ThemeMode>(
+                      value: _ThemeScope.of(context).themeMode,
+                      underline: const SizedBox.shrink(),
+                      onChanged: (mode) {
+                        if (mode != null)
+                          _ThemeScope.of(context).onThemeModeChanged(mode);
+                      },
+                      items: const [
+                        DropdownMenuItem(
+                            value: ThemeMode.system, child: Text('System')),
+                        DropdownMenuItem(
+                            value: ThemeMode.light, child: Text('Light')),
+                        DropdownMenuItem(
+                            value: ThemeMode.dark, child: Text('Dark')),
+                      ],
+                    ),
                   ),
-                  trailing: const Icon(Icons.edit_outlined),
-                  onTap: _editUsername,
                 ),
-              ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.local_gas_station_rounded, color: AppTheme.corporateBlue),
-                title: const Text('Gas Plant & Retailer Portal'),
-                subtitle: const Text('Register an LPG plant or manage your station listing on the refill map'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const RetailerRegistrationScreen()),
-                  );
-                },
-              ),
-            ),
-            if (widget.onLogout != null)
-              Card(
-                child: ListTile(
-                  key: const Key('logout-tile'),
-                  leading: const Icon(Icons.logout_rounded, color: AppTheme.statusCritical),
-                  title: const Text('Log out'),
-                  subtitle: widget.accountLabel == null ? null : Text('Signed in as ${widget.accountLabel}'),
-                  onTap: _confirmLogout,
+                if (widget.session != null)
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.alternate_email_rounded,
+                          color: AppTheme.corporateBlue),
+                      title: const Text('Username'),
+                      subtitle: Text(
+                        (widget.session!.user?.username != null &&
+                                widget.session!.user!.username!
+                                    .trim()
+                                    .isNotEmpty)
+                            ? widget.session!.user!.username!
+                            : 'Not set — tap to choose one for login and the dashboard',
+                      ),
+                      trailing: const Icon(Icons.edit_outlined),
+                      onTap: _editUsername,
+                    ),
+                  ),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.local_gas_station_rounded,
+                        color: AppTheme.corporateBlue),
+                    title: const Text('Gas Plant & Retailer Portal'),
+                    subtitle: const Text(
+                        'Register an LPG plant or manage your station listing on the refill map'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const RetailerRegistrationScreen()),
+                      );
+                    },
+                  ),
                 ),
-              ),
-            Card(child: SwitchListTile(value: app.demoBusinessAccess, onChanged: (value) => setState(() { app.demoBusinessAccess = value; }), secondary: const Icon(Icons.developer_mode, color: AppTheme.skyBlue), title: const Text('Demo business access'), subtitle: const Text('Local-only testing bypass. Remove/disable before production; it is not authentication.'))),
-            const Card(child: ListTile(leading: Icon(Icons.info_outline_rounded, color: AppTheme.skyBlue), title: Text('XP Technology Digital Gas Meter'), subtitle: Text('Business backend integration is configurable through XP_API_BASE_URL.'))),
-          ]),
+                if (widget.onLogout != null)
+                  Card(
+                    child: ListTile(
+                      key: const Key('logout-tile'),
+                      leading: const Icon(Icons.logout_rounded,
+                          color: AppTheme.statusCritical),
+                      title: const Text('Log out'),
+                      subtitle: widget.accountLabel == null
+                          ? null
+                          : Text('Signed in as ${widget.accountLabel}'),
+                      onTap: _confirmLogout,
+                    ),
+                  ),
+                Card(
+                    child: SwitchListTile(
+                        value: app.demoBusinessAccess,
+                        onChanged: (value) => setState(() {
+                              app.demoBusinessAccess = value;
+                            }),
+                        secondary: const Icon(Icons.developer_mode,
+                            color: AppTheme.skyBlue),
+                        title: const Text('Demo business access'),
+                        subtitle: const Text(
+                            'Local-only testing bypass. Remove/disable before production; it is not authentication.'))),
+                const Card(
+                    child: ListTile(
+                        leading: Icon(Icons.info_outline_rounded,
+                            color: AppTheme.skyBlue),
+                        title: Text('XP Technology Digital Gas Meter'),
+                        subtitle: Text(
+                            'Business backend integration is configurable through XP_API_BASE_URL.'))),
+              ]),
         );
       },
     );
   }
 }
-
 
 class _BluetoothSheet extends StatelessWidget {
   final BluetoothService bt;
@@ -2130,27 +2435,33 @@ class _BluetoothSheet extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Connect to your meter', style: Theme.of(context).textTheme.titleLarge),
+                Text('Connect to your meter',
+                    style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
-                if (bt.state == BtState.connecting) const LinearProgressIndicator(),
+                if (bt.state == BtState.connecting)
+                  const LinearProgressIndicator(),
                 if (bt.state == BtState.error && bt.scanError != null)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(bt.scanError!, style: const TextStyle(color: AppTheme.statusWarning)),
+                    child: Text(bt.scanError!,
+                        style: const TextStyle(color: AppTheme.statusWarning)),
                   ),
                 if (devices.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 20),
                     child: Center(
                       child: bt.isScanning
-                          ? const Column(mainAxisSize: MainAxisSize.min, children: [
-                              CircularProgressIndicator(),
-                              SizedBox(height: 12),
-                              Text('Loading paired Bluetooth devices...'),
-                            ])
+                          ? const Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                  CircularProgressIndicator(),
+                                  SizedBox(height: 12),
+                                  Text('Loading paired Bluetooth devices...'),
+                                ])
                           : Column(mainAxisSize: MainAxisSize.min, children: [
                               Text(
-                                bt.scanError ?? 'No paired Bluetooth devices found. Pair the meter in Android Bluetooth settings first.',
+                                bt.scanError ??
+                                    'No paired Bluetooth devices found. Pair the meter in Android Bluetooth settings first.',
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 12),
@@ -2170,16 +2481,20 @@ class _BluetoothSheet extends StatelessWidget {
                       itemBuilder: (context, index) {
                         final info = devices[index];
                         return ListTile(
-                          leading: const Icon(Icons.bluetooth_connected, color: AppTheme.skyBlue),
+                          leading: const Icon(Icons.bluetooth_connected,
+                              color: AppTheme.skyBlue),
                           title: Text(info.displayName),
                           subtitle: Text('${info.address} • Paired'),
                           trailing: TextButton(
-                            onPressed: bt.state == BtState.connecting ? null : () async {
-                              await bt.connectToDevice(info);
-                              if (context.mounted && bt.state == BtState.connected) {
-                                Navigator.of(context).pop();
-                              }
-                            },
+                            onPressed: bt.state == BtState.connecting
+                                ? null
+                                : () async {
+                                    await bt.connectToDevice(info);
+                                    if (context.mounted &&
+                                        bt.state == BtState.connected) {
+                                      Navigator.of(context).pop();
+                                    }
+                                  },
                             child: const Text('Connect'),
                           ),
                         );

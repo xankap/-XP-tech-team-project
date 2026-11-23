@@ -1,11 +1,27 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-<uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+﻿<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Classic Bluetooth (HC-05 meter over SPP).
+         Android 11 and lower: install-time BLUETOOTH/BLUETOOTH_ADMIN, and
+         location (runtime) is needed to discover nearby devices. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
 
-<!-- Required for Android 12+ -->
-<uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
-<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Android 12+: runtime "Nearby devices" permissions. Scan results are
+         not used to derive location. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- Location: the map/cylinder location features (geolocator) and
+         Bluetooth discovery on Android 11 and lower. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Leak / low-gas alerts on Android 13+. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- The app still installs on phones without Bluetooth (meter features
+         are then unavailable). -->
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+
     <application
         android:label="xp_gas_monitor"
         android:name="${applicationName}"
@@ -39,7 +55,7 @@
             android:value="2" />
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="${MAPS_API_KEY}" />   // Add this line to include the API key from local.properties
+            android:value="${MAPS_API_KEY}" /> <!-- from local.properties MAPS_API_KEY -->
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

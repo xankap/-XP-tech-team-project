@@ -123,4 +123,85 @@ void main() {
       expect(summary.weekly.first.kgUsed, 2.5);
     });
   });
+
+  group('XpApi.retailers (gas plant & retailer registration)', () {
+    test('getMyRetailer returns null on 404', () async {
+      final api = XpApi(
+          client: MockClient((_) async =>
+              http.Response('{"error":"No retailer profile yet"}', 404)));
+
+      final profile = await api.getMyRetailer();
+      expect(profile, isNull);
+    });
+
+    test('getMyRetailer parses profile on 200', () async {
+      final api = XpApi(
+          client: MockClient((_) async => http.Response(
+              '{"retailer":{"id":"ret-123","name":"Apex Energy LPG","phone":"+2348012345678",'
+              '"address":"Plot 4 Industrial Way","state":"Enugu","cityLga":"Enugu North",'
+              '"latitude":6.452,"longitude":7.510,"isAvailable":true,"status":"approved"}}',
+              200)));
+
+      final profile = await api.getMyRetailer();
+      expect(profile, isNotNull);
+      expect(profile!.id, 'ret-123');
+      expect(profile.name, 'Apex Energy LPG');
+      expect(profile.phone, '+2348012345678');
+      expect(profile.isAvailable, isTrue);
+      expect(profile.status, 'approved');
+      expect(profile.latitude, 6.452);
+    });
+
+    test('registerRetailer posts valid JSON payload and parses response', () async {
+      http.BaseRequest? seen;
+      final api = XpApi(
+          client: MockClient((req) async {
+        seen = req;
+        return http.Response(
+            '{"retailer":{"id":"ret-456","name":"TotalEnergies Plant","phone":"+2348099999999",'
+            '"address":"12 Station Road","latitude":6.44,"longitude":7.50,"isAvailable":false,"status":"pending"}}',
+            201);
+      }));
+
+      final profile = await api.registerRetailer(
+        name: 'TotalEnergies Plant',
+        phone: '+2348099999999',
+        address: '12 Station Road',
+        state: 'Enugu',
+        cityLga: 'Enugu North',
+        latitude: 6.44,
+        longitude: 7.50,
+      );
+
+      final req = seen! as http.Request;
+      expect(req.method, 'POST');
+      expect(req.url.path, '/retailers');
+      final body = jsonDecode(req.body) as Map<String, dynamic>;
+      expect(body['name'], 'TotalEnergies Plant');
+      expect(body['phone'], '+2348099999999');
+      expect(body['state'], 'Enugu');
+      expect(profile.status, 'pending');
+    });
+
+    test('updateRetailer patches fields and parses response', () async {
+      http.BaseRequest? seen;
+      final api = XpApi(
+          client: MockClient((req) async {
+        seen = req;
+        return http.Response(
+            '{"retailer":{"id":"ret-456","name":"TotalEnergies Plant","phone":"+2348099999999",'
+            '"address":"12 Station Road","latitude":6.44,"longitude":7.50,"isAvailable":true,"status":"approved"}}',
+            200);
+      }));
+
+      final profile = await api.updateRetailer(isAvailable: true);
+
+      final req = seen! as http.Request;
+      expect(req.method, 'PATCH');
+      expect(req.url.path, '/retailers/me');
+      final body = jsonDecode(req.body) as Map<String, dynamic>;
+      expect(body['isAvailable'], isTrue);
+      expect(profile.isAvailable, isTrue);
+    });
+  });
 }

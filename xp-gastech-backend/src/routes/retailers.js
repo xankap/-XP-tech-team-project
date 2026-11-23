@@ -16,13 +16,14 @@ const writeLimiter = limiter(30);
 const nearbyLimiter = limiter(60, 60 * 1000);
 
 const OWN_COLUMNS = `id, name, phone_e164 as phone, address_line as address, state, city_lga,
-  latitude, longitude, is_available, opening_hours, status, status_reason, created_at, updated_at`;
+  latitude, longitude, is_available, opening_hours, price_per_kg, status, status_reason, created_at, updated_at`;
 
 function toRetailer(r) {
   return {
     id: r.id, name: r.name, phone: r.phone, address: r.address, state: r.state, cityLga: r.city_lga,
     latitude: r.latitude, longitude: r.longitude, isAvailable: r.is_available,
-    openingHours: r.opening_hours, status: r.status, statusReason: r.status_reason,
+    openingHours: r.opening_hours, pricePerKg: r.price_per_kg === null ? null : Number(r.price_per_kg),
+    status: r.status, statusReason: r.status_reason,
     createdAt: r.created_at, updatedAt: r.updated_at,
   };
 }
@@ -47,7 +48,8 @@ async function nearbyHandler(req, res) {
       stations: rows.map((r) => ({
         id: r.id, name: r.name, phone: r.phone_e164, address: r.address_line,
         latitude: r.latitude, longitude: r.longitude, isAvailable: r.is_available,
-        openingHours: r.opening_hours, distanceM: Math.round(r.distance_m),
+        openingHours: r.opening_hours, pricePerKg: r.price_per_kg === null ? null : Number(r.price_per_kg),
+        distanceM: Math.round(r.distance_m),
       })),
     });
   } catch (err) {
@@ -69,10 +71,11 @@ router.post('/', writeLimiter, requireAuth, route(async (req, res) => {
     v.num(b.latitude, 'latitude', { min: -90, max: 90 }),
     v.num(b.longitude, 'longitude', { min: -180, max: 180 }),
     v.openingHours(b.openingHours),
+    v.num(b.pricePerKg, 'pricePerKg', { min: 0, max: 1000000, optional: true }),
   ];
   const { rows } = await pool.query(
-    `insert into public.retailers (app_user_id, name, phone_e164, address_line, state, city_lga, latitude, longitude, opening_hours)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    `insert into public.retailers (app_user_id, name, phone_e164, address_line, state, city_lga, latitude, longitude, opening_hours, price_per_kg)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
      on conflict (app_user_id) do nothing
      returning ${OWN_COLUMNS}`,
     values
@@ -98,8 +101,11 @@ router.patch('/me', writeLimiter, requireAuth, route(async (req, res) => {
   if (b.openingHours !== undefined) add('opening_hours', v.openingHours(b.openingHours));
   if (b.name !== undefined) add('name', v.text(b.name, 'name', { min: 2, max: 120 }));
   if (b.phone !== undefined) add('phone_e164', v.phone(b.phone));
+  if (b.pricePerKg !== undefined) add('price_per_kg', v.num(b.pricePerKg, 'pricePerKg', { min: 0, max: 1000000, optional: true }));
   let relocate = false;
   if (b.address !== undefined) { add('address_line', v.text(b.address, 'address', { min: 3, max: 200 })); relocate = true; }
+  if (b.state !== undefined) add('state', v.text(b.state, 'state', { min: 2, max: 80, optional: true }));
+  if (b.cityLga !== undefined) add('city_lga', v.text(b.cityLga, 'cityLga', { min: 2, max: 80, optional: true }));
   if (b.latitude !== undefined || b.longitude !== undefined) {
     add('latitude', v.num(b.latitude, 'latitude', { min: -90, max: 90 }));
     add('longitude', v.num(b.longitude, 'longitude', { min: -180, max: 180 }));

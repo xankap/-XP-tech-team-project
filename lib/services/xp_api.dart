@@ -18,7 +18,11 @@ class XpApiException implements Exception {
   const XpApiException(this.message, {this.statusCode, this.code});
 
   /// Worth retrying later: offline, timeout, rate limit or server error.
-  bool get isTransient => statusCode == null || statusCode == 408 || statusCode == 429 || statusCode! >= 500;
+  bool get isTransient =>
+      statusCode == null ||
+      statusCode == 408 ||
+      statusCode == 429 ||
+      statusCode! >= 500;
   @override
   String toString() => message;
 }
@@ -33,8 +37,17 @@ class PartnerStation {
   final double longitude;
   final int? distanceM;
   final bool isAvailable;
-  const PartnerStation({required this.id, required this.name, this.phone, this.address,
-      required this.latitude, required this.longitude, this.distanceM, this.isAvailable = true});
+  final double? pricePerKg;
+  const PartnerStation(
+      {required this.id,
+      required this.name,
+      this.phone,
+      this.address,
+      required this.latitude,
+      required this.longitude,
+      this.distanceM,
+      this.isAvailable = true,
+      this.pricePerKg});
 
   factory PartnerStation.fromJson(Map<String, dynamic> j) => PartnerStation(
         id: j['id'].toString(),
@@ -45,6 +58,7 @@ class PartnerStation {
         longitude: (j['longitude'] as num).toDouble(),
         distanceM: (j['distanceM'] as num?)?.round(),
         isAvailable: j['isAvailable'] == null || j['isAvailable'] == true,
+        pricePerKg: (j['pricePerKg'] as num?)?.toDouble(),
       );
 
   /// Short facility badge from the registration suffix, e.g.
@@ -55,7 +69,8 @@ class PartnerStation {
     if (tag.contains('skid')) return 'Skid';
     if (tag.contains('delivery') || tag.contains('doorstep')) return 'Delivery';
     if (tag.contains('depot') || tag.contains('cylinder')) return 'Depot';
-    if (tag.contains('plant') || tag.contains('refill') || tag.contains('lpg')) return 'LPG Plant';
+    if (tag.contains('plant') || tag.contains('refill') || tag.contains('lpg'))
+      return 'LPG Plant';
     if (tag.contains('station') || tag.contains('retail')) return 'Station';
     return 'Partner';
   }
@@ -68,7 +83,7 @@ class PartnerStation {
 
   /// Universal maps link (opens Google Maps, or Apple Maps via browser).
   Uri get directionsUrl => Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude');
+      'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude');
 
   /// Dialer link, or null when the station has no phone number.
   Uri? get telUrl => (phone == null || phone!.trim().isEmpty)
@@ -94,7 +109,8 @@ class BusinessGasSummary {
   final double? latestPercent;
   final DateTime? latestAt;
   final List<WeeklyGasUsage> weekly;
-  const BusinessGasSummary({this.latestKg, this.latestPercent, this.latestAt, required this.weekly});
+  const BusinessGasSummary(
+      {this.latestKg, this.latestPercent, this.latestAt, required this.weekly});
 }
 
 /// A gas meter registered to the signed-in account.
@@ -104,14 +120,21 @@ class RemoteMeter {
   final String? label;
   final double? cylinderSizeKg;
   final DateTime? lastReadingAt;
-  const RemoteMeter({required this.id, required this.btAddress, this.label, this.cylinderSizeKg, this.lastReadingAt});
+  const RemoteMeter(
+      {required this.id,
+      required this.btAddress,
+      this.label,
+      this.cylinderSizeKg,
+      this.lastReadingAt});
 
   factory RemoteMeter.fromJson(Map<String, dynamic> j) => RemoteMeter(
         id: j['id'].toString(),
         btAddress: j['btAddress'].toString(),
         label: j['label']?.toString(),
         cylinderSizeKg: (j['cylinderSizeKg'] as num?)?.toDouble(),
-        lastReadingAt: j['lastReadingAt'] == null ? null : DateTime.tryParse(j['lastReadingAt'].toString()),
+        lastReadingAt: j['lastReadingAt'] == null
+            ? null
+            : DateTime.tryParse(j['lastReadingAt'].toString()),
       );
 }
 
@@ -123,13 +146,19 @@ class ReadingUploadResult {
   /// Client id -> reason, for readings the server will never accept.
   final Map<String, String> rejected;
   final int inserted;
-  const ReadingUploadResult({required this.accepted, required this.rejected, this.inserted = 0});
+  const ReadingUploadResult(
+      {required this.accepted, required this.rejected, this.inserted = 0});
 
-  factory ReadingUploadResult.fromJson(Map<String, dynamic> j) => ReadingUploadResult(
-        accepted: (j['accepted'] as List? ?? const []).map((e) => e.toString()).toList(),
+  factory ReadingUploadResult.fromJson(Map<String, dynamic> j) =>
+      ReadingUploadResult(
+        accepted: (j['accepted'] as List? ?? const [])
+            .map((e) => e.toString())
+            .toList(),
         rejected: {
           for (final r in (j['rejected'] as List? ?? const []))
-            if (r is Map && r['clientReadingId'] != null) r['clientReadingId'].toString(): r['error']?.toString() ?? 'rejected',
+            if (r is Map && r['clientReadingId'] != null)
+              r['clientReadingId'].toString():
+                  r['error']?.toString() ?? 'rejected',
         },
         inserted: (j['inserted'] as num?)?.toInt() ?? 0,
       );
@@ -146,6 +175,7 @@ class RetailerProfile {
   final double latitude;
   final double longitude;
   final bool isAvailable;
+  final double? pricePerKg;
   final Map<String, dynamic>? openingHours;
   final String status;
   final String? statusReason;
@@ -162,6 +192,7 @@ class RetailerProfile {
     required this.latitude,
     required this.longitude,
     required this.isAvailable,
+    this.pricePerKg,
     this.openingHours,
     required this.status,
     this.statusReason,
@@ -179,11 +210,18 @@ class RetailerProfile {
         latitude: (j['latitude'] as num).toDouble(),
         longitude: (j['longitude'] as num).toDouble(),
         isAvailable: j['isAvailable'] == true,
-        openingHours: j['openingHours'] is Map ? Map<String, dynamic>.from(j['openingHours']) : null,
+        pricePerKg: (j['pricePerKg'] as num?)?.toDouble(),
+        openingHours: j['openingHours'] is Map
+            ? Map<String, dynamic>.from(j['openingHours'])
+            : null,
         status: j['status']?.toString() ?? 'pending',
         statusReason: j['statusReason']?.toString(),
-        createdAt: j['createdAt'] != null ? DateTime.tryParse(j['createdAt'].toString()) : null,
-        updatedAt: j['updatedAt'] != null ? DateTime.tryParse(j['updatedAt'].toString()) : null,
+        createdAt: j['createdAt'] != null
+            ? DateTime.tryParse(j['createdAt'].toString())
+            : null,
+        updatedAt: j['updatedAt'] != null
+            ? DateTime.tryParse(j['updatedAt'].toString())
+            : null,
       );
 }
 
@@ -195,7 +233,8 @@ class XpApi {
   final http.Client _client;
   final SessionController? _sessionOverride;
 
-  SessionController? get _session => _sessionOverride ?? SessionController.instance;
+  SessionController? get _session =>
+      _sessionOverride ?? SessionController.instance;
 
   Uri _uri(String path, [Map<String, String>? q]) =>
       Uri.parse('${AppConfig.apiBaseUrl}$path').replace(queryParameters: q);
@@ -208,7 +247,8 @@ class XpApi {
 
   /// Authenticated request: attaches the access token and, on a 401, refreshes
   /// the session once and retries. A rejected refresh signs the user out.
-  Future<Map<String, dynamic>> _sendAuthed(Future<http.Response> Function(Map<String, String> headers) req) async {
+  Future<Map<String, dynamic>> _sendAuthed(
+      Future<http.Response> Function(Map<String, String> headers) req) async {
     final session = _session;
     final token = session?.accessToken;
     if (session == null || token == null) {
@@ -224,14 +264,17 @@ class XpApi {
     }
   }
 
-  Future<Map<String, dynamic>> _send(Future<http.Response> Function() req) async {
+  Future<Map<String, dynamic>> _send(
+      Future<http.Response> Function() req) async {
     http.Response res;
     try {
       res = await req().timeout(AppConfig.requestTimeout);
     } on TimeoutException {
-      throw const XpApiException('The server took too long to respond. Try again.');
+      throw const XpApiException(
+          'The server took too long to respond. Try again.');
     } catch (_) {
-      throw const XpApiException('Could not reach the XP GasTech server. Check your connection.');
+      throw const XpApiException(
+          'Could not reach the XP GasTech server. Check your connection.');
     }
     Map<String, dynamic> body = const {};
     try {
@@ -239,32 +282,45 @@ class XpApi {
       if (d is Map<String, dynamic>) body = d;
     } catch (_) {}
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw XpApiException(body['error']?.toString() ?? 'Request failed (${res.statusCode}).',
-          statusCode: res.statusCode, code: body['code']?.toString());
+      throw XpApiException(
+          body['error']?.toString() ?? 'Request failed (${res.statusCode}).',
+          statusCode: res.statusCode,
+          code: body['code']?.toString());
     }
     return body;
   }
 
-  Future<List<PartnerStation>> nearbyStations(double lat, double lng, {double radiusKm = 10}) async {
+  Future<List<PartnerStation>> nearbyStations(double lat, double lng,
+      {double radiusKm = 10}) async {
     final body = await _send(() async => _client.get(
-        _uri('/retailers/nearby', {'lat': '$lat', 'lng': '$lng', 'radius': '${(radiusKm * 1000).round()}'}),
+        _uri('/retailers/nearby', {
+          'lat': '$lat',
+          'lng': '$lng',
+          'radius': '${(radiusKm * 1000).round()}'
+        }),
         headers: _headers()));
     return (body['stations'] as List? ?? const [])
-        .map((e) => PartnerStation.fromJson(Map<String, dynamic>.from(e as Map)))
+        .map(
+            (e) => PartnerStation.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
   }
 
   Future<BusinessGasSummary> myGas({int weeks = 8}) async {
-    final body = await _sendAuthed((h) => _client.get(_uri('/businesses/me/gas', {'weeks': '$weeks'}), headers: h));
+    final body = await _sendAuthed((h) => _client
+        .get(_uri('/businesses/me/gas', {'weeks': '$weeks'}), headers: h));
     final l = body['latest'] as Map?;
     return BusinessGasSummary(
       latestKg: (l?['kgLeft'] as num?)?.toDouble(),
       latestPercent: (l?['percentLeft'] as num?)?.toDouble(),
-      latestAt: l?['recordedAt'] == null ? null : DateTime.tryParse(l!['recordedAt'].toString())?.toLocal(),
+      latestAt: l?['recordedAt'] == null
+          ? null
+          : DateTime.tryParse(l!['recordedAt'].toString())?.toLocal(),
       weekly: (body['weekly'] as List? ?? const []).map((w) {
         final m = Map<String, dynamic>.from(w as Map);
-        return WeeklyGasUsage(DateTime.parse(m['weekStart'].toString()),
-            (m['kgUsed'] as num).toDouble(), (m['percentUsed'] as num).toDouble());
+        return WeeklyGasUsage(
+            DateTime.parse(m['weekStart'].toString()),
+            (m['kgUsed'] as num).toDouble(),
+            (m['percentUsed'] as num).toDouble());
       }).toList(),
     );
   }
@@ -273,7 +329,8 @@ class XpApi {
 
   /// Registers a Bluetooth meter to my account (idempotent). Throws
   /// XpApiException(code: 'METER_TAKEN') if another account owns it.
-  Future<RemoteMeter> registerMeter(String btAddress, {String? label, double? cylinderSizeKg}) async {
+  Future<RemoteMeter> registerMeter(String btAddress,
+      {String? label, double? cylinderSizeKg}) async {
     final body = await _sendAuthed((h) => _client.post(_uri('/meters'),
         headers: h,
         body: jsonEncode({
@@ -281,38 +338,48 @@ class XpApi {
           if (label != null && label.trim().isNotEmpty) 'label': label.trim(),
           if (cylinderSizeKg != null) 'cylinderSizeKg': cylinderSizeKg,
         })));
-    return RemoteMeter.fromJson(Map<String, dynamic>.from(body['meter'] as Map));
+    return RemoteMeter.fromJson(
+        Map<String, dynamic>.from(body['meter'] as Map));
   }
 
   Future<List<RemoteMeter>> myMeters() async {
-    final body = await _sendAuthed((h) => _client.get(_uri('/meters'), headers: h));
+    final body =
+        await _sendAuthed((h) => _client.get(_uri('/meters'), headers: h));
     return (body['meters'] as List? ?? const [])
         .map((e) => RemoteMeter.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
   }
 
-  Future<RemoteMeter> updateMeter(String meterId, {String? label, double? cylinderSizeKg}) async {
-    final body = await _sendAuthed((h) => _client.patch(_uri('/meters/$meterId'),
-        headers: h,
-        body: jsonEncode({
-          if (label != null) 'label': label,
-          if (cylinderSizeKg != null) 'cylinderSizeKg': cylinderSizeKg,
-        })));
-    return RemoteMeter.fromJson(Map<String, dynamic>.from(body['meter'] as Map));
+  Future<RemoteMeter> updateMeter(String meterId,
+      {String? label, double? cylinderSizeKg}) async {
+    final body =
+        await _sendAuthed((h) => _client.patch(_uri('/meters/$meterId'),
+            headers: h,
+            body: jsonEncode({
+              if (label != null) 'label': label,
+              if (cylinderSizeKg != null) 'cylinderSizeKg': cylinderSizeKg,
+            })));
+    return RemoteMeter.fromJson(
+        Map<String, dynamic>.from(body['meter'] as Map));
   }
 
   Future<void> removeMeter(String meterId) async {
-    await _sendAuthed((h) => _client.delete(_uri('/meters/$meterId'), headers: h));
+    await _sendAuthed(
+        (h) => _client.delete(_uri('/meters/$meterId'), headers: h));
   }
 
   /// Uploads up to 100 readings (JSON from LocalReading.toSyncJson()).
-  Future<ReadingUploadResult> uploadReadings(String meterId, List<Map<String, Object?>> readings) async {
-    final body = await _sendAuthed((h) => _client.post(_uri('/meters/$meterId/readings'),
-        headers: h, body: jsonEncode({'readings': readings})));
+  Future<ReadingUploadResult> uploadReadings(
+      String meterId, List<Map<String, Object?>> readings) async {
+    final body = await _sendAuthed((h) => _client.post(
+        _uri('/meters/$meterId/readings'),
+        headers: h,
+        body: jsonEncode({'readings': readings})));
     return ReadingUploadResult.fromJson(body);
   }
 
-  Future<void> postGasReading({double? kgLeft, double? percentLeft, String? cylinderLabel}) async {
+  Future<void> postGasReading(
+      {double? kgLeft, double? percentLeft, String? cylinderLabel}) async {
     final recordedAt = DateTime.now().toUtc().toIso8601String();
     await _sendAuthed((h) => _client.post(_uri('/businesses/me/gas-readings'),
         headers: h,
@@ -326,7 +393,8 @@ class XpApi {
 
   Future<RetailerProfile?> getMyRetailer() async {
     try {
-      final body = await _sendAuthed((h) => _client.get(_uri('/retailers/me'), headers: h));
+      final body = await _sendAuthed(
+          (h) => _client.get(_uri('/retailers/me'), headers: h));
       final r = body['retailer'];
       if (r is Map) {
         return RetailerProfile.fromJson(Map<String, dynamic>.from(r));
@@ -346,6 +414,7 @@ class XpApi {
     String? cityLga,
     required double latitude,
     required double longitude,
+    double? pricePerKg,
   }) async {
     final body = await _sendAuthed((h) => _client.post(
           _uri('/retailers'),
@@ -355,9 +424,11 @@ class XpApi {
             'phone': phone.trim(),
             'address': address.trim(),
             if (state != null && state.trim().isNotEmpty) 'state': state.trim(),
-            if (cityLga != null && cityLga.trim().isNotEmpty) 'cityLga': cityLga.trim(),
+            if (cityLga != null && cityLga.trim().isNotEmpty)
+              'cityLga': cityLga.trim(),
             'latitude': latitude,
             'longitude': longitude,
+            if (pricePerKg != null) 'pricePerKg': pricePerKg,
           }),
         ));
     final r = body['retailer'] as Map;
@@ -373,6 +444,7 @@ class XpApi {
     double? latitude,
     double? longitude,
     bool? isAvailable,
+    double? pricePerKg,
     Map<String, dynamic>? openingHours,
   }) async {
     final payload = <String, dynamic>{};
@@ -384,6 +456,7 @@ class XpApi {
     if (latitude != null) payload['latitude'] = latitude;
     if (longitude != null) payload['longitude'] = longitude;
     if (isAvailable != null) payload['isAvailable'] = isAvailable;
+    if (pricePerKg != null) payload['pricePerKg'] = pricePerKg;
     if (openingHours != null) payload['openingHours'] = openingHours;
 
     final body = await _sendAuthed((h) => _client.patch(
