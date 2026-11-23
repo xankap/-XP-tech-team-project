@@ -11,6 +11,7 @@ import '../theme/app_theme.dart';
 import '../widgets/gauge_loading.dart';
 import '../widgets/google_sign_in_button.dart';
 import '../widgets/xp_logo.dart';
+import 'retailer_registration_screen.dart';
 
 /// Signature for building the signed-in home.
 typedef HomeBuilder = Widget Function(VoidCallback onLogout, UserProfile user);
@@ -315,6 +316,11 @@ class _LoginPageState extends State<LoginPage> {
   bool _signupDone = false;
   DateTime? _lastResend;
 
+  /// Set from the "Register a gas plant" signup card: land on the station
+  /// portal right after the account is ready. Survives tab switches so the
+  /// email-verify-then-log-in path keeps it too.
+  bool _businessIntent = false;
+
   /// After phone/Google login, offer an optional username if the account has none.
   bool _pickUsername = false;
   AuthResult? _pendingResult;
@@ -449,9 +455,50 @@ class _LoginPageState extends State<LoginPage> {
     return _validUsername(identifier, required: true);
   }
 
+  /// Completes sign-in, then routes business signups straight to the
+  /// station portal so gas plants register without hunting through Settings.
+  Future<void> _finishSignIn(AuthResult result, String method, String fallback) async {
+    await widget.onSuccess(result, method, fallback);
+    if (!_businessIntent || !mounted) return;
+    _businessIntent = false;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const RetailerRegistrationScreen()),
+    );
+  }
+
+  Widget _businessIntentBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.statusOK.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.local_gas_station_rounded, color: AppTheme.statusOK),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Signing up as a gas plant / firm — your business registration is next.',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+          InkWell(
+            onTap: () => setState(() => _businessIntent = false),
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.close_rounded, size: 18, color: AppTheme.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _completeLogin(AuthResult result, String method, String fallback) async {
     if (result.username != null && result.username!.trim().isNotEmpty) {
-      await widget.onSuccess(result, method, fallback);
+      await _finishSignIn(result, method, fallback);
       return;
     }
     if (!mounted) return;
@@ -470,7 +517,7 @@ class _LoginPageState extends State<LoginPage> {
     final fallback = _pendingFallback;
     if (pending == null || method == null) return;
     if (skip) {
-      await widget.onSuccess(pending, method, fallback ?? pending.displayId('XP Tech user'));
+      await _finishSignIn(pending, method, fallback ?? pending.displayId('XP Tech user'));
       return;
     }
     final username = _username.text.trim();
@@ -487,7 +534,18 @@ class _LoginPageState extends State<LoginPage> {
         username: profile.username,
         raw: pending.raw,
       );
-      await widget.onSuccess(updated, method, fallback ?? updated.displayId('XP Tech user'));
+      await _finishSignIn(updated, method, fallback ?? updated.displayId('XP Tech user'));
+    });
+  }
+
+  /// Login-tab shortcut: business owners jump straight into signup with
+  /// the business intent set, landing on the station portal after sign-in.
+  void _startBusinessSignup() {
+    _switchTab(_AuthTab.signup);
+    setState(() {
+      _businessIntent = true;
+      _signupMethod = _SignupMethod.email;
+      _signupDone = false;
     });
   }
 
@@ -524,7 +582,7 @@ class _LoginPageState extends State<LoginPage> {
       final session = result.session;
       if (session != null) {
         // Older backend without email verification: signed in directly.
-        await widget.onSuccess(session, 'email', email);
+        await _finishSignIn(session, 'email', email);
         return;
       }
       if (mounted) {
@@ -854,6 +912,18 @@ class _LoginPageState extends State<LoginPage> {
           }),
         ),
         _googleOption(context),
+        _signupOption(
+          icon: Icons.local_gas_station_rounded,
+          title: 'Register a gas plant or firm',
+          subtitle: 'Create an account, then list your business on the refill map',
+          accent: AppTheme.statusOK,
+          onTap: () => setState(() {
+            _businessIntent = true;
+            _signupMethod = _SignupMethod.email;
+            _signupDone = false;
+            _error = null;
+          }),
+        ),
         _messages(context),
       ];
 
@@ -874,6 +944,15 @@ class _LoginPageState extends State<LoginPage> {
                 'We sent a verification link to ${_verifyEmail ?? 'your email'}. Open it, then come back and log in.',
                 textAlign: TextAlign.center,
               ),
+              if (_businessIntent)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    'After logging in, you will go straight to gas plant registration.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
             ],
           ),
         ),
@@ -899,6 +978,7 @@ class _LoginPageState extends State<LoginPage> {
       ];
 
   List<Widget> _signupEmailForm(BuildContext context) => [
+        if (_businessIntent) _businessIntentBanner(),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
@@ -950,6 +1030,7 @@ class _LoginPageState extends State<LoginPage> {
       ];
 
   List<Widget> _signupPhoneForm(BuildContext context) => [
+        if (_businessIntent) _businessIntentBanner(),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
@@ -1091,6 +1172,19 @@ class _LoginPageState extends State<LoginPage> {
                     if (!_pickUsername) ...[
                       const SizedBox(height: 22),
                       _modeToggle(context),
+                      const SizedBox(height: 10),
+                      Center(
+                        child: TextButton.icon(
+                          onPressed: _busy ? null : _startBusinessSignup,
+                          icon: const Icon(Icons.local_gas_station_rounded,
+                              size: 18, color: AppTheme.statusOK),
+                          label: const Text(
+                            'Own a gas plant? List your business',
+                            style: TextStyle(
+                                color: AppTheme.statusOK, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
                     ],
                     const SizedBox(height: 22),
                     ...body,
