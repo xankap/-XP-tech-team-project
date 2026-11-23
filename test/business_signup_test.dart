@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:xp_gas_monitor/screens/auth_flow.dart';
+import 'package:xp_gas_monitor/screens/station_auth_screen.dart';
 import 'package:xp_gas_monitor/services/auth_api.dart';
 
 void main() {
@@ -20,7 +21,74 @@ void main() {
     }
   }
 
-  testWidgets('business card routes signup through to the station portal', (tester) async {
+  testWidgets('LoginPage displays the gas station banner and persistent shortcut', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final api = AuthApi(
+        client: MockClient((req) async => http.Response(jsonEncode({'ok': true}), 200)),
+        baseUrl: 'https://api.test');
+    await tester.pumpWidget(MaterialApp(home: LoginPage(api: api, onSuccess: (r, m, f) async {})));
+    await settle(tester);
+
+    // Dedicated gas station banner is displayed
+    expect(find.text('Gas Station & Plant Portal'), findsOneWidget);
+
+    // Persistent link under the toggle is displayed
+    final cta = find.text('Own a gas plant? List your business');
+    expect(cta, findsOneWidget);
+  });
+
+  testWidgets('tapping business shortcut opens the dedicated GasStationAuthScreen', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final api = AuthApi(
+        client: MockClient((req) async => http.Response(jsonEncode({'ok': true}), 200)),
+        baseUrl: 'https://api.test');
+    await tester.pumpWidget(MaterialApp(home: LoginPage(api: api, onSuccess: (r, m, f) async {})));
+    await settle(tester);
+
+    final cta = find.text('Own a gas plant? List your business');
+    await tester.ensureVisible(cta);
+    await tester.tap(cta);
+    await tester.pumpAndSettle();
+
+    // Now on the dedicated Gas Station Auth Screen
+    expect(find.byType(GasStationAuthScreen), findsOneWidget);
+    expect(find.text('Station Sign In'), findsWidgets);
+    expect(find.text('Register Station'), findsOneWidget);
+    expect(find.byKey(const Key('station-login-button')), findsOneWidget);
+  });
+
+  testWidgets('signup chooser card opens dedicated GasStationAuthScreen in register mode', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final api = AuthApi(
+        client: MockClient((req) async => http.Response(jsonEncode({'ok': true}), 200)),
+        baseUrl: 'https://api.test');
+    await tester.pumpWidget(MaterialApp(home: LoginPage(api: api, onSuccess: (r, m, f) async {})));
+    await settle(tester);
+
+    await tester.tap(find.text('Sign up'));
+    await tester.pumpAndSettle();
+
+    final card = find.text('Register a gas plant or firm');
+    expect(card, findsOneWidget);
+    await tester.ensureVisible(card);
+    await tester.tap(card);
+    await tester.pumpAndSettle();
+
+    // Opened in register mode
+    expect(find.byType(GasStationAuthScreen), findsOneWidget);
+    expect(find.byKey(const Key('station-signup-button')), findsOneWidget);
+    expect(find.byKey(const Key('station-name-field')), findsOneWidget);
+    expect(find.byKey(const Key('station-email-field')), findsOneWidget);
+  });
+
+  testWidgets('station sign-in on dedicated screen logs in and routes directly to the retailer portal',
+      (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -33,62 +101,130 @@ void main() {
           if (req.url.path == '/auth/login') {
             return http.Response(
                 jsonEncode({
-                  'token': 'tok',
-                  'user': {'id': 'u1', 'email': 'plant@gas.co', 'username': 'gasplant'}
+                  'token': 'station_jwt_token',
+                  'user': {'id': 'st_user_1', 'email': 'plant@totalenergies.ng', 'username': 'totalgas'}
                 }),
                 200);
           }
           return http.Response('{}', 200);
         }),
         baseUrl: 'https://api.test');
-    await tester
-        .pumpWidget(MaterialApp(home: LoginPage(api: api, onSuccess: (r, m, f) async => signedIn = true)));
-    await settle(tester);
 
-    // Signup tab -> the business card appears on the chooser.
-    await tester.tap(find.text('Sign up'));
-    await tester.pump();
-    final card = find.text('Register a gas plant or firm');
-    expect(card, findsOneWidget);
-    await tester.ensureVisible(card);
-    await tester.tap(card);
-    await tester.pump();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GasStationAuthScreen(
+          api: api,
+          onSuccess: (r, m, f) async => signedIn = true,
+          initialIsSignUp: false,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-    // Lands on the email form with the business banner.
-    expect(find.text('Signing up as a gas plant / firm — your business registration is next.'),
-        findsOneWidget);
+    await tester.enterText(find.byKey(const Key('station-login-identifier')), 'plant@totalenergies.ng');
+    await tester.enterText(find.byKey(const Key('station-login-password')), 'stationPass123');
+    await tester.tap(find.byKey(const Key('station-login-button')));
+    await tester.pump();
+    await tester.pumpAndSettle();
 
-    // Intent survives switching to the login tab; logging in opens the portal.
-    await tester.tap(find.text('Login'));
-    await tester.pump();
-    await tester.enterText(find.widgetWithText(TextField, 'Email'), 'plant@gas.co');
-    await tester.enterText(find.widgetWithText(TextField, 'Password'), 'password123');
-    await tester.tap(find.widgetWithText(ElevatedButton, 'Log in'));
-    await tester.pump();
-    await tester.pump();
     expect(signedIn, isTrue);
     expect(find.text('Gas Plant & Retailer Sign-up'), findsOneWidget);
   });
 
-  testWidgets('login tab offers the business signup shortcut', (tester) async {
+  testWidgets('station sign-up on dedicated screen creates account and routes to retailer portal',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    var signedIn = false;
+    final api = AuthApi(
+        client: MockClient((req) async {
+          if (req.url.path == '/auth/signup') {
+            return http.Response(
+                jsonEncode({
+                  'verificationRequired': false,
+                  'token': 'new_station_token',
+                  'user': {'id': 'st_user_2', 'email': 'apex@gasplant.ng', 'username': 'apexplant'}
+                }),
+                201);
+          }
+          return http.Response('{}', 200);
+        }),
+        baseUrl: 'https://api.test');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GasStationAuthScreen(
+          api: api,
+          onSuccess: (r, m, f) async => signedIn = true,
+          initialIsSignUp: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('station-name-field')), 'Apex LPG Refill Plant');
+    await tester.enterText(find.byKey(const Key('station-email-field')), 'apex@gasplant.ng');
+    await tester.enterText(find.byKey(const Key('station-username-field')), 'apexplant');
+    await tester.enterText(find.byKey(const Key('station-password-field')), 'apexPassword123');
+    await tester.enterText(find.byKey(const Key('station-phone-field')), '+2348011223344');
+
+    await tester.tap(find.byKey(const Key('station-signup-button')));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(signedIn, isTrue);
+    expect(find.text('Gas Plant & Retailer Sign-up'), findsOneWidget);
+  });
+
+  testWidgets('dedicated screen allows switching tabs and navigating back to personal account',
+      (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final api = AuthApi(
         client: MockClient((req) async => http.Response(jsonEncode({'ok': true}), 200)),
         baseUrl: 'https://api.test');
-    await tester.pumpWidget(MaterialApp(home: LoginPage(api: api, onSuccess: (r, m, f) async {})));
-    await settle(tester);
 
-    // Default login tab shows the persistent business link under the toggle.
-    final cta = find.text('Own a gas plant? List your business');
-    expect(cta, findsOneWidget);
-    await tester.ensureVisible(cta);
-    await tester.tap(cta);
-    await tester.pump();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => GasStationAuthScreen(api: api, onSuccess: (r, m, f) async {}),
+                ),
+              ),
+              child: const Text('Open Station Portal'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-    // Jumps straight to the email form with the business banner.
-    expect(find.text('Signing up as a gas plant / firm — your business registration is next.'),
-        findsOneWidget);
+    // Open station auth screen
+    await tester.tap(find.text('Open Station Portal'));
+    await tester.pumpAndSettle();
+    expect(find.byType(GasStationAuthScreen), findsOneWidget);
+
+    // Switch to Register Station tab
+    await tester.tap(find.text('Register Station'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('station-signup-button')), findsOneWidget);
+
+    // Switch back to Station Sign In
+    await tester.tap(find.text('Station Sign In'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('station-login-button')), findsOneWidget);
+
+    // Pop back using the top app bar action
+    await tester.tap(find.text('Personal Account'));
+    await tester.pumpAndSettle();
+
+    // Back to main screen
+    expect(find.byType(GasStationAuthScreen), findsNothing);
+    expect(find.text('Open Station Portal'), findsOneWidget);
   });
 }

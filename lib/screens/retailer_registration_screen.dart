@@ -15,7 +15,9 @@ const List<String> _kNigerianStates = [
 
 /// Screen allowing gas plants, refill stations, and retailers to register or manage their listing.
 class RetailerRegistrationScreen extends StatefulWidget {
-  const RetailerRegistrationScreen({super.key});
+  final String? initialName;
+  final String? initialPhone;
+  const RetailerRegistrationScreen({super.key, this.initialName, this.initialPhone});
 
   @override
   State<RetailerRegistrationScreen> createState() => _RetailerRegistrationScreenState();
@@ -78,6 +80,13 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
         _loading = false;
         if (p != null) {
           _populateFormWithProfile(p);
+        } else {
+          if (widget.initialName != null && _nameController.text.isEmpty) {
+            _nameController.text = widget.initialName!;
+          }
+          if (widget.initialPhone != null && _phoneController.text.isEmpty) {
+            _phoneController.text = widget.initialPhone!;
+          }
         }
       });
     } catch (e) {
@@ -496,7 +505,7 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
                         else
                           Switch(
                             value: p.isAvailable,
-                            activeColor: AppTheme.statusOK,
+                            activeThumbColor: AppTheme.statusOK,
                             onChanged: _toggleAvailability,
                           ),
                       ],
@@ -657,7 +666,7 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
 
           if (!_isEditing) ...[
             DropdownButtonFormField<String>(
-              value: _selectedFacilityType,
+              initialValue: _selectedFacilityType,
               decoration: InputDecoration(
                 labelText: 'Facility Type *',
                 prefixIcon: const Icon(Icons.business_rounded),
@@ -731,7 +740,7 @@ class _RetailerRegistrationScreenState extends State<RetailerRegistrationScreen>
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: _selectedState,
+                  initialValue: _selectedState,
                   isExpanded: true,
                   decoration: InputDecoration(
                     labelText: 'State *',

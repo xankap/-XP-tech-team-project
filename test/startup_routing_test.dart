@@ -119,6 +119,8 @@ void main() {
   });
 
   testWidgets('login persists the session and next launch skips the auth screens', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final storage = MemorySessionStorage();
     final client = MockClient((req) async {
       if (req.url.path == '/health') return _json(200, {'ok': true});
@@ -134,11 +136,16 @@ void main() {
 
     await tester.tap(find.text('Continue'));
     await _settleTimers(tester);
-    await tester.enterText(find.widgetWithText(TextField, 'Email'), 'ada@example.com');
+    await tester.enterText(find.widgetWithText(TextField, 'Email or username'), 'ada@example.com');
     await tester.enterText(find.widgetWithText(TextField, 'Password'), 'password123');
     await tester.tap(find.widgetWithText(ElevatedButton, 'Log in'));
     await tester.pump();
     await tester.pump();
+    if (find.text('Skip for now').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Skip for now'));
+      await tester.pump();
+      await tester.pump();
+    }
     expect(find.text('HOME ada@example.com'), findsOneWidget);
     expect(storage.values.containsKey(SessionStore.storageKey), isTrue);
 
@@ -168,13 +175,15 @@ void main() {
     }
 
     testWidgets('login 403 EMAIL_NOT_VERIFIED shows message and Resend', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final reqs = await pumpLogin(tester, (req) async {
         if (req.url.path == '/auth/login') {
           return _json(403, {'error': 'Please verify your email first', 'code': 'EMAIL_NOT_VERIFIED'});
         }
         return _json(200, {'ok': true, 'message': 'If an account exists for that email and still needs verification, a new link has been sent.'});
       });
-      await tester.enterText(find.widgetWithText(TextField, 'Email'), 'new@example.com');
+      await tester.enterText(find.widgetWithText(TextField, 'Email or username'), 'new@example.com');
       await tester.enterText(find.widgetWithText(TextField, 'Password'), 'password123');
       await tester.tap(find.widgetWithText(ElevatedButton, 'Log in'));
       await tester.pump();
@@ -208,6 +217,7 @@ void main() {
       await tester.tap(find.text('Sign up with email'));
       await tester.pump();
       await tester.enterText(find.widgetWithText(TextField, 'Email'), 'new@example.com');
+      await tester.enterText(find.widgetWithText(TextField, 'Username'), 'newuser');
       await tester.enterText(find.widgetWithText(TextField, 'Password'), 'password123');
       await tester.tap(find.widgetWithText(ElevatedButton, 'Create account'));
       await tester.pump();

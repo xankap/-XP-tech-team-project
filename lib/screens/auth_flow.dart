@@ -12,6 +12,7 @@ import '../widgets/gauge_loading.dart';
 import '../widgets/google_sign_in_button.dart';
 import '../widgets/xp_logo.dart';
 import 'retailer_registration_screen.dart';
+import 'station_auth_screen.dart';
 
 /// Signature for building the signed-in home.
 typedef HomeBuilder = Widget Function(VoidCallback onLogout, UserProfile user);
@@ -538,15 +539,83 @@ class _LoginPageState extends State<LoginPage> {
     });
   }
 
-  /// Login-tab shortcut: business owners jump straight into signup with
-  /// the business intent set, landing on the station portal after sign-in.
-  void _startBusinessSignup() {
-    _switchTab(_AuthTab.signup);
-    setState(() {
-      _businessIntent = true;
-      _signupMethod = _SignupMethod.email;
-      _signupDone = false;
-    });
+  /// Opens the dedicated Gas Station & Refill Plant authentication page.
+  void _openGasStationPortal({bool isSignUp = false}) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GasStationAuthScreen(
+          api: _api,
+          onSuccess: widget.onSuccess,
+          initialIsSignUp: isSignUp,
+        ),
+      ),
+    );
+  }
+
+  /// Shortcut for gas station owners: opens the dedicated station portal page.
+  void _startBusinessSignup({bool isSignUp = true}) {
+    _openGasStationPortal(isSignUp: isSignUp);
+  }
+
+  Widget _stationPortalBanner(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF132238) : const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF1B4332) : const Color(0xFF86EFAC),
+          width: 1.2,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          key: const Key('gas-station-portal-banner'),
+          borderRadius: BorderRadius.circular(16),
+          onTap: _busy ? null : () => _openGasStationPortal(isSignUp: _tab == _AuthTab.signup),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppTheme.statusOK.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.local_gas_station_rounded, color: AppTheme.statusOK, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Gas Station & Plant Portal',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Sign in or register on our dedicated station page',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.statusOK),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _submitLogin() async {
@@ -915,14 +984,9 @@ class _LoginPageState extends State<LoginPage> {
         _signupOption(
           icon: Icons.local_gas_station_rounded,
           title: 'Register a gas plant or firm',
-          subtitle: 'Create an account, then list your business on the refill map',
+          subtitle: 'Sign in or register on our dedicated gas station page',
           accent: AppTheme.statusOK,
-          onTap: () => setState(() {
-            _businessIntent = true;
-            _signupMethod = _SignupMethod.email;
-            _signupDone = false;
-            _error = null;
-          }),
+          onTap: () => _openGasStationPortal(isSignUp: true),
         ),
         _messages(context),
       ];
@@ -1170,12 +1234,13 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ],
                     if (!_pickUsername) ...[
-                      const SizedBox(height: 22),
+                      const SizedBox(height: 18),
+                      _stationPortalBanner(context),
                       _modeToggle(context),
                       const SizedBox(height: 10),
                       Center(
                         child: TextButton.icon(
-                          onPressed: _busy ? null : _startBusinessSignup,
+                          onPressed: _busy ? null : () => _startBusinessSignup(isSignUp: false),
                           icon: const Icon(Icons.local_gas_station_rounded,
                               size: 18, color: AppTheme.statusOK),
                           label: const Text(
