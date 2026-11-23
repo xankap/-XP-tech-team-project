@@ -37,6 +37,7 @@ class AuthResult {
   final String? phone;
   final String? name;
   final String? username;
+  final String? role;
   final Map<String, dynamic> raw;
   const AuthResult({
     required this.token,
@@ -46,13 +47,14 @@ class AuthResult {
     this.phone,
     this.name,
     this.username,
+    this.role,
     required this.raw,
   });
 
   /// Best identifier to show/persist for the signed-in user.
   String displayId(String fallback) => username ?? email ?? phone ?? fallback;
 
-  UserProfile get profile => UserProfile(id: userId, email: email, phone: phone, name: name, username: username);
+  UserProfile get profile => UserProfile(id: userId, email: email, phone: phone, name: name, username: username, role: role);
 }
 
 /// Response of POST /auth/signup. New backends require email verification and
@@ -215,6 +217,7 @@ class AuthApi {
       phone: str(user['phone']),
       name: str(user['name']),
       username: str(user['username']),
+      role: str(user['role']),
       raw: json,
     );
   }

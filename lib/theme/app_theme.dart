@@ -14,6 +14,10 @@ class AppTheme {
   static const Color statusCritical = Color(0xFFC62828);
   static const Color statusUnknown = Color(0xFF757575);
 
+  static const Color textPrimary = Color(0xFF1A237E);
+  static const Color textSecondary = Color(0xFF475569);
+  static const Color textMuted = Color(0xFF90A4AE);
+
   static const Color darkBg = Color(0xFF0B1220);
   static const Color darkSurface = Color(0xFF121A2B);
   static const Color darkCard = Color(0xFF182338);

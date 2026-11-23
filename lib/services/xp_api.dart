@@ -9,8 +9,16 @@ import 'session_controller.dart';
 /// Error with a user-facing [message].
 class XpApiException implements Exception {
   final String message;
+
+  /// HTTP status; null when the server could not be reached (offline/timeout).
   final int? statusCode;
-  const XpApiException(this.message, {this.statusCode});
+
+  /// Machine-readable error code from the server, e.g. METER_TAKEN.
+  final String? code;
+  const XpApiException(this.message, {this.statusCode, this.code});
+
+  /// Worth retrying later: offline, timeout, rate limit or server error.
+  bool get isTransient => statusCode == null || statusCode == 408 || statusCode == 429 || statusCode! >= 500;
   @override
   String toString() => message;
 }
@@ -24,8 +32,9 @@ class PartnerStation {
   final double latitude;
   final double longitude;
   final int? distanceM;
+  final bool isAvailable;
   const PartnerStation({required this.id, required this.name, this.phone, this.address,
-      required this.latitude, required this.longitude, this.distanceM});
+      required this.latitude, required this.longitude, this.distanceM, this.isAvailable = true});
 
   factory PartnerStation.fromJson(Map<String, dynamic> j) => PartnerStation(
         id: j['id'].toString(),
@@ -35,7 +44,36 @@ class PartnerStation {
         latitude: (j['latitude'] as num).toDouble(),
         longitude: (j['longitude'] as num).toDouble(),
         distanceM: (j['distanceM'] as num?)?.round(),
+        isAvailable: j['isAvailable'] == null || j['isAvailable'] == true,
       );
+
+  /// Short facility badge from the registration suffix, e.g.
+  /// "Apex Energy (LPG Refill Plant)" -> "LPG Plant".
+  String get facilityBadge {
+    final match = RegExp(r'\(([^()]*)\)\s*$').firstMatch(name);
+    final tag = (match?.group(1) ?? '').toLowerCase();
+    if (tag.contains('skid')) return 'Skid';
+    if (tag.contains('delivery') || tag.contains('doorstep')) return 'Delivery';
+    if (tag.contains('depot') || tag.contains('cylinder')) return 'Depot';
+    if (tag.contains('plant') || tag.contains('refill') || tag.contains('lpg')) return 'LPG Plant';
+    if (tag.contains('station') || tag.contains('retail')) return 'Station';
+    return 'Partner';
+  }
+
+  /// Name without the trailing "(facility type)" registration suffix.
+  String get displayName {
+    final stripped = name.replaceAll(RegExp(r'\s*\([^()]*\)\s*$'), '').trim();
+    return stripped.isEmpty ? name : stripped;
+  }
+
+  /// Universal maps link (opens Google Maps, or Apple Maps via browser).
+  Uri get directionsUrl => Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude');
+
+  /// Dialer link, or null when the station has no phone number.
+  Uri? get telUrl => (phone == null || phone!.trim().isEmpty)
+      ? null
+      : Uri(scheme: 'tel', path: phone!.trim());
 
   String get distanceLabel {
     final d = distanceM;
@@ -57,6 +95,96 @@ class BusinessGasSummary {
   final DateTime? latestAt;
   final List<WeeklyGasUsage> weekly;
   const BusinessGasSummary({this.latestKg, this.latestPercent, this.latestAt, required this.weekly});
+}
+
+/// A gas meter registered to the signed-in account.
+class RemoteMeter {
+  final String id;
+  final String btAddress;
+  final String? label;
+  final double? cylinderSizeKg;
+  final DateTime? lastReadingAt;
+  const RemoteMeter({required this.id, required this.btAddress, this.label, this.cylinderSizeKg, this.lastReadingAt});
+
+  factory RemoteMeter.fromJson(Map<String, dynamic> j) => RemoteMeter(
+        id: j['id'].toString(),
+        btAddress: j['btAddress'].toString(),
+        label: j['label']?.toString(),
+        cylinderSizeKg: (j['cylinderSizeKg'] as num?)?.toDouble(),
+        lastReadingAt: j['lastReadingAt'] == null ? null : DateTime.tryParse(j['lastReadingAt'].toString()),
+      );
+}
+
+/// Server answer to a reading batch upload.
+class ReadingUploadResult {
+  /// Client ids the server now has (new or already stored) -> mark synced.
+  final List<String> accepted;
+
+  /// Client id -> reason, for readings the server will never accept.
+  final Map<String, String> rejected;
+  final int inserted;
+  const ReadingUploadResult({required this.accepted, required this.rejected, this.inserted = 0});
+
+  factory ReadingUploadResult.fromJson(Map<String, dynamic> j) => ReadingUploadResult(
+        accepted: (j['accepted'] as List? ?? const []).map((e) => e.toString()).toList(),
+        rejected: {
+          for (final r in (j['rejected'] as List? ?? const []))
+            if (r is Map && r['clientReadingId'] != null) r['clientReadingId'].toString(): r['error']?.toString() ?? 'rejected',
+        },
+        inserted: (j['inserted'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// Registered gas station / retailer profile.
+class RetailerProfile {
+  final String id;
+  final String name;
+  final String phone;
+  final String address;
+  final String? state;
+  final String? cityLga;
+  final double latitude;
+  final double longitude;
+  final bool isAvailable;
+  final Map<String, dynamic>? openingHours;
+  final String status;
+  final String? statusReason;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  const RetailerProfile({
+    required this.id,
+    required this.name,
+    required this.phone,
+    required this.address,
+    this.state,
+    this.cityLga,
+    required this.latitude,
+    required this.longitude,
+    required this.isAvailable,
+    this.openingHours,
+    required this.status,
+    this.statusReason,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory RetailerProfile.fromJson(Map<String, dynamic> j) => RetailerProfile(
+        id: j['id'].toString(),
+        name: j['name']?.toString() ?? '',
+        phone: j['phone']?.toString() ?? '',
+        address: j['address']?.toString() ?? '',
+        state: j['state']?.toString(),
+        cityLga: j['cityLga']?.toString(),
+        latitude: (j['latitude'] as num).toDouble(),
+        longitude: (j['longitude'] as num).toDouble(),
+        isAvailable: j['isAvailable'] == true,
+        openingHours: j['openingHours'] is Map ? Map<String, dynamic>.from(j['openingHours']) : null,
+        status: j['status']?.toString() ?? 'pending',
+        statusReason: j['statusReason']?.toString(),
+        createdAt: j['createdAt'] != null ? DateTime.tryParse(j['createdAt'].toString()) : null,
+        updatedAt: j['updatedAt'] != null ? DateTime.tryParse(j['updatedAt'].toString()) : null,
+      );
 }
 
 /// Data API for xp-gastech-backend (retailers, business gas). Auth endpoints live in AuthApi.
@@ -112,7 +240,7 @@ class XpApi {
     } catch (_) {}
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw XpApiException(body['error']?.toString() ?? 'Request failed (${res.statusCode}).',
-          statusCode: res.statusCode);
+          statusCode: res.statusCode, code: body['code']?.toString());
     }
     return body;
   }
@@ -141,6 +269,49 @@ class XpApi {
     );
   }
 
+  // --- Meters + offline reading sync -------------------------------------
+
+  /// Registers a Bluetooth meter to my account (idempotent). Throws
+  /// XpApiException(code: 'METER_TAKEN') if another account owns it.
+  Future<RemoteMeter> registerMeter(String btAddress, {String? label, double? cylinderSizeKg}) async {
+    final body = await _sendAuthed((h) => _client.post(_uri('/meters'),
+        headers: h,
+        body: jsonEncode({
+          'btAddress': btAddress,
+          if (label != null && label.trim().isNotEmpty) 'label': label.trim(),
+          if (cylinderSizeKg != null) 'cylinderSizeKg': cylinderSizeKg,
+        })));
+    return RemoteMeter.fromJson(Map<String, dynamic>.from(body['meter'] as Map));
+  }
+
+  Future<List<RemoteMeter>> myMeters() async {
+    final body = await _sendAuthed((h) => _client.get(_uri('/meters'), headers: h));
+    return (body['meters'] as List? ?? const [])
+        .map((e) => RemoteMeter.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<RemoteMeter> updateMeter(String meterId, {String? label, double? cylinderSizeKg}) async {
+    final body = await _sendAuthed((h) => _client.patch(_uri('/meters/$meterId'),
+        headers: h,
+        body: jsonEncode({
+          if (label != null) 'label': label,
+          if (cylinderSizeKg != null) 'cylinderSizeKg': cylinderSizeKg,
+        })));
+    return RemoteMeter.fromJson(Map<String, dynamic>.from(body['meter'] as Map));
+  }
+
+  Future<void> removeMeter(String meterId) async {
+    await _sendAuthed((h) => _client.delete(_uri('/meters/$meterId'), headers: h));
+  }
+
+  /// Uploads up to 100 readings (JSON from LocalReading.toSyncJson()).
+  Future<ReadingUploadResult> uploadReadings(String meterId, List<Map<String, Object?>> readings) async {
+    final body = await _sendAuthed((h) => _client.post(_uri('/meters/$meterId/readings'),
+        headers: h, body: jsonEncode({'readings': readings})));
+    return ReadingUploadResult.fromJson(body);
+  }
+
   Future<void> postGasReading({double? kgLeft, double? percentLeft, String? cylinderLabel}) async {
     final recordedAt = DateTime.now().toUtc().toIso8601String();
     await _sendAuthed((h) => _client.post(_uri('/businesses/me/gas-readings'),
@@ -151,5 +322,76 @@ class XpApi {
           if (cylinderLabel != null) 'cylinderLabel': cylinderLabel,
           'recordedAt': recordedAt,
         })));
+  }
+
+  Future<RetailerProfile?> getMyRetailer() async {
+    try {
+      final body = await _sendAuthed((h) => _client.get(_uri('/retailers/me'), headers: h));
+      final r = body['retailer'];
+      if (r is Map) {
+        return RetailerProfile.fromJson(Map<String, dynamic>.from(r));
+      }
+      return null;
+    } on XpApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  Future<RetailerProfile> registerRetailer({
+    required String name,
+    required String phone,
+    required String address,
+    String? state,
+    String? cityLga,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final body = await _sendAuthed((h) => _client.post(
+          _uri('/retailers'),
+          headers: h,
+          body: jsonEncode({
+            'name': name.trim(),
+            'phone': phone.trim(),
+            'address': address.trim(),
+            if (state != null && state.trim().isNotEmpty) 'state': state.trim(),
+            if (cityLga != null && cityLga.trim().isNotEmpty) 'cityLga': cityLga.trim(),
+            'latitude': latitude,
+            'longitude': longitude,
+          }),
+        ));
+    final r = body['retailer'] as Map;
+    return RetailerProfile.fromJson(Map<String, dynamic>.from(r));
+  }
+
+  Future<RetailerProfile> updateRetailer({
+    String? name,
+    String? phone,
+    String? address,
+    String? state,
+    String? cityLga,
+    double? latitude,
+    double? longitude,
+    bool? isAvailable,
+    Map<String, dynamic>? openingHours,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (name != null) payload['name'] = name.trim();
+    if (phone != null) payload['phone'] = phone.trim();
+    if (address != null) payload['address'] = address.trim();
+    if (state != null) payload['state'] = state.trim();
+    if (cityLga != null) payload['cityLga'] = cityLga.trim();
+    if (latitude != null) payload['latitude'] = latitude;
+    if (longitude != null) payload['longitude'] = longitude;
+    if (isAvailable != null) payload['isAvailable'] = isAvailable;
+    if (openingHours != null) payload['openingHours'] = openingHours;
+
+    final body = await _sendAuthed((h) => _client.patch(
+          _uri('/retailers/me'),
+          headers: h,
+          body: jsonEncode(payload),
+        ));
+    final r = body['retailer'] as Map;
+    return RetailerProfile.fromJson(Map<String, dynamic>.from(r));
   }
 }

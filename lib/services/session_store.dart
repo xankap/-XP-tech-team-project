@@ -12,8 +12,9 @@ class UserProfile {
   final String? phone;
   final String? name;
   final String? username;
+  final String? role;
 
-  const UserProfile({this.id, this.email, this.phone, this.name, this.username});
+  const UserProfile({this.id, this.email, this.phone, this.name, this.username, this.role});
 
   /// Best label to show for the signed-in user. Username first, then name/email/phone.
   String get displayName {
@@ -29,6 +30,7 @@ class UserProfile {
         phone: other.phone ?? phone,
         name: other.name ?? name,
         username: other.username ?? username,
+        role: other.role ?? role,
       );
 
   factory UserProfile.fromJson(Map<String, dynamic> j) => UserProfile(
@@ -37,6 +39,7 @@ class UserProfile {
         phone: _str(j['phone']),
         name: _str(j['name']),
         username: _str(j['username']),
+        role: _str(j['role']),
       );
 
   Map<String, dynamic> toJson() => {
@@ -45,6 +48,7 @@ class UserProfile {
         if (phone != null) 'phone': phone,
         if (name != null) 'name': name,
         if (username != null) 'username': username,
+        if (role != null) 'role': role,
       };
 }
 

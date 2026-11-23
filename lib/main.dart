@@ -22,17 +22,18 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth_flow.dart';
+import 'screens/retailer_registration_screen.dart';
 import 'services/auth_api.dart';
 import 'services/session_controller.dart';
 import 'services/session_store.dart';
 import 'services/xp_api.dart';
 import 'widgets/business_gas_card.dart';
+import 'widgets/retailer_quick_card.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -40,6 +41,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ---------------------------------------------------------------------------
 // pubspec.yaml dependencies:
@@ -410,7 +412,7 @@ class NotificationService {
       id: id,
       title: title,
       body: body,
-      notificationDetails: NotificationDetails(
+      notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
           'dgm_channel',
           'Gas Meter Alerts',
@@ -420,7 +422,7 @@ class NotificationService {
           color: AppTheme.corporateBlue,
           icon: '@mipmap/ic_launcher',
         ),
-        iOS: const DarwinNotificationDetails(
+        iOS: DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
@@ -776,6 +778,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ),
                       ),
                     const SizedBox(height: 8),
+                    const RetailerQuickCard(),
                     _buildGaugeCard(reading, bt.state),
                     const SizedBox(height: 4),
                     _buildStatusRow(reading, bt.state),
@@ -1333,10 +1336,148 @@ class _MapScreenState extends State<MapScreen> {
   bool _locLoading = true;
 
   final Set<Marker> _markers = <Marker>{};
+  List<PartnerStation> _stations = const [];
   bool _loadingPartners = false;
   String? _partnerError;
 
   final XpApi _api = XpApi();
+
+  Future<void> _openUrl(Uri uri, String fallbackMessage) async {
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(fallbackMessage)));
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(fallbackMessage)));
+    }
+  }
+
+  Widget _buildStationCard(PartnerStation s) {
+    final open = s.isAvailable;
+    final stockColor = open ? AppTheme.statusOK : AppTheme.statusCritical;
+    final address = (s.address == null || s.address!.trim().isEmpty)
+        ? 'Address not provided'
+        : s.address!.trim();
+    return SizedBox(
+      width: 300,
+      child: Card(
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(s.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.corporateBlue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(s.facilityBadge,
+                        style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.corporateBlue)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: stockColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(open ? Icons.check_circle_rounded : Icons.remove_circle_rounded,
+                            size: 13, color: stockColor),
+                        const SizedBox(width: 4),
+                        Text(open ? 'In Stock · Open' : 'Out of Stock · Closed',
+                            style:
+                                TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: stockColor)),
+                      ],
+                    ),
+                  ),
+                  if (s.distanceLabel.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    const Icon(Icons.directions_walk_rounded, size: 13, color: AppTheme.textSecondary),
+                    const SizedBox(width: 2),
+                    Flexible(
+                      child: Text(s.distanceLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(address,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        final tel = s.telUrl;
+                        if (tel == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                              content: Text('This station has no phone number yet.')));
+                        } else {
+                          _openUrl(tel, 'Could not open the phone dialer.');
+                        }
+                      },
+                      icon: const Icon(Icons.call_rounded, size: 16),
+                      label: const Text('Call Station', style: TextStyle(fontSize: 12)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.corporateBlue,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _openUrl(s.directionsUrl, 'Could not open Maps.'),
+                      icon: const Icon(Icons.directions_rounded, size: 16),
+                      label: const Text('Directions', style: TextStyle(fontSize: 12)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.corporateBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _loadPartnerStations() async {
     if (_loadingPartners) return;
@@ -1346,7 +1487,8 @@ class _MapScreenState extends State<MapScreen> {
       final markers = stations.map((s) => Marker(
         markerId: MarkerId('xp_${s.id}'),
         position: LatLng(s.latitude, s.longitude),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+        icon: BitmapDescriptor.defaultMarkerWithHue(
+            s.isAvailable ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueRed),
         infoWindow: InfoWindow(
           title: s.name,
           snippet: [s.distanceLabel, s.address ?? s.phone ?? ''].where((e) => e.isNotEmpty).join(' · '),
@@ -1355,6 +1497,7 @@ class _MapScreenState extends State<MapScreen> {
       if (!mounted) return;
       setState(() {
         _markers..clear()..addAll(markers);
+        _stations = stations;
         _loadingPartners = false;
         if (stations.isEmpty) _partnerError = 'No open XP Tech partner stations within 10 km yet.';
       });
@@ -1423,6 +1566,22 @@ class _MapScreenState extends State<MapScreen> {
             myLocationButtonEnabled: true,
             onMapCreated: (ctrl) { _mapCtrl = ctrl; },
           ),
+          if (_stations.isNotEmpty && !_locLoading)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SizedBox(
+                height: 212,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  itemCount: _stations.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (context, i) => _buildStationCard(_stations[i]),
+                ),
+              ),
+            ),
           if (_partnerError != null)
             Positioned(left: 16, right: 16, top: 16, child: Card(child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
@@ -1797,6 +1956,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _busy = true);
     try {
       await bt.sendCommand('SET_EMPTY:${size.toStringAsFixed(2)}');
+      if (!mounted) return;
       final app = _AppState.of(context);
       final active = app.cylinders.where((c) => c.id == app.activeCylinderId).firstOrNull;
       if (active != null) { active.cylinderSizeKg = size; await app.saveCylinders(); }
@@ -1843,7 +2003,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       animation: bt,
       builder: (context, _) {
         final connected = bt.state == BtState.connected;
-        final active = app.cylinders.where((c) => c.id == app.activeCylinderId).firstOrNull;
         return Scaffold(
           appBar: AppBar(title: const Text('Settings & Configuration')),
           body: ListView(padding: const EdgeInsets.symmetric(vertical: 16), children: [
@@ -1921,6 +2080,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: _editUsername,
                 ),
               ),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.local_gas_station_rounded, color: AppTheme.corporateBlue),
+                title: const Text('Gas Plant & Retailer Portal'),
+                subtitle: const Text('Register an LPG plant or manage your station listing on the refill map'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const RetailerRegistrationScreen()),
+                  );
+                },
+              ),
+            ),
             if (widget.onLogout != null)
               Card(
                 child: ListTile(
