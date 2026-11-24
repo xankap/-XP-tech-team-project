@@ -173,7 +173,14 @@ var FACILITY_TYPES = ['LPG Refill Plant', 'Gas Skid / Mini Station',
   'Cylinder Depot & Retailer', 'Doorstep Delivery Provider'];
 
 var store = {
-  get apiBase() { return (localStorage.getItem(LS_BASE) || 'http://localhost:3000').replace(/\/$/, ''); },
+  get apiBase() {
+    var saved = localStorage.getItem(LS_BASE);
+    if (saved) return saved.replace(/\/$/, '');
+    if (typeof location !== 'undefined' && /xptechltd\.com$/.test(location.hostname || '')) {
+      return 'https://api.xptechltd.com';
+    }
+    return 'http://localhost:3000';
+  },
   set apiBase(v) { localStorage.setItem(LS_BASE, v); },
   get token() { return localStorage.getItem(LS_TOKEN) || ''; },
   set token(v) { if (v) localStorage.setItem(LS_TOKEN, v); else localStorage.removeItem(LS_TOKEN); },

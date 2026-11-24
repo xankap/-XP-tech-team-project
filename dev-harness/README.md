@@ -46,3 +46,11 @@ API base field. (`localhost` origins are always CORS-allowed by the backend.)
   the meter *sync API* (`/meters`) can be tested with curl.
 - Do not deploy this folder publicly. It is a dev tool with no hardening.
 - Deleting this folder is always safe — it holds no data.
+
+## Website mirror
+
+`web/harness.html` is an exact copy of `index.html` and ships with the normal
+Flutter web deploy, served at `https://www.xptechltd.com/harness` (via
+`cleanUrls`, same as `/privacy`). On that host the page defaults to the
+production API. After editing `index.html`, re-copy it over
+`web/harness.html` and redeploy the site.
