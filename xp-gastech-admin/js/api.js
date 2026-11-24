@@ -32,12 +32,28 @@ class AdminApiClient {
       throw new Error(data.error || 'Login failed. Please check your credentials.');
     }
 
-    if (data.user?.role !== 'admin') {
+    const token = data.tokens?.accessToken || data.token;
+    if (!token) {
+      throw new Error('Authentication succeeded but no token was provided.');
+    }
+
+    // Verify admin access against the live backend
+    const checkRes = await fetch(`${API_BASE}/admin/stats`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!checkRes.ok) {
       throw new Error('Access denied. This portal is restricted to platform administrators.');
     }
 
-    this.token = data.tokens?.accessToken || data.token;
-    this.user = data.user;
+    this.token = token;
+    this.user = {
+      ...(data.user || {}),
+      role: 'admin',
+    };
 
     localStorage.setItem('xp_admin_token', this.token);
     localStorage.setItem('xp_admin_user', JSON.stringify(this.user));

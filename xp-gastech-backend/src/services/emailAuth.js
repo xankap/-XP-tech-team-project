@@ -42,6 +42,7 @@ function publicUser(row) {
     email: row.email,
     phone: row.phone,
     username: row.username || null,
+    role: row.role || 'consumer',
   };
 }
 
@@ -169,8 +170,8 @@ async function login({ email, username, identifier, password }, ctx = {}) {
 
   const { rows } = await pool.query(
     normalizedEmail
-      ? `select id, email, phone, username, password_hash, email_verified_at from users where email = $1`
-      : `select id, email, phone, username, password_hash, email_verified_at from users where username = $1`,
+      ? `select id, email, phone, username, password_hash, email_verified_at, role from users where email = $1`
+      : `select id, email, phone, username, password_hash, email_verified_at, role from users where username = $1`,
     [normalizedEmail || normalizedUsername]
   );
   const row = rows[0];
