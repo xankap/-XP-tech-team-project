@@ -104,6 +104,29 @@ void main() {
       expect(stations.first.name, 'Demo Gas Point');
       expect(stations.first.distanceLabel, '150 m away');
     });
+
+    test('sends bbox viewport and parses stations', () async {
+      http.BaseRequest? seen;
+      final api = XpApi(
+          client: MockClient((req) async {
+        seen = req;
+        return http.Response(
+            '{"stations":[{"id":"r1","name":"Demo Gas Point (LPG Refill Plant)","phone":"+234700000010",'
+            '"address":"12 Aba Road","latitude":4.8156,"longitude":7.0498,"distanceM":150,"isAvailable":true}]}',
+            200);
+      }));
+
+      final stations = await api.nearbyStationsByBbox(
+          west: 7.0, south: 4.8, east: 7.1, north: 4.86);
+
+      final req = seen!;
+      expect(req.method, 'GET');
+      expect(req.url.path, '/retailers/nearby');
+      expect(req.url.queryParameters['bbox'], '7.0,4.8,7.1,4.86');
+      expect(stations, hasLength(1));
+      expect(stations.first.displayName, 'Demo Gas Point');
+      expect(stations.first.facilityBadge, 'LPG Plant');
+    });
   });
 
   group('XpApi.myGas (business gas card path)', () {

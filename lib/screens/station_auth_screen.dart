@@ -49,6 +49,12 @@ class _GasStationAuthScreenState extends State<GasStationAuthScreen> {
   final _signupPassword = TextEditingController();
   final _signupPhone = TextEditingController();
 
+  // Phone OTP controllers
+  final _smsPhone = TextEditingController();
+  final _smsCode = TextEditingController();
+  bool _usePhoneAuth = false;
+  bool _codeSent = false;
+
   bool _busy = false;
   String? _error;
   String? _info;
@@ -76,6 +82,8 @@ class _GasStationAuthScreenState extends State<GasStationAuthScreen> {
     _signupUsername.dispose();
     _signupPassword.dispose();
     _signupPhone.dispose();
+    _smsPhone.dispose();
+    _smsCode.dispose();
     super.dispose();
   }
 
@@ -85,6 +93,64 @@ class _GasStationAuthScreenState extends State<GasStationAuthScreen> {
       _error = null;
       _info = null;
       _signupDone = false;
+      _codeSent = false;
+      _usePhoneAuth = false;
+    });
+  }
+
+  String _normalizePhone(String raw) {
+    String trimmed = raw.replaceAll(RegExp(r'[\s\-()]'), '');
+    if (trimmed.startsWith('0') && trimmed.length == 11) {
+      return '+234${trimmed.substring(1)}';
+    }
+    if (!trimmed.startsWith('+') && trimmed.startsWith('234')) {
+      return '+$trimmed';
+    }
+    if (!trimmed.startsWith('+') && trimmed.length == 10 && RegExp(r'^[789]').hasMatch(trimmed)) {
+      return '+234$trimmed';
+    }
+    return trimmed;
+  }
+
+  Future<void> _sendSmsOtp() async {
+    final rawPhone = _smsPhone.text.trim();
+    final normalized = _normalizePhone(rawPhone);
+    if (!RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(normalized)) {
+      setState(() => _error = 'Enter a valid Nigerian phone number (e.g. 08012345678 or +234...)');
+      return;
+    }
+    await _run(() async {
+      await _api.sendSmsCode(phone: normalized);
+      if (mounted) {
+        setState(() {
+          _codeSent = true;
+          _info = 'Verification code sent to $normalized. Valid for 10 minutes.';
+        });
+      }
+    });
+  }
+
+  Future<void> _verifySmsOtp() async {
+    final rawPhone = _smsPhone.text.trim();
+    final normalized = _normalizePhone(rawPhone);
+    final code = _smsCode.text.trim();
+    if (code.length < 4) {
+      setState(() => _error = 'Please enter the code from the SMS.');
+      return;
+    }
+    await _run(() async {
+      final result = await _api.verifySmsCode(phone: normalized, code: code);
+      await widget.onSuccess(result, 'phone', normalized);
+      if (!mounted) return;
+      final initialName = _stationName.text.trim().isNotEmpty ? _stationName.text.trim() : null;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => RetailerRegistrationScreen(
+            initialName: initialName,
+            initialPhone: normalized,
+          ),
+        ),
+      );
     });
   }
 
@@ -133,8 +199,15 @@ class _GasStationAuthScreenState extends State<GasStationAuthScreen> {
         final result = await _api.login(identifier: identifier, password: password);
         await widget.onSuccess(result, 'email', identifier);
         if (!mounted) return;
+        final initialName = _stationName.text.trim().isNotEmpty ? _stationName.text.trim() : null;
+        final initialPhone = _signupPhone.text.trim().isNotEmpty ? _signupPhone.text.trim() : null;
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const RetailerRegistrationScreen()),
+          MaterialPageRoute(
+            builder: (_) => RetailerRegistrationScreen(
+              initialName: initialName,
+              initialPhone: initialPhone,
+            ),
+          ),
         );
       } on AuthApiException catch (e) {
         if (!e.isEmailNotVerified) rethrow;
@@ -234,8 +307,15 @@ class _GasStationAuthScreenState extends State<GasStationAuthScreen> {
       final result = await _api.google(idToken: idToken);
       await widget.onSuccess(result, 'google', result.email ?? 'Station owner');
       if (!mounted) return;
+      final initialName = _stationName.text.trim().isNotEmpty ? _stationName.text.trim() : null;
+      final initialPhone = _signupPhone.text.trim().isNotEmpty ? _signupPhone.text.trim() : null;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const RetailerRegistrationScreen()),
+        MaterialPageRoute(
+          builder: (_) => RetailerRegistrationScreen(
+            initialName: initialName,
+            initialPhone: initialPhone,
+          ),
+        ),
       );
     });
   }
@@ -444,6 +524,114 @@ class _GasStationAuthScreenState extends State<GasStationAuthScreen> {
             child: const Text('Need to register your gas station? Sign up'),
           ),
         ),
+        Center(
+          child: TextButton.icon(
+            key: const Key('station-switch-phone-login'),
+            onPressed: () => setState(() {
+              _usePhoneAuth = true;
+              _codeSent = false;
+              _error = null;
+              _info = null;
+            }),
+            icon: const Icon(Icons.phone_android_rounded, size: 18),
+            label: const Text('Sign in with Phone (SMS OTP)'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPhoneForm(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isSignUp = _tab == _StationTab.signup;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (isSignUp) ...[
+          TextField(
+            key: const Key('station-phone-name-field'),
+            controller: _stationName,
+            decoration: const InputDecoration(
+              labelText: 'Station / Business Name',
+              hintText: 'e.g. Total Gas Plant, Apex LPG Skid',
+              prefixIcon: Icon(Icons.local_gas_station_outlined),
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
+        TextField(
+          key: const Key('station-sms-phone-field'),
+          controller: _smsPhone,
+          keyboardType: TextInputType.phone,
+          enabled: !_codeSent,
+          decoration: const InputDecoration(
+            labelText: 'Contact Phone Number',
+            hintText: '08012345678 or +234...',
+            prefixIcon: Icon(Icons.phone_outlined),
+          ),
+        ),
+        if (_codeSent) ...[
+          const SizedBox(height: 14),
+          TextField(
+            key: const Key('station-sms-code-field'),
+            controller: _smsCode,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            decoration: const InputDecoration(
+              labelText: '6-digit SMS Code',
+              hintText: '123456',
+              prefixIcon: Icon(Icons.pin_outlined),
+            ),
+          ),
+        ],
+        _buildMessages(scheme),
+        const SizedBox(height: 20),
+        if (!_codeSent)
+          ElevatedButton(
+            key: const Key('station-send-code-button'),
+            onPressed: _busy ? null : _sendSmsOtp,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isSignUp ? AppTheme.statusOK : AppTheme.corporateBlue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+            child: Text(
+              isSignUp ? 'Send Registration Code' : 'Send Sign-In Code',
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+            ),
+          )
+        else ...[
+          ElevatedButton(
+            key: const Key('station-verify-code-button'),
+            onPressed: _busy ? null : _verifySmsOtp,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.statusOK,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+            child: const Text('Verify Code & Continue', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            key: const Key('station-resend-code-button'),
+            onPressed: _busy ? null : _sendSmsOtp,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Resend Code'),
+          ),
+        ],
+        const SizedBox(height: 14),
+        Center(
+          child: TextButton.icon(
+            onPressed: () => setState(() {
+              _usePhoneAuth = false;
+              _codeSent = false;
+              _error = null;
+              _info = null;
+            }),
+            icon: const Icon(Icons.mail_outline_rounded, size: 18),
+            label: const Text('Use Email & Password instead'),
+          ),
+        ),
       ],
     );
   }
@@ -576,6 +764,19 @@ class _GasStationAuthScreenState extends State<GasStationAuthScreen> {
             child: const Text('Already have a station account? Sign in'),
           ),
         ),
+        Center(
+          child: TextButton.icon(
+            key: const Key('station-switch-phone-signup'),
+            onPressed: () => setState(() {
+              _usePhoneAuth = true;
+              _codeSent = false;
+              _error = null;
+              _info = null;
+            }),
+            icon: const Icon(Icons.phone_android_rounded, size: 18),
+            label: const Text('Register with Phone (SMS OTP)'),
+          ),
+        ),
       ],
     );
   }
@@ -628,7 +829,9 @@ class _GasStationAuthScreenState extends State<GasStationAuthScreen> {
                     const SizedBox(height: 20),
                     _buildTabToggle(isDark),
                     const SizedBox(height: 20),
-                    if (_tab == _StationTab.login)
+                    if (_usePhoneAuth)
+                      _buildPhoneForm(context)
+                    else if (_tab == _StationTab.login)
                       _buildLoginForm(context)
                     else if (_signupDone)
                       _buildVerifyPanel(context)

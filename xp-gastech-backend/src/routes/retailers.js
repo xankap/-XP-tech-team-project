@@ -28,16 +28,55 @@ function toRetailer(r) {
   };
 }
 
-// Nearby approved + available retailers. Accepts lat/lng/radius (metres) or the
-// Flutter map's latitude/longitude/radiusKm. Response: { stations: [...] }.
+// GasGrid viewport contract: bbox=minLng,minLat,maxLng,maxLat
+// (same order as the CHIMDIA-GAS-MAP OpenAPI: minx,miny,maxx,maxy).
+// Converted to centre + radius so the existing nearby_retailers()
+// PostGIS function is reused unchanged.
+function haversineM(lat1, lng1, lat2, lng2) {
+  const r = Math.PI / 180;
+  const dLat = (lat2 - lat1) * r;
+  const dLng = (lng2 - lng1) * r;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(a));
+}
+
+function bboxToCenterRadius(bbox) {
+  const parts = String(bbox).split(',').map((p) => Number(String(p).trim()));
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) {
+    throw v.bad('bbox must be "minLng,minLat,maxLng,maxLat"');
+  }
+  const [minLng, minLat, maxLng, maxLat] = parts;
+  if (!(minLat >= -90 && maxLat <= 90 && minLat <= maxLat)) {
+    throw v.bad('bbox latitudes must satisfy -90 <= minLat <= maxLat <= 90');
+  }
+  if (!(minLng >= -180 && maxLng <= 180 && minLng <= maxLng)) {
+    throw v.bad('bbox longitudes must satisfy -180 <= minLng <= maxLng <= 180');
+  }
+  // Half the diagonal covers the whole viewport; clamped to the
+  // same 100m-50km window as the radius search.
+  const radiusM = Math.min(
+    50000, Math.max(100, Math.ceil(haversineM(minLat, minLng, maxLat, maxLng) / 2)));
+  return { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2, radiusM };
+}
+
+// Nearby approved retailers. Accepts lat/lng/radius (metres), the
+// Flutter map's latitude/longitude/radiusKm, or a GasGrid-style bbox
+// viewport. Response: { stations: [...] }.
 async function nearbyHandler(req, res) {
   try {
     const q = req.query;
-    const lat = v.num(q.lat ?? q.latitude, 'lat', { min: -90, max: 90 });
-    const lng = v.num(q.lng ?? q.longitude, 'lng', { min: -180, max: 180 });
+    let lat;
+    let lng;
     let radiusM = 10000;
-    if (q.radius !== undefined) radiusM = v.num(q.radius, 'radius', { min: 100, max: 50000 });
-    else if (q.radiusKm !== undefined) radiusM = v.num(q.radiusKm, 'radiusKm', { min: 0.1, max: 50 }) * 1000;
+    if (q.bbox !== undefined) {
+      ({ lat, lng, radiusM } = bboxToCenterRadius(q.bbox));
+    } else {
+      lat = v.num(q.lat ?? q.latitude, 'lat', { min: -90, max: 90 });
+      lng = v.num(q.lng ?? q.longitude, 'lng', { min: -180, max: 180 });
+      if (q.radius !== undefined) radiusM = v.num(q.radius, 'radius', { min: 100, max: 50000 });
+      else if (q.radiusKm !== undefined) radiusM = v.num(q.radiusKm, 'radiusKm', { min: 0.1, max: 50 }) * 1000;
+    }
     const limit = q.limit !== undefined ? Math.trunc(v.num(q.limit, 'limit', { min: 1, max: 100 })) : 50;
     const { rows } = await pool.query(
       'select * from public.nearby_retailers($1, $2, $3, $4)',
@@ -81,6 +120,9 @@ router.post('/', writeLimiter, requireAuth, route(async (req, res) => {
     values
   );
   if (!rows[0]) return res.status(409).json({ error: 'You already have a retailer profile. Use PATCH /retailers/me.' });
+  try {
+    await pool.query("update public.users set role = 'retailer' where id = $1 and role = 'consumer'", [req.user.id]);
+  } catch (_) { /* non-fatal role update */ }
   return res.status(201).json({ retailer: toRetailer(rows[0]) });
 }));
 
@@ -137,12 +179,18 @@ router.post('/:id/review', writeLimiter, requireAuth, requireAdmin, route(async 
   const reason = v.text(req.body?.reason, 'reason', { min: 2, max: 300, optional: decision === 'approved' });
   const { rows } = await pool.query(
     `update public.retailers set status = $1, status_reason = $2, reviewed_by = $3, reviewed_at = now()
-     where id = $4 returning ${OWN_COLUMNS}`,
+     where id = $4 returning ${OWN_COLUMNS}, app_user_id`,
     [decision, reason, req.user.id, id]
   );
   if (!rows[0]) return res.status(404).json({ error: 'Retailer not found' });
+  if (decision === 'approved' && rows[0].app_user_id) {
+    try {
+      await pool.query("update public.users set role = 'retailer' where id = $1", [rows[0].app_user_id]);
+    } catch (_) { /* non-fatal role update */ }
+  }
   return res.json({ retailer: toRetailer(rows[0]) });
 }));
 
 module.exports = router;
 module.exports.nearbyHandler = nearbyHandler;
+module.exports.bboxToCenterRadius = bboxToCenterRadius;

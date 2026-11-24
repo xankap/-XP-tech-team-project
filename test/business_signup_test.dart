@@ -227,4 +227,119 @@ void main() {
     expect(find.byType(GasStationAuthScreen), findsNothing);
     expect(find.text('Open Station Portal'), findsOneWidget);
   });
+
+  testWidgets('landing page displays gas plant partner link and opens GasStationAuthScreen in signup mode',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final api = AuthApi(
+        client: MockClient((req) async => http.Response(jsonEncode({'ok': true}), 200)),
+        baseUrl: 'https://api.test');
+
+    var openedStation = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              key: const Key('landing-gas-station-portal-button'),
+              onPressed: () {
+                openedStation = true;
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => GasStationAuthScreen(
+                      api: api,
+                      onSuccess: (r, m, f) async {},
+                      initialIsSignUp: true,
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Own a Gas Plant / Refill Station? Sign Up Here'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final link = find.byKey(const Key('landing-gas-station-portal-button'));
+    expect(link, findsOneWidget);
+    await tester.tap(link);
+    await tester.pumpAndSettle();
+
+    expect(openedStation, isTrue);
+    expect(find.byType(GasStationAuthScreen), findsOneWidget);
+    expect(find.byKey(const Key('station-signup-button')), findsOneWidget);
+    expect(find.byKey(const Key('station-name-field')), findsOneWidget);
+  });
+
+  testWidgets('station auth screen supports phone OTP mode and routes to retailer portal',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    var signedIn = false;
+    final api = AuthApi(
+        client: MockClient((req) async {
+          if (req.url.path == '/auth/send-sms-code') {
+            return http.Response(jsonEncode({'ok': true, 'reference': 'ref_123'}), 200);
+          }
+          if (req.url.path == '/auth/verify-sms-code') {
+            return http.Response(
+                jsonEncode({
+                  'token': 'phone_jwt_token',
+                  'user': {'id': 'ph_user_1', 'phone': '+2348012345678'}
+                }),
+                200);
+          }
+          return http.Response('{}', 200);
+        }),
+        baseUrl: 'https://api.test');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GasStationAuthScreen(
+          api: api,
+          onSuccess: (r, m, f) async => signedIn = true,
+          initialIsSignUp: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Switch to phone mode
+    final switchBtn = find.byKey(const Key('station-switch-phone-signup'));
+    expect(switchBtn, findsOneWidget);
+    await tester.ensureVisible(switchBtn);
+    await tester.tap(switchBtn);
+    await tester.pumpAndSettle();
+
+    // Phone form is visible
+    expect(find.byKey(const Key('station-sms-phone-field')), findsOneWidget);
+    expect(find.byKey(const Key('station-phone-name-field')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('station-phone-name-field')), 'Delta Gas Plant');
+    await tester.enterText(find.byKey(const Key('station-sms-phone-field')), '08012345678');
+
+    // Send code
+    final sendBtn = find.byKey(const Key('station-send-code-button'));
+    await tester.tap(sendBtn);
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    // Code input is shown
+    expect(find.byKey(const Key('station-sms-code-field')), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('station-sms-code-field')), '123456');
+
+    // Verify code
+    final verifyBtn = find.byKey(const Key('station-verify-code-button'));
+    await tester.tap(verifyBtn);
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(signedIn, isTrue);
+    expect(find.text('Gas Plant & Retailer Sign-up'), findsOneWidget);
+  });
 }

@@ -89,6 +89,8 @@ class _RetailerRegistrationScreenState
   @override
   void initState() {
     super.initState();
+    if (widget.initialName != null) _nameController.text = widget.initialName!;
+    if (widget.initialPhone != null) _phoneController.text = widget.initialPhone!;
     _loadProfile();
   }
 
@@ -159,6 +161,9 @@ class _RetailerRegistrationScreenState
     }
     if (!trimmed.startsWith('+') && trimmed.startsWith('234')) {
       return '+$trimmed';
+    }
+    if (!trimmed.startsWith('+') && trimmed.length == 10 && RegExp(r'^[789]').hasMatch(trimmed)) {
+      return '+234$trimmed';
     }
     return trimmed;
   }
@@ -488,6 +493,17 @@ class _RetailerRegistrationScreenState
                 : 'Gas Plant & Retailer Sign-up')),
         backgroundColor: AppTheme.corporateBlue,
         foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: Icon(_isEditing ? Icons.close_rounded : Icons.arrow_back_rounded),
+          tooltip: _isEditing ? 'Cancel Editing' : 'Back',
+          onPressed: () {
+            if (_isEditing) {
+              setState(() => _isEditing = false);
+            } else if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          },
+        ),
         actions: [
           if (_currentProfile != null && !_isEditing)
             IconButton(

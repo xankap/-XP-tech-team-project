@@ -148,6 +148,25 @@ test('retailers validation: name, phone, coordinates', () => {
   assert.throws(() => v.num(95, 'latitude', { min: -90, max: 90 }), /latitude must be a number between -90 and 90/);
 });
 
+test('nearby bbox viewport search (GasGrid contract)', () => {
+  const { bboxToCenterRadius } = require('../src/routes/retailers');
+
+  // "minLng,minLat,maxLng,maxLat" -> centre + half-diagonal radius.
+  const c = bboxToCenterRadius('7.00,4.80,7.10,4.86');
+  assert.equal(c.lat.toFixed(2), '4.83');
+  assert.equal(c.lng.toFixed(2), '7.05');
+  assert.ok(c.radiusM >= 100 && c.radiusM <= 50000);
+
+  // Degenerate viewport still yields a usable minimum radius.
+  assert.equal(bboxToCenterRadius('7.05,4.83,7.05,4.83').radiusM, 100);
+
+  assert.throws(() => bboxToCenterRadius('7.00,4.80'), /bbox must be "minLng,minLat,maxLng,maxLat"/);
+  assert.throws(() => bboxToCenterRadius('a,b,c,d'), /bbox must be "minLng,minLat,maxLng,maxLat"/);
+  assert.throws(() => bboxToCenterRadius('7.10,4.80,7.00,4.86'), /bbox longitudes/);
+  assert.throws(() => bboxToCenterRadius('7.00,4.86,7.10,4.80'), /bbox latitudes/);
+  assert.throws(() => bboxToCenterRadius('7.00,-91,7.10,4.80'), /bbox latitudes/);
+});
+
 test('retailers validation: openingHours', () => {
   assert.equal(v.openingHours(undefined), null);
   assert.equal(v.openingHours(null), null);

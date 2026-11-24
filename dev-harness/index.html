@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XP GasTech — Dev Harness (no Flutter needed)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --blue: #0053BA; --ok: #15803d; --bad: #b91c1c; --muted: #64748b; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; color: #1b2430; background: #f1f5f9; }
+  header { background: var(--blue); color: #fff; padding: 12px 20px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header p { margin: 4px 0 0; font-size: 13px; opacity: .9; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  section { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; }
+  section h2 { font-size: 16px; margin: 0 0 4px; }
+  section .sub { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 140px; flex: 1; }
+  .field label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  input, select, button { font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1; }
+  input:focus, select:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
+  button { background: var(--blue); color: #fff; border: none; cursor: pointer; white-space: nowrap; }
+  button.secondary { background: #e2e8f0; color: #1b2430; }
+  button.danger { background: var(--bad); }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { font-size: 13px; margin-top: 8px; }
+  .ok { color: var(--ok); } .err { color: var(--bad); } .muted { color: var(--muted); }
+  #map { height: 340px; border-radius: 10px; border: 1px solid #e2e8f0; background: #eef2f7; }
+  #mapFallback { padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
+  .cards { display: grid; gap: 8px; margin-top: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+  .card b { font-size: 14px; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+  .pill.open { background: #dcfce7; color: var(--ok); }
+  .pill.closed { background: #e2e8f0; color: #475569; }
+  .pill.pending { background: #fef3c7; color: #92400e; }
+  .pill.approved { background: #dcfce7; color: var(--ok); }
+  .pill.rejected { background: #fee2e2; color: var(--bad); }
+  .card .actions { display: flex; gap: 8px; margin-top: 8px; }
+  .card .actions a, .card .actions button { flex: 1; text-align: center; font-size: 12px; padding: 6px 8px; border-radius: 8px; text-decoration: none; }
+  .card .actions a { border: 1px solid var(--blue); color: var(--blue); }
+  .card .actions button { font-size: 12px; }
+  #log { background: #0f172a; color: #dbeafe; border-radius: 10px; padding: 12px; font: 12px/1.5 ui-monospace, Consolas, monospace; height: 220px; overflow: auto; white-space: pre-wrap; margin: 8px 0 0; }
+  code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; word-break: break-all; }
+</style>
+</head>
+<body>
+<header>
+  <h1>XP GasTech — Dev Harness</h1>
+  <p>Throwaway backend workbench. Same REST API as the Flutter app. Do not deploy publicly.</p>
+</header>
+<main>
+  <section>
+    <h2>1 · API connection</h2>
+    <p class="sub">Local backend or production. Served from <code>localhost</code> so CORS passes either way.</p>
+    <div class="row">
+      <div class="field" style="flex:3"><label>API base URL</label><input id="apiBase" value="http://localhost:3000"></div>
+      <button id="btnHealth" class="secondary">Test connection</button>
+    </div>
+    <div class="status muted" id="healthStatus">Not checked yet.</div>
+  </section>
+
+  <section>
+    <h2>2 · Auth</h2>
+    <p class="sub">Email login, email signup (needs the emailed link before login), or phone OTP. Tokens persist in this browser only.</p>
+    <div class="row">
+      <div class="field"><label>Email or username</label><input id="loginId" autocomplete="username"></div>
+      <div class="field"><label>Password</label><input id="loginPw" type="password" autocomplete="current-password"></div>
+      <button id="btnLogin">Log in</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="field"><label>New email</label><input id="suEmail" autocomplete="email"></div>
+      <div class="field"><label>Password</label><input id="suPw" type="password" autocomplete="new-password"></div>
+      <div class="field"><label>Username (optional)</label><input id="suUser"></div>
+      <button id="btnSignup" class="secondary">Sign up</button>
+      <button id="btnResend" class="secondary">Resend link</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="field"><label>Phone (080… or +234…)</label><input id="otpPhone" autocomplete="tel"></div>
+      <button id="btnOtpSend" class="secondary">Send code</button>
+      <div class="field"><label>6-digit code</label><input id="otpCode" inputmode="numeric"></div>
+      <button id="btnOtpVerify" class="secondary">Verify &amp; log in</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="field" style="flex:3"><label>Paste access token (from app / logs)</label><input id="pasteToken" class="mono" placeholder="eyJ…"></div>
+      <button id="btnTokenApply" class="secondary">Use token</button>
+      <button id="btnMe" class="secondary">/auth/me</button>
+      <button id="btnRefresh" class="secondary">Refresh</button>
+      <button id="btnLogout" class="secondary">Log out</button>
+    </div>
+    <div class="status muted" id="authStatus">Signed out.</div>
+    <div class="mono muted" id="userView"></div>
+  </section>
+
+  <section>
+    <h2>3 · My gas plant registration</h2>
+    <p class="sub">Mirrors <code>RetailerRegistrationScreen</code>: same fields, same Nigerian phone rule, same pending → admin review flow.</p>
+    <div class="row">
+      <div class="field"><label>Facility type</label><select id="rType"></select></div>
+      <div class="field" style="flex:2"><label>Plant / business name *</label><input id="rName" placeholder="Apex Energy Gas Plant"></div>
+      <div class="field"><label>Phone *</label><input id="rPhone" placeholder="08012345678"></div>
+      <div class="field"><label>Price ₦/kg</label><input id="rPrice" inputmode="decimal" placeholder="1400"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="field" style="flex:2"><label>Address *</label><input id="rAddr" placeholder="Plot 4, Industrial Layout"></div>
+      <div class="field"><label>State *</label><select id="rState"></select></div>
+      <div class="field"><label>City / LGA</label><input id="rCity" placeholder="Ikeja"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="field"><label>Latitude *</label><input id="rLat" inputmode="decimal" placeholder="6.4520"></div>
+      <div class="field"><label>Longitude *</label><input id="rLng" inputmode="decimal" placeholder="7.5105"></div>
+      <div class="field"><label>Availability</label><select id="rAvail"><option value="true">Open / in stock</option><option value="false">Closed / out of stock</option></select></div>
+      <button id="btnLocateForm" class="secondary">Use my GPS</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="btnGet">Load my profile</button>
+      <button id="btnRegister">Register</button>
+      <button id="btnUpdate" class="secondary">Update</button>
+      <button id="btnAvailToggle" class="secondary">Toggle open/closed</button>
+    </div>
+    <div class="status muted" id="myStatus">No profile loaded.</div>
+  </section>
+
+  <section>
+    <h2>4 · Consumer map — approved stations</h2>
+    <p class="sub">Same <code>GET /retailers/nearby</code> the app map uses. Radius search or bbox of the visible area. Only admin-approved plants appear.</p>
+    <div class="row">
+      <div class="field"><label>Latitude</label><input id="mLat" value="4.8156"></div>
+      <div class="field"><label>Longitude</label><input id="mLng" value="7.0498"></div>
+      <div class="field"><label>Radius km</label><input id="mRadius" value="10"></div>
+      <button id="btnRadius">Search radius</button>
+      <button id="btnBbox" class="secondary">Load visible area</button>
+      <button id="btnLocateMap" class="secondary">Locate me</button>
+    </div>
+    <div style="margin-top:10px"><div id="map"></div></div>
+    <div class="status muted" id="mapStatus">No search yet.</div>
+    <div class="cards" id="resultsList"></div>
+  </section>
+
+  <section>
+    <h2>5 · Admin review queue</h2>
+    <p class="sub">Needs an admin token. Same decisions as <code>review_retailer.js</code> and <code>POST /retailers/:id/review</code>.</p>
+    <div class="row">
+      <button id="btnPending" class="secondary">List pending</button>
+    </div>
+    <div class="status muted" id="adminStatus">Not loaded.</div>
+    <div class="cards" id="pendingList"></div>
+  </section>
+
+  <section>
+    <h2>Request log</h2>
+    <p class="sub">Every API call with status, time, and response summary. Newest last.</p>
+    <div class="row"><button id="btnClearLog" class="secondary">Clear</button></div>
+    <pre id="log"></pre>
+  </section>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+'use strict';
+/* XP GasTech dev harness. No build step. Needs only a static file server. */
+
+var LS_BASE = 'xpd.apiBase', LS_TOKEN = 'xpd.token', LS_REFRESH = 'xpd.refresh', LS_USER = 'xpd.user';
+
+var NIGERIAN_STATES = ['Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno',
+  'Cross River','Delta','Ebonyi','Edo','Ekiti','Enugu','FCT - Abuja','Gombe','Imo','Jigawa','Kaduna',
+  'Kano','Katsina','Kebbi','Kogi','Kwara','Lagos','Nasarawa','Niger','Ogun','Ondo','Osun','Oyo',
+  'Plateau','Rivers','Sokoto','Taraba','Yobe','Zamfara'];
+
+var FACILITY_TYPES = ['LPG Refill Plant', 'Gas Skid / Mini Station',
+  'Cylinder Depot & Retailer', 'Doorstep Delivery Provider'];
+
+var store = {
+  get apiBase() { return (localStorage.getItem(LS_BASE) || 'http://localhost:3000').replace(/\/$/, ''); },
+  set apiBase(v) { localStorage.setItem(LS_BASE, v); },
+  get token() { return localStorage.getItem(LS_TOKEN) || ''; },
+  set token(v) { if (v) localStorage.setItem(LS_TOKEN, v); else localStorage.removeItem(LS_TOKEN); },
+  get refresh() { return localStorage.getItem(LS_REFRESH) || ''; },
+  set refresh(v) { if (v) localStorage.setItem(LS_REFRESH, v); else localStorage.removeItem(LS_REFRESH); },
+  get user() { try { return JSON.parse(localStorage.getItem(LS_USER) || 'null'); } catch (_) { return null; } },
+  set user(v) { if (v) localStorage.setItem(LS_USER, JSON.stringify(v)); else localStorage.removeItem(LS_USER); },
+};
+
+function $(id) { return document.getElementById(id); }
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function setStatus(id, html, cls) {
+  var el = $(id);
+  el.className = 'status ' + (cls || 'muted');
+  el.innerHTML = html;
+}
+
+/* Same rule as RetailerRegistrationScreen._normalizePhone. */
+function normalizePhone(raw) {
+  var t = String(raw || '').replace(/[\s\-()]/g, '');
+  if (/^0\d{10}$/.test(t)) return '+234' + t.substring(1);
+  if (t.charAt(0) !== '+' && t.indexOf('234') === 0) return '+' + t;
+  if (t.charAt(0) !== '+' && /^[789]\d{9}$/.test(t)) return '+234' + t;
+  return t;
+}
+
+function log(method, url, status, ms, summary) {
+  var el = $('log');
+  var line = '[' + new Date().toLocaleTimeString() + '] ' + method + ' ' + url +
+    ' -> ' + status + ' (' + ms + 'ms) ' + summary;
+  el.textContent += (el.textContent ? '\n' : '') + line;
+  el.textContent = el.textContent.split('\n').slice(-100).join('\n');
+  el.scrollTop = el.scrollHeight;
+}
+
+async function api(method, path, body, opts) {
+  opts = opts || {};
+  var base = store.apiBase;
+  var url = base + path;
+  var headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+  if (!opts.anon && store.token) headers['Authorization'] = 'Bearer ' + store.token;
+  var started = Date.now();
+  var res, text = '';
+  try {
+    res = await fetch(url, {
+      method: method,
+      headers: headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    text = await res.text();
+  } catch (e) {
+    log(method, url, 'NET-ERR', Date.now() - started, String((e && e.message) || e));
+    throw new Error('Cannot reach ' + base + ' — is the backend running?');
+  }
+  var data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (_) { data = { _raw: text }; }
+  log(method, url, res.status, Date.now() - started,
+    (data && (data.error || data.message)) || (method === 'GET' ? 'ok' : JSON.stringify(data).slice(0, 160)));
+  if (res.status === 401 && !opts.anon && !opts.noRetry && store.refresh) {
+    var refreshed = await tryRefresh();
+    if (refreshed) return api(method, path, body, Object.assign({}, opts, { noRetry: true }));
+  }
+  if (res.status < 200 || res.status >= 300) {
+    var err = new Error((data && data.error) || ('Request failed (' + res.status + ')'));
+    err.status = res.status;
+    err.code = data && data.code;
+    throw err;
+  }
+  return data || {};
+}
+
+function adoptSession(body) {
+  var token = body && (body.token || body.accessToken);
+  if (token) store.token = token;
+  if (body && body.refreshToken) store.refresh = body.refreshToken;
+  if (body && body.user) store.user = body.user;
+  renderAuth();
+  return Boolean(token);
+}
+
+async function tryRefresh() {
+  if (!store.refresh) return false;
+  try {
+    var data = await api('POST', '/auth/refresh', { refreshToken: store.refresh }, { anon: true, noRetry: true });
+    return adoptSession(data);
+  } catch (_) {
+    return false;
+  }
+}
+
+function renderAuth() {
+  var u = store.user;
+  if (store.token && u) {
+    setStatus('authStatus', 'Signed in as <b>' + esc(u.email || u.phone || u.username || u.id) + '</b>' +
+      (u.role ? ' · role: <b>' + esc(u.role) + '</b>' : ''), 'ok');
+    $('userView').textContent = 'token: ' + store.token.slice(0, 18) + '…  user: ' + JSON.stringify(u);
+  } else if (store.token) {
+    setStatus('authStatus', 'Token set, user unknown — press /auth/me.', 'muted');
+    $('userView').textContent = 'token: ' + store.token.slice(0, 18) + '…';
+  } else {
+    setStatus('authStatus', 'Signed out.', 'muted');
+    $('userView').textContent = '';
+  }
+}
+
+async function doHealth() {
+  $('apiBase').value = $('apiBase').value.trim().replace(/\/$/, '');
+  store.apiBase = $('apiBase').value;
+  try {
+    var h = await api('GET', '/health', undefined, { anon: true });
+    setStatus('healthStatus', 'ok: <b>' + esc(h.ok) + '</b> · sms: ' + esc(h.smsConfigured) +
+      ' · email: ' + esc(h.emailConfigured) + ' · google: ' + esc(h.googleConfigured), 'ok');
+  } catch (e) {
+    setStatus('healthStatus', esc(e.message), 'err');
+  }
+}
+
+async function doLogin() {
+  try {
+    var data = await api('POST', '/auth/login', {
+      identifier: $('loginId').value.trim(),
+      password: $('loginPw').value,
+      deviceLabel: 'dev-harness',
+    }, { anon: true });
+    adoptSession(data);
+    if (!store.token) setStatus('authStatus', 'Login answered without a token — see log.', 'err');
+  } catch (e) {
+    setStatus('authStatus', esc(e.message) +
+      (e.code === 'EMAIL_NOT_VERIFIED' ? ' — click the emailed link, then log in again.' : ''), 'err');
+  }
+}
+
+async function doSignup() {
+  try {
+    var data = await api('POST', '/auth/signup', {
+      email: $('suEmail').value.trim(),
+      password: $('suPw').value,
+      username: $('suUser').value.trim() || undefined,
+    }, { anon: true });
+    setStatus('authStatus', esc(data.message || 'Signed up — check your email for the verification link, then log in.'), 'ok');
+  } catch (e) {
+    setStatus('authStatus', esc(e.message), 'err');
+  }
+}
+
+async function doResend() {
+  try {
+    var data = await api('POST', '/auth/resend-verification', { email: $('suEmail').value.trim() }, { anon: true });
+    setStatus('authStatus', esc(data.message || 'If that email needs verification, a new link was sent.'), 'ok');
+  } catch (e) {
+    setStatus('authStatus', esc(e.message), 'err');
+  }
+}
+
+async function doOtpSend() {
+  try {
+    var phone = normalizePhone($('otpPhone').value);
+    var data = await api('POST', '/auth/send-sms-code', { phone: phone }, { anon: true });
+    setStatus('authStatus', 'Code sent to <b>' + esc(phone) + '</b>' +
+      (data.expiresInSeconds ? ' (expires in ' + Math.round(data.expiresInSeconds / 60) + ' min).' : '.'), 'ok');
+  } catch (e) {
+    setStatus('authStatus', esc(e.message), 'err');
+  }
+}
+
+async function doOtpVerify() {
+  try {
+    var data = await api('POST', '/auth/verify-sms-code', {
+      phone: normalizePhone($('otpPhone').value),
+      code: $('otpCode').value.trim(),
+      deviceLabel: 'dev-harness',
+    }, { anon: true });
+    adoptSession(data);
+  } catch (e) {
+    setStatus('authStatus', esc(e.message), 'err');
+  }
+}
+
+async function doMe() {
+  try {
+    var data = await api('GET', '/auth/me');
+    if (data.user) { store.user = data.user; renderAuth(); }
+    else setStatus('authStatus', 'No user in response — see log.', 'err');
+  } catch (e) {
+    setStatus('authStatus', esc(e.message), 'err');
+  }
+}
+
+async function doLogout() {
+  try {
+    await api('POST', '/auth/logout', store.refresh ? { refreshToken: store.refresh } : {});
+  } catch (_) { /* logout never blocks */ }
+  store.token = ''; store.refresh = ''; store.user = null;
+  renderAuth();
+}
+
+/* ---- My gas plant ---- */
+function retailerPayload(forRegister) {
+  var payload = {};
+  if (forRegister) {
+    payload.name = $('rName').value.trim() + ' (' + $('rType').value + ')';
+  } else {
+    payload.name = $('rName').value.trim();
+  }
+  payload.phone = normalizePhone($('rPhone').value);
+  payload.address = $('rAddr').value.trim();
+  if ($('rState').value) payload.state = $('rState').value;
+  if ($('rCity').value.trim()) payload.cityLga = $('rCity').value.trim();
+  payload.latitude = parseFloat($('rLat').value);
+  payload.longitude = parseFloat($('rLng').value);
+  var price = parseFloat(String($('rPrice').value).replace(/,/g, ''));
+  if (!isNaN(price)) payload.pricePerKg = price;
+  if (!forRegister) payload.isAvailable = $('rAvail').value === 'true';
+  return payload;
+}
+
+function fillRetailerForm(r) {
+  $('rName').value = r.name || '';
+  $('rPhone').value = r.phone || '';
+  $('rAddr').value = r.address || '';
+  $('rState').value = r.state || '';
+  $('rCity').value = r.cityLga || '';
+  $('rLat').value = r.latitude;
+  $('rLng').value = r.longitude;
+  $('rPrice').value = (r.pricePerKg === null || r.pricePerKg === undefined) ? '' : r.pricePerKg;
+  $('rAvail').value = r.isAvailable ? 'true' : 'false';
+}
+
+function renderRetailerStatus(r) {
+  var pill = r.status === 'approved' ? 'approved' : (r.status === 'rejected' ? 'rejected' : 'pending');
+  setStatus('myStatus',
+    '<span class="pill ' + pill + '">' + esc(r.status) + '</span> <b>' + esc(r.name) + '</b><br>' +
+    esc([r.address, r.cityLga, r.state].filter(Boolean).join(', ')) + ' · ' + esc(r.phone) + '<br>' +
+    'GPS ' + Number(r.latitude).toFixed(5) + ', ' + Number(r.longitude).toFixed(5) +
+    ((r.pricePerKg === null || r.pricePerKg === undefined)
+      ? '' : ' · ₦' + Number(r.pricePerKg).toFixed(2) + '/kg') +
+    ' · ' + (r.isAvailable ? 'OPEN' : 'CLOSED') +
+    (r.statusReason ? '<br>Reviewer note: ' + esc(r.statusReason) : ''),
+    r.status === 'approved' ? 'ok' : 'muted');
+}
+
+async function doRetailerGet() {
+  try {
+    var data = await api('GET', '/retailers/me');
+    fillRetailerForm(data.retailer);
+    renderRetailerStatus(data.retailer);
+  } catch (e) {
+    if (e.status === 404) setStatus('myStatus', 'No profile yet — fill the form and press Register.', 'muted');
+    else setStatus('myStatus', esc(e.message), 'err');
+  }
+}
+
+async function doRegister() {
+  try {
+    var data = await api('POST', '/retailers', retailerPayload(true));
+    fillRetailerForm(data.retailer);
+    renderRetailerStatus(data.retailer);
+  } catch (e) {
+    setStatus('myStatus', esc(e.message) +
+      (e.status === 409 ? ' — press “Load my profile”, edit, then Update.' : ''), 'err');
+  }
+}
+
+async function doRetailerUpdate() {
+  try {
+    var data = await api('PATCH', '/retailers/me', retailerPayload(false));
+    fillRetailerForm(data.retailer);
+    renderRetailerStatus(data.retailer);
+  } catch (e) {
+    setStatus('myStatus', esc(e.message), 'err');
+  }
+}
+
+async function doAvailToggle() {
+  try {
+    var next = $('rAvail').value !== 'true';
+    var data = await api('PATCH', '/retailers/me', { isAvailable: next });
+    fillRetailerForm(data.retailer);
+    renderRetailerStatus(data.retailer);
+  } catch (e) {
+    setStatus('myStatus', esc(e.message), 'err');
+  }
+}
+
+/* ---- Consumer map ---- */
+var map = null, pins = null;
+
+function initMap() {
+  if (typeof L === 'undefined') {
+    $('map').innerHTML = '<div id="mapFallback">Map library failed to load (offline?). Radius/bbox search and the list below still work.</div>';
+    return;
+  }
+  var lat = parseFloat($('mLat').value) || 4.8156;
+  var lng = parseFloat($('mLng').value) || 7.0498;
+  map = L.map('map').setView([lat, lng], 13);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap contributors',
+  }).addTo(map);
+  pins = L.layerGroup().addTo(map);
+}
+
+function stationCard(s) {
+  var open = !!s.isAvailable;
+  var price = (s.pricePerKg === null || s.pricePerKg === undefined)
+    ? 'Price on request' : '₦' + Number(s.pricePerKg).toFixed(2) + ' / kg';
+  var dist = (s.distanceM === null || s.distanceM === undefined) ? '' :
+    (s.distanceM < 1000
+      ? Math.round(s.distanceM) + ' m away'
+      : (s.distanceM / 1000).toFixed(1) + ' km away');
+  var statusPill = s.status ? ' <span class="pill ' + esc(s.status) + '">' + esc(s.status) + '</span>' : '';
+  var addr = [s.address, s.cityLga, s.state].filter(Boolean).map(esc).join(', ');
+  var phoneBtn = s.phone
+    ? '<a href="tel:' + esc(s.phone) + '">Call</a>'
+    : '<a href="#" onclick="return false" style="opacity:.4">No phone</a>';
+  return '<div class="card"><b>' + esc(s.name) + '</b>' + statusPill + '<br>' +
+    '<span class="pill ' + (open ? 'open' : 'closed') + '">' + (open ? 'In Stock · Open' : 'Out of Stock · Closed') + '</span>' +
+    (dist ? ' <span class="muted">' + esc(dist) + '</span>' : '') + '<br>' +
+    '<b>' + esc(price) + '</b><br><span class="muted">' + addr + '</span>' +
+    '<div class="actions">' + phoneBtn +
+    '<a href="https://www.google.com/maps/dir/?api=1&amp;destination=' +
+    s.latitude + ',' + s.longitude + '" target="_blank" rel="noopener">Directions</a></div></div>';
+}
+
+function renderStations(list) {
+  var html = '';
+  if (pins) pins.clearLayers();
+  list.forEach(function (s) {
+    html += stationCard(s);
+    if (pins) {
+      L.circleMarker([s.latitude, s.longitude], {
+        radius: 8,
+        color: s.isAvailable ? '#15803d' : '#64748b',
+        fillColor: s.isAvailable ? '#22c55e' : '#94a3b8',
+        fillOpacity: 0.9,
+        weight: 2,
+      }).addTo(pins).bindPopup('<b>' + esc(s.name) + '</b><br>' + esc(s.address || ''));
+    }
+  });
+  $('resultsList').innerHTML = html || '<span class="muted">No stations found.</span>';
+  setStatus('mapStatus', list.length
+    ? ('Showing <b>' + list.length + '</b> approved station(s).')
+    : 'No approved stations here yet.', list.length ? 'ok' : 'muted');
+}
+
+async function doRadius() {
+  try {
+    var lat = parseFloat($('mLat').value), lng = parseFloat($('mLng').value);
+    var km = parseFloat($('mRadius').value) || 10;
+    var data = await api('GET',
+      '/retailers/nearby?lat=' + lat + '&lng=' + lng + '&radius=' + Math.round(km * 1000),
+      undefined, { anon: true });
+    if (map) map.setView([lat, lng], 13);
+    renderStations(data.stations || []);
+  } catch (e) {
+    setStatus('mapStatus', esc(e.message), 'err');
+  }
+}
+
+function bboxAround(lat, lng, km) {
+  var dLat = km / 111;
+  var dLng = km / (111 * Math.cos(lat * Math.PI / 180));
+  return { west: lng - dLng, south: lat - dLat, east: lng + dLng, north: lat + dLat };
+}
+
+async function doBbox() {
+  try {
+    var b;
+    if (map) {
+      var bounds = map.getBounds();
+      var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
+      b = { west: sw.lng, south: sw.lat, east: ne.lng, north: ne.lat };
+    } else {
+      b = bboxAround(parseFloat($('mLat').value) || 4.8156, parseFloat($('mLng').value) || 7.0498,
+        parseFloat($('mRadius').value) || 10);
+    }
+    var data = await api('GET',
+      '/retailers/nearby?bbox=' + b.west + ',' + b.south + ',' + b.east + ',' + b.north,
+      undefined, { anon: true });
+    renderStations(data.stations || []);
+  } catch (e) {
+    setStatus('mapStatus', esc(e.message), 'err');
+  }
+}
+
+function locate(cb) {
+  if (typeof navigator === 'undefined' || !navigator.geolocation) {
+    cb(new Error('Geolocation unavailable in this browser.'), null);
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    function (pos) { cb(null, pos.coords); },
+    function (err) { cb(new Error('GPS failed: ' + ((err && err.message) || err)), null); },
+    { enableHighAccuracy: true, timeout: 15000 });
+}
+
+function doLocateMap() {
+  locate(function (err, c) {
+    if (err) { setStatus('mapStatus', esc(err.message), 'err'); return; }
+    $('mLat').value = c.latitude.toFixed(6);
+    $('mLng').value = c.longitude.toFixed(6);
+    doRadius();
+  });
+}
+
+function doLocateForm() {
+  locate(function (err, c) {
+    if (err) { setStatus('myStatus', esc(err.message), 'err'); return; }
+    $('rLat').value = c.latitude.toFixed(6);
+    $('rLng').value = c.longitude.toFixed(6);
+    setStatus('myStatus', 'GPS coordinates filled from device.', 'ok');
+  });
+}
+
+/* ---- Admin review queue ---- */
+function pendingCard(r) {
+  return '<div class="card" data-id="' + esc(r.id) + '"><b>' + esc(r.name) + '</b> ' +
+    '<span class="pill pending">pending</span><br><span class="muted">' +
+    esc([r.address, r.cityLga, r.state].filter(Boolean).join(', ')) + ' · ' + esc(r.phone) + '</span>' +
+    '<div class="actions"><button data-act="approve">Approve</button>' +
+    '<button data-act="reject" class="danger">Reject</button></div>' +
+    '<input data-role="reason" placeholder="Reason (required to reject)" style="margin-top:8px;width:100%">';
+}
+
+async function doPending() {
+  try {
+    var data = await api('GET', '/retailers/admin/pending');
+    var list = data.retailers || [];
+    $('pendingList').innerHTML = list.length
+      ? list.map(pendingCard).join('')
+      : '<span class="muted">Queue is empty.</span>';
+    setStatus('adminStatus', list.length ? ('<b>' + list.length + '</b> pending.') : 'Queue is empty.', 'muted');
+  } catch (e) {
+    setStatus('adminStatus', esc(e.message) + (e.status === 403 ? ' — this token is not an admin.' : ''), 'err');
+  }
+}
+
+async function onPendingClick(ev) {
+  var btn = ev && ev.target;
+  if (!btn || !btn.dataset || !btn.dataset.act) return;
+  var card = btn.parentNode && btn.parentNode.parentNode;
+  if (!card || !card.getAttribute) return;
+  var id = card.getAttribute('data-id');
+  var reasonEl = card.querySelector('[data-role="reason"]');
+  var reason = reasonEl ? reasonEl.value.trim() : '';
+  var decision = btn.dataset.act === 'reject' ? 'rejected' : 'approved';
+  if (decision === 'rejected' && reason.length < 2) {
+    setStatus('adminStatus', 'A reason (2+ chars) is required to reject.', 'err');
+    return;
+  }
+  try {
+    await api('POST', '/retailers/' + id + '/review',
+      reason ? { decision: decision, reason: reason } : { decision: decision });
+    setStatus('adminStatus', 'Retailer <b>' + esc(decision) + '</b>. Refreshing queue…', 'ok');
+    await doPending();
+  } catch (e) {
+    setStatus('adminStatus', esc(e.message), 'err');
+  }
+}
+
+/* ---- Init ---- */
+function fillStaticSelects() {
+  $('rType').innerHTML = FACILITY_TYPES.map(function (t) {
+    return '<option>' + esc(t) + '</option>';
+  }).join('');
+  $('rState').innerHTML = '<option value="">— select —</option>' + NIGERIAN_STATES.map(function (s) {
+    return '<option>' + esc(s) + '</option>';
+  }).join('');
+}
+
+function init() {
+  $('apiBase').value = store.apiBase;
+  fillStaticSelects();
+  $('btnHealth').addEventListener('click', doHealth);
+  $('btnLogin').addEventListener('click', doLogin);
+  $('btnSignup').addEventListener('click', doSignup);
+  $('btnResend').addEventListener('click', doResend);
+  $('btnOtpSend').addEventListener('click', doOtpSend);
+  $('btnOtpVerify').addEventListener('click', doOtpVerify);
+  $('btnTokenApply').addEventListener('click', function () {
+    store.token = $('pasteToken').value.trim();
+    store.refresh = '';
+    store.user = null;
+    renderAuth();
+    if (store.token) doMe();
+  });
+  $('btnMe').addEventListener('click', doMe);
+  $('btnRefresh').addEventListener('click', function () {
+    tryRefresh().then(function (ok) {
+      if (!ok) setStatus('authStatus', 'Refresh failed — log in again.', 'err');
+    });
+  });
+  $('btnLogout').addEventListener('click', doLogout);
+  $('btnGet').addEventListener('click', doRetailerGet);
+  $('btnRegister').addEventListener('click', doRegister);
+  $('btnUpdate').addEventListener('click', doRetailerUpdate);
+  $('btnAvailToggle').addEventListener('click', doAvailToggle);
+  $('btnLocateForm').addEventListener('click', doLocateForm);
+  $('btnRadius').addEventListener('click', doRadius);
+  $('btnBbox').addEventListener('click', doBbox);
+  $('btnLocateMap').addEventListener('click', doLocateMap);
+  $('btnPending').addEventListener('click', doPending);
+  $('pendingList').addEventListener('click', onPendingClick);
+  $('btnClearLog').addEventListener('click', function () { $('log').textContent = ''; });
+  renderAuth();
+  initMap();
+  doHealth();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

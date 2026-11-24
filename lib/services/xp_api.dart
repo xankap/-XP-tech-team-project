@@ -305,6 +305,26 @@ class XpApi {
         .toList();
   }
 
+  /// Viewport search using the GasGrid bbox contract
+  /// (`bbox=minLng,minLat,maxLng,maxLat`). Same approved-only
+  /// `{ stations: [...] }` response as [nearbyStations].
+  Future<List<PartnerStation>> nearbyStationsByBbox({
+    required double west,
+    required double south,
+    required double east,
+    required double north,
+  }) async {
+    final body = await _send(() async => _client.get(
+        _uri('/retailers/nearby', {
+          'bbox': '$west,$south,$east,$north',
+        }),
+        headers: _headers()));
+    return (body['stations'] as List? ?? const [])
+        .map(
+            (e) => PartnerStation.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
   Future<BusinessGasSummary> myGas({int weeks = 8}) async {
     final body = await _sendAuthed((h) => _client
         .get(_uri('/businesses/me/gas', {'weeks': '$weeks'}), headers: h));

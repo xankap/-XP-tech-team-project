@@ -126,6 +126,18 @@ class _AuthBootstrapFlowState extends State<AuthBootstrapFlow> with WidgetsBindi
     await GoogleAuth.signOut();
   }
 
+  void _openStationPortal({bool isSignUp = true}) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GasStationAuthScreen(
+          api: widget.api,
+          onSuccess: _onLoggedIn,
+          initialIsSignUp: isSignUp,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_session.isSignedIn) {
@@ -133,7 +145,10 @@ class _AuthBootstrapFlowState extends State<AuthBootstrapFlow> with WidgetsBindi
     }
     switch (_step) {
       case _BootStep.landing:
-        return _LandingPage(onContinue: _runLogoThenLoading);
+        return _LandingPage(
+          onContinue: _runLogoThenLoading,
+          onOpenStationPortal: () => _openStationPortal(isSignUp: true),
+        );
       case _BootStep.logo:
         return const _LogoGreetingPage();
       case _BootStep.loading:
@@ -152,7 +167,8 @@ class _AuthBootstrapFlowState extends State<AuthBootstrapFlow> with WidgetsBindi
 
 class _LandingPage extends StatelessWidget {
   final VoidCallback onContinue;
-  const _LandingPage({required this.onContinue});
+  final VoidCallback? onOpenStationPortal;
+  const _LandingPage({required this.onContinue, this.onOpenStationPortal});
 
   @override
   Widget build(BuildContext context) {
@@ -216,6 +232,23 @@ class _LandingPage extends StatelessWidget {
                         child: const Text('Continue', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                       ),
                     ),
+                    if (onOpenStationPortal != null) ...[
+                      const SizedBox(height: 12),
+                      TextButton.icon(
+                        key: const Key('landing-gas-station-portal-button'),
+                        onPressed: onOpenStationPortal,
+                        icon: const Icon(Icons.local_gas_station_rounded, color: Colors.white, size: 20),
+                        label: const Text(
+                          'Own a Gas Plant / Refill Station? Sign Up Here',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                   ],
                 ),

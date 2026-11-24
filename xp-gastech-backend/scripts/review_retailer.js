@@ -143,11 +143,16 @@ async function reviewRetailer(client, { id, decision, reason, by }) {
     `update public.retailers set status = $1, status_reason = $2, reviewed_by = $3, reviewed_at = now()
      where id = $4
      returning id, name, phone_e164, address_line, state, city_lga, latitude, longitude,
-               is_available, status, status_reason, created_at`,
+               is_available, status, status_reason, created_at, app_user_id`,
     [decision, reason, by, id]
   );
   if (!rows[0]) {
     throw new Error(`retailer ${id} not found`);
+  }
+  if (decision === 'approved' && rows[0].app_user_id) {
+    try {
+      await client.query("update public.users set role = 'retailer' where id = $1", [rows[0].app_user_id]);
+    } catch (_) {}
   }
   console.log(`Retailer ${decision}:`);
   printRow(rows[0]);

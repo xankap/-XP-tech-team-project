@@ -81,10 +81,11 @@ void main() {
     expect(session.isSignedIn, isTrue);
   });
 
-  testWidgets('no stored session shows the landing page', (tester) async {
+  testWidgets('no stored session shows the landing page with gas plant partner link', (tester) async {
     final (session, api, _) = await setup((_) async => _json(200, {'ok': true}));
     await tester.pumpWidget(_app(session, api));
     expect(find.text('Continue'), findsOneWidget);
+    expect(find.byKey(const Key('landing-gas-station-portal-button')), findsOneWidget);
     expect(find.textContaining('HOME'), findsNothing);
   });
 

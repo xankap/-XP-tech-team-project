@@ -1543,16 +1543,58 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Future<void> _loadPartnerStations() async {
+  DateTime? _lastPartnerLoad;
+
+  Future<void> _loadPartnerStations() => _fetchStations(
+        () => _api.nearbyStations(
+            _currentPos.latitude, _currentPos.longitude,
+            radiusKm: 10),
+        emptyMessage: 'No approved XP Tech partner stations within 10 km yet.',
+      );
+
+  /// Reloads stations for the visible map region (GasGrid bbox contract)
+  /// after the user pans or zooms. Skipped while locating, while a load
+  /// is running, or within a few seconds of the last load so the initial
+  /// camera settle does not double-fetch.
+  Future<void> _loadPartnerStationsInView() async {
+    final ctrl = _mapCtrl;
+    if (ctrl == null || _locLoading || _loadingPartners) return;
+    final last = _lastPartnerLoad;
+    if (last != null &&
+        DateTime.now().difference(last) < const Duration(seconds: 5)) {
+      return;
+    }
+    try {
+      final bounds = await ctrl.getVisibleRegion();
+      if (bounds.northeast.longitude < bounds.southwest.longitude ||
+          bounds.northeast.latitude < bounds.southwest.latitude) {
+        return; // Degenerate region (e.g. antimeridian) — keep current pins.
+      }
+      await _fetchStations(
+        () => _api.nearbyStationsByBbox(
+          west: bounds.southwest.longitude,
+          south: bounds.southwest.latitude,
+          east: bounds.northeast.longitude,
+          north: bounds.northeast.latitude,
+        ),
+        emptyMessage: 'No approved XP Tech partner stations in this area yet.',
+      );
+    } catch (_) {
+      // Map not ready — the radius pins already on screen stay put.
+    }
+  }
+
+  Future<void> _fetchStations(
+    Future<List<PartnerStation>> Function() query, {
+    required String emptyMessage,
+  }) async {
     if (_loadingPartners) return;
     setState(() {
       _loadingPartners = true;
       _partnerError = null;
     });
     try {
-      final stations = await _api.nearbyStations(
-          _currentPos.latitude, _currentPos.longitude,
-          radiusKm: 10);
+      final stations = await query();
       final markers = stations
           .map((s) => Marker(
                 markerId: MarkerId('xp_${s.id}'),
@@ -1585,9 +1627,8 @@ class _MapScreenState extends State<MapScreen> {
           ..addAll(markers);
         _stations = stations;
         _loadingPartners = false;
-        if (stations.isEmpty)
-          _partnerError =
-              'No approved XP Tech partner stations within 10 km yet.';
+        _lastPartnerLoad = DateTime.now();
+        if (stations.isEmpty) _partnerError = emptyMessage;
       });
     } catch (e) {
       if (mounted)
@@ -1646,7 +1687,19 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Find Gas Refill Stations')),
+      appBar: AppBar(
+        title: const Text('Find Gas Refill Stations'),
+        actions: [
+          IconButton(
+            key: const Key('map-register-plant-button'),
+            tooltip: 'Register your Gas Plant',
+            icon: const Icon(Icons.add_business_rounded),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const RetailerRegistrationScreen()),
+            ).then((_) => _loadPartnerStations()),
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           GoogleMap(
@@ -1658,6 +1711,7 @@ class _MapScreenState extends State<MapScreen> {
             onMapCreated: (ctrl) {
               _mapCtrl = ctrl;
             },
+            onCameraIdle: _loadPartnerStationsInView,
           ),
           if (_stations.isNotEmpty && !_locLoading)
             Positioned(
@@ -1677,18 +1731,45 @@ class _MapScreenState extends State<MapScreen> {
             ),
           if (_partnerError != null)
             Positioned(
-                left: 16,
-                right: 16,
-                top: 16,
-                child: Card(
-                    child: Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
-                        child: Row(children: [
+              left: 16,
+              right: 16,
+              top: 16,
+              child: Card(
+                elevation: 3,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.info_outline_rounded, size: 20, color: AppTheme.corporateBlue),
+                          const SizedBox(width: 8),
                           Expanded(child: Text(_partnerError!)),
                           TextButton(
-                              onPressed: _loadPartnerStations,
-                              child: const Text('Retry')),
-                        ])))),
+                            onPressed: _loadPartnerStations,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 16),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          key: const Key('map-partner-card-register-button'),
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const RetailerRegistrationScreen()),
+                          ).then((_) => _loadPartnerStations()),
+                          icon: const Icon(Icons.add_business_rounded, size: 16),
+                          label: const Text('Own a gas plant or refill station? Register it here'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           if (_loadingPartners)
             const Positioned(
                 top: 16,
