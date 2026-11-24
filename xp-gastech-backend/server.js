@@ -6,6 +6,8 @@ const authRoutes = require('./src/routes/auth');
 const retailerRoutes = require('./src/routes/retailers');
 const businessRoutes = require('./src/routes/businesses');
 const meterRoutes = require('./src/routes/meters');
+const adminRoutes = require('./src/routes/admin');
+const supportRoutes = require('./src/routes/support');
 const { getSmsConfig } = require('./src/services/sendchamp');
 const { getEmailConfig } = require('./src/services/sendchampEmail');
 
@@ -24,13 +26,19 @@ app.set('trust proxy', 1);
 // dev server on 5050, 8080, …) plus anything listed in CORS_ORIGINS
 // (comma-separated, exact match) for deployed front-ends.
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+const XP_ORIGIN = /^https?:\/\/([a-z0-9-]+\.)?xptechltd\.com$/i;
+const VERCEL_ORIGIN = /^https?:\/\/.*-papagedonlabs-4556s-projects\.vercel\.app$/i;
 const extraOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
 
 function isAllowedOrigin(origin) {
-  return LOCAL_ORIGIN.test(origin) || extraOrigins.includes(origin);
+  if (!origin) return false;
+  return LOCAL_ORIGIN.test(origin) ||
+    XP_ORIGIN.test(origin) ||
+    VERCEL_ORIGIN.test(origin) ||
+    extraOrigins.includes(origin);
 }
 
 app.use((req, res, next) => {
@@ -71,6 +79,8 @@ app.use('/auth', authRoutes);
 app.use('/retailers', retailerRoutes);
 app.use('/businesses', businessRoutes);
 app.use('/meters', meterRoutes);
+app.use('/admin', adminRoutes);
+app.use('/support', supportRoutes);
 // Flutter map contract alias: GET /partner-stations/nearby?latitude&longitude&radiusKm
 app.get('/partner-stations/nearby', retailerRoutes.nearbyHandler);
 

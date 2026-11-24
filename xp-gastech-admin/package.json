@@ -1,0 +1,9 @@
+{
+  "name": "xp-gastech-admin",
+  "version": "1.0.0",
+  "description": "XP GasTech Central Administration & Verification Portal",
+  "private": true,
+  "scripts": {
+    "start": "npx serve ."
+  }
+}

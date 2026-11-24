@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XP Tech Admin | Verification & Platform Governance</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Leaflet CSS for Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+  <!-- ================= AUTH VIEW ================= -->
+  <div id="auth-container" class="auth-container">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="brand-icon-wrapper">⚡</div>
+        <h1 class="auth-title">XP Tech Admin</h1>
+        <p class="auth-subtitle">Central Verification & Platform Governance Portal</p>
+      </div>
+
+      <form id="login-form" class="auth-form">
+        <div class="form-group">
+          <label class="form-label" for="login-email">Administrator Email</label>
+          <input type="email" id="login-email" class="form-input" placeholder="admin@xptechltd.com" required autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-password">Password</label>
+          <input type="password" id="login-password" class="form-input" placeholder="••••••••••••" required autocomplete="current-password">
+        </div>
+        <button type="submit" id="btn-login-submit" class="btn btn-primary" style="margin-top: 8px;">Sign In to Portal</button>
+      </form>
+
+      <div style="margin-top: 24px; text-align: center; font-size: 12px; color: var(--text-muted);">
+        🔒 Restricted to authorized XP Gas Technologies personnel.
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= APP VIEW ================= -->
+  <div id="app-container" class="app-container" style="display: none;">
+    
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-brand-icon">⚡</div>
+        <div>
+          <div class="sidebar-brand-text">XP Tech</div>
+        </div>
+        <span class="sidebar-brand-badge">ADMIN</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-item active" data-tab="overview">
+          <div class="nav-label">
+            <span class="nav-icon">📊</span>
+            <span>Overview</span>
+          </div>
+        </div>
+        <div class="nav-item" data-tab="stations">
+          <div class="nav-label">
+            <span class="nav-icon">⛽</span>
+            <span>Gas Plants</span>
+          </div>
+          <span id="sidebar-badge-stations" class="nav-badge nav-badge-warning" style="display: none;">0</span>
+        </div>
+        <div class="nav-item" data-tab="map">
+          <div class="nav-label">
+            <span class="nav-icon">🗺️</span>
+            <span>Refill Map</span>
+          </div>
+        </div>
+        <div class="nav-item" data-tab="users">
+          <div class="nav-label">
+            <span class="nav-icon">👥</span>
+            <span>Users & Roles</span>
+          </div>
+        </div>
+        <div class="nav-item" data-tab="meters">
+          <div class="nav-label">
+            <span class="nav-icon">📟</span>
+            <span>Digital Meters</span>
+          </div>
+        </div>
+        <div class="nav-item" data-tab="support">
+          <div class="nav-label">
+            <span class="nav-icon">💬</span>
+            <span>Support Desk</span>
+          </div>
+          <span id="sidebar-badge-support" class="nav-badge nav-badge-info" style="display: none;">0</span>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-snippet">
+          <div id="header-user-avatar" class="user-avatar">AD</div>
+          <div class="user-info">
+            <span id="header-user-name" class="user-name">Administrator</span>
+            <span class="user-role">Super Admin</span>
+          </div>
+        </div>
+        <button id="btn-logout" class="btn-logout" title="Sign Out">✕</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="main-wrapper">
+      
+      <!-- Top Bar -->
+      <header class="top-bar">
+        <div class="page-title-box">
+          <h1 id="page-title">Platform Overview</h1>
+          <p id="page-desc">Real-time telemetry, active verification queue, and KPI metrics</p>
+        </div>
+        <div class="top-bar-actions">
+          <div class="live-pill">
+            <div class="live-dot"></div>
+            <span>api.xptechltd.com</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Content Panes -->
+      <main class="content-pane">
+
+        <!-- TAB 1: OVERVIEW -->
+        <section id="pane-overview" class="tab-pane" style="display: flex; flex-direction: column; gap: 28px;">
+          <!-- KPI Cards -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-details">
+                <span class="stat-label">Total Gas Plants</span>
+                <span id="kpi-stations-total" class="stat-value">--</span>
+                <span class="stat-subtext">Registered nationwide</span>
+              </div>
+              <div class="stat-icon primary">⛽</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-details">
+                <span class="stat-label">Verification Queue</span>
+                <span id="kpi-stations-pending" class="stat-value">--</span>
+                <span class="stat-subtext">Awaiting admin review</span>
+              </div>
+              <div class="stat-icon warning">⏳</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-details">
+                <span class="stat-label">Platform Accounts</span>
+                <span id="kpi-users-total" class="stat-value">--</span>
+                <span class="stat-subtext">Consumers & Retailers</span>
+              </div>
+              <div class="stat-icon success">👥</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-details">
+                <span class="stat-label">Connected Meters</span>
+                <span id="kpi-meters-active" class="stat-value">--</span>
+                <span class="stat-subtext">Active IoT cylinders</span>
+              </div>
+              <div class="stat-icon info">📟</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-details">
+                <span class="stat-label">Open Support Tickets</span>
+                <span id="kpi-support-new" class="stat-value">--</span>
+                <span class="stat-subtext">New customer inquiries</span>
+              </div>
+              <div class="stat-icon primary">💬</div>
+            </div>
+          </div>
+
+          <!-- Pending Verification Queue Table -->
+          <div class="section-card">
+            <div class="section-header">
+              <span class="section-title">Action Needed: Pending Plant Verifications</span>
+            </div>
+            <div class="table-responsive">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Plant Name & Location</th>
+                    <th>Contact Phone</th>
+                    <th>Price / kg</th>
+                    <th>Status</th>
+                    <th>Submitted</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="overview-pending-tbody">
+                  <tr><td colspan="6" class="empty-state">Loading pending submissions...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 2: STATIONS VERIFICATION & MANAGEMENT -->
+        <section id="pane-stations" class="tab-pane" style="display: none; flex-direction: column; gap: 20px;">
+          <div class="section-card">
+            <div class="section-header">
+              <div class="filter-tabs">
+                <button class="filter-tab station-filter-btn active" data-status="all">All Plants</button>
+                <button class="filter-tab station-filter-btn" data-status="pending">Pending Review</button>
+                <button class="filter-tab station-filter-btn" data-status="approved">Approved</button>
+                <button class="filter-tab station-filter-btn" data-status="rejected">Rejected</button>
+              </div>
+
+              <div class="section-controls">
+                <div class="search-input-box">
+                  <span class="search-icon">🔍</span>
+                  <input type="text" id="station-search-input" class="form-input" placeholder="Search plant, state, owner...">
+                </div>
+                <span id="stations-count-label" style="font-size: 13px; color: var(--text-muted);">-- stations</span>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Plant Details</th>
+                    <th>Phone</th>
+                    <th>Price / kg</th>
+                    <th>Stock</th>
+                    <th>Status</th>
+                    <th>Date Added</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="stations-tbody">
+                  <tr><td colspan="7" class="empty-state">Loading stations...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 3: NATIONWIDE REFILL MAP -->
+        <section id="pane-map" class="tab-pane" style="display: none; flex-direction: column; gap: 16px;">
+          <div class="section-card">
+            <div class="section-header">
+              <span class="section-title">Nationwide Refill Network Explorer</span>
+              <div class="section-controls">
+                <span style="font-size: 12px; font-weight: 600; color: var(--text-muted);">Jump to:</span>
+                <button class="btn btn-secondary btn-sm" onclick="zoomMap(6.5244, 3.3792, 11)">Lagos</button>
+                <button class="btn btn-secondary btn-sm" onclick="zoomMap(9.0765, 7.3986, 11)">Abuja</button>
+                <button class="btn btn-secondary btn-sm" onclick="zoomMap(4.8156, 7.0498, 12)">Port Harcourt</button>
+                <button class="btn btn-secondary btn-sm" onclick="zoomMap(12.0022, 8.5920, 11)">Kano</button>
+                <button class="btn btn-secondary btn-sm" onclick="zoomMap(7.3775, 3.9470, 11)">Ibadan</button>
+              </div>
+            </div>
+            <div class="full-map-card">
+              <div id="refill-map"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 4: USERS & ROLES -->
+        <section id="pane-users" class="tab-pane" style="display: none; flex-direction: column; gap: 20px;">
+          <div class="section-card">
+            <div class="section-header">
+              <div class="filter-tabs">
+                <button class="filter-tab user-filter-btn active" data-role="all">All Users</button>
+                <button class="filter-tab user-filter-btn" data-role="consumer">Consumers</button>
+                <button class="filter-tab user-filter-btn" data-role="retailer">Retailers</button>
+                <button class="filter-tab user-filter-btn" data-role="admin">Admins</button>
+              </div>
+
+              <div class="section-controls">
+                <div class="search-input-box">
+                  <span class="search-icon">🔍</span>
+                  <input type="text" id="user-search-input" class="form-input" placeholder="Search email, username, phone...">
+                </div>
+                <span id="users-count-label" style="font-size: 13px; color: var(--text-muted);">-- accounts</span>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Role</th>
+                    <th>Verified</th>
+                    <th>Assets</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="users-tbody">
+                  <tr><td colspan="7" class="empty-state">Loading users...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 5: DIGITAL METERS -->
+        <section id="pane-meters" class="tab-pane" style="display: none; flex-direction: column; gap: 20px;">
+          <div class="section-card">
+            <div class="section-header">
+              <span class="section-title">Digital Gas Meter Telemetry & Status</span>
+            </div>
+            <div class="table-responsive">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Meter MAC / BT</th>
+                    <th>Account Owner</th>
+                    <th>Cylinder Size</th>
+                    <th>Level (%)</th>
+                    <th>Weight</th>
+                    <th>Battery</th>
+                    <th>Gas Leak Status</th>
+                    <th>Last Synced</th>
+                  </tr>
+                </thead>
+                <tbody id="meters-tbody">
+                  <tr><td colspan="8" class="empty-state">Loading digital meter telemetry...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 6: SUPPORT DESK -->
+        <section id="pane-support" class="tab-pane" style="display: none; flex-direction: column; gap: 20px;">
+          <div class="section-card">
+            <div class="section-header">
+              <div class="filter-tabs">
+                <button class="filter-tab support-filter-btn active" data-status="all">All Inquiries</button>
+                <button class="filter-tab support-filter-btn" data-status="new">New Tickets</button>
+                <button class="filter-tab support-filter-btn" data-status="in_progress">In Progress</button>
+                <button class="filter-tab support-filter-btn" data-status="resolved">Resolved</button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Customer Name</th>
+                    <th>Contact</th>
+                    <th>Category</th>
+                    <th>Subject</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="support-tbody">
+                  <tr><td colspan="7" class="empty-state">Loading support tickets...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ================= MODALS ================= -->
+
+  <!-- 1. Station Verification & Inspection Modal -->
+  <div id="station-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 id="modal-station-name" class="modal-title">Gas Plant Name</h2>
+          <span id="modal-station-status" class="badge">pending</span>
+        </div>
+        <button class="btn-close modal-close-trigger">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Entrance Map Preview -->
+        <div class="form-group">
+          <label class="form-label">Pinned Location on Map</label>
+          <div id="modal-mini-map" class="mini-map-preview"></div>
+          <div style="margin-top: 6px; font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between;">
+            <span>Coordinates: <strong id="modal-station-coords">--</strong></span>
+            <span id="modal-station-address">--</span>
+          </div>
+        </div>
+
+        <!-- Contact & Refill Pricing -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div class="form-group">
+            <label class="form-label">Plant Phone & Dispatch</label>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span id="modal-station-phone" style="font-weight: 600;">--</span>
+              <a id="btn-station-whatsapp" href="#" target="_blank" class="btn btn-sm" style="background:#25D366;color:#fff;">WhatsApp</a>
+              <a id="btn-station-call" href="#" class="btn btn-secondary btn-sm">Call</a>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Refill Price Per Kilogram</label>
+            <div id="modal-station-price" style="font-size: 18px; font-weight: 800; color: var(--primary);">--</div>
+          </div>
+        </div>
+
+        <!-- Calculated Standard Cylinder Pricing -->
+        <div style="background: var(--surface-subtle); padding: 14px; border-radius: var(--radius-sm); display: flex; justify-content: space-around;">
+          <div>
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Standard 6kg Refill</span>
+            <div id="calc-6kg" style="font-size: 16px; font-weight: 700; color: var(--text-main);">--</div>
+          </div>
+          <div style="border-left: 1px solid var(--border); padding-left: 16px;">
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Standard 12.5kg Refill</span>
+            <div id="calc-12kg" style="font-size: 16px; font-weight: 700; color: var(--text-main);">--</div>
+          </div>
+        </div>
+
+        <!-- Description & Owner -->
+        <div class="form-group">
+          <label class="form-label">Plant Description & Facilities</label>
+          <div id="modal-station-about" style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; background: #fff; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);">--</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Registered Owner Account</label>
+          <span id="modal-station-owner" style="font-size: 13px; color: var(--text-muted);">--</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-delete-plant" class="btn btn-danger btn-sm" style="margin-right: auto;">Delete Plant</button>
+        <button class="btn btn-secondary modal-close-trigger">Close</button>
+        <button id="btn-reject-plant" class="btn btn-danger">Reject Plant</button>
+        <button id="btn-approve-plant" class="btn btn-success">Approve Plant</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. User Role Modal -->
+  <div id="user-role-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Change User Role</h2>
+        <button class="btn-close modal-close-trigger">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">User Account</label>
+          <div id="modal-role-username" style="font-weight: 700; font-size: 15px;">--</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Assign Role</label>
+          <select id="modal-role-select" class="form-select">
+            <option value="consumer">Consumer (Standard App User)</option>
+            <option value="retailer">Retailer (Plant Operator / Gas Partner)</option>
+            <option value="admin">Administrator (Full Portal Access)</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary modal-close-trigger">Cancel</button>
+        <button id="btn-save-role" class="btn btn-primary">Save Role</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Support Ticket Modal -->
+  <div id="support-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 id="ticket-subject" class="modal-title">Support Ticket</h2>
+          <span id="ticket-contact" style="font-size: 12px; color: var(--text-muted);">--</span>
+        </div>
+        <button class="btn-close modal-close-trigger">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Customer Inquiry from <strong id="ticket-name">--</strong></label>
+          <div id="ticket-message" style="background: var(--surface-subtle); padding: 14px; border-radius: var(--radius-sm); font-size: 13px; line-height: 1.6;">--</div>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <a id="btn-ticket-whatsapp" href="#" target="_blank" class="btn btn-sm" style="background:#25D366;color:#fff;">Chat on WhatsApp</a>
+          <a id="btn-ticket-email" href="#" class="btn btn-secondary btn-sm">Reply via Email</a>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="ticket-status-select">Ticket Status</label>
+          <select id="ticket-status-select" class="form-select">
+            <option value="new">New Inquiry</option>
+            <option value="in_progress">In Progress / Contacted</option>
+            <option value="resolved">Resolved</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="ticket-notes">Internal Admin Notes</label>
+          <textarea id="ticket-notes" class="form-textarea" placeholder="Add notes on communication, resolutions, or follow-ups..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary modal-close-trigger">Close</button>
+        <button id="btn-save-ticket" class="btn btn-primary">Update Ticket</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
