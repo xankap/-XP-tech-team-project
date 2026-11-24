@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -38,6 +39,8 @@ class PartnerStation {
   final int? distanceM;
   final bool isAvailable;
   final double? pricePerKg;
+  final String? logoUrl;
+  final String? about;
   const PartnerStation(
       {required this.id,
       required this.name,
@@ -47,7 +50,9 @@ class PartnerStation {
       required this.longitude,
       this.distanceM,
       this.isAvailable = true,
-      this.pricePerKg});
+      this.pricePerKg,
+      this.logoUrl,
+      this.about});
 
   factory PartnerStation.fromJson(Map<String, dynamic> j) => PartnerStation(
         id: j['id'].toString(),
@@ -59,6 +64,8 @@ class PartnerStation {
         distanceM: (j['distanceM'] as num?)?.round(),
         isAvailable: j['isAvailable'] == null || j['isAvailable'] == true,
         pricePerKg: (j['pricePerKg'] as num?)?.toDouble(),
+        logoUrl: j['logoUrl']?.toString(),
+        about: j['about']?.toString(),
       );
 
   /// Short facility badge from the registration suffix, e.g.
@@ -94,6 +101,19 @@ class PartnerStation {
     final d = distanceM;
     if (d == null) return '';
     return d < 1000 ? '$d m away' : '${(d / 1000).toStringAsFixed(1)} km away';
+  }
+
+  /// Calculates the estimated refill price for a specific cylinder size in kg.
+  double? refillCost(double cylinderKg) {
+    if (pricePerKg == null) return null;
+    return pricePerKg! * cylinderKg;
+  }
+
+  /// Formatted refill price string for common cylinder sizes.
+  String formatRefillPrice(double cylinderKg) {
+    final cost = refillCost(cylinderKg);
+    if (cost == null) return 'Price on request';
+    return '₦${cost.toStringAsFixed(0)}';
   }
 }
 
@@ -176,6 +196,8 @@ class RetailerProfile {
   final double longitude;
   final bool isAvailable;
   final double? pricePerKg;
+  final String? logoUrl;
+  final String? about;
   final Map<String, dynamic>? openingHours;
   final String status;
   final String? statusReason;
@@ -193,6 +215,8 @@ class RetailerProfile {
     required this.longitude,
     required this.isAvailable,
     this.pricePerKg,
+    this.logoUrl,
+    this.about,
     this.openingHours,
     required this.status,
     this.statusReason,
@@ -211,6 +235,8 @@ class RetailerProfile {
         longitude: (j['longitude'] as num).toDouble(),
         isAvailable: j['isAvailable'] == true,
         pricePerKg: (j['pricePerKg'] as num?)?.toDouble(),
+        logoUrl: j['logoUrl']?.toString(),
+        about: j['about']?.toString(),
         openingHours: j['openingHours'] is Map
             ? Map<String, dynamic>.from(j['openingHours'])
             : null,
@@ -290,14 +316,22 @@ class XpApi {
     return body;
   }
 
-  Future<List<PartnerStation>> nearbyStations(double lat, double lng,
-      {double radiusKm = 10}) async {
+  Future<List<PartnerStation>> nearbyStations(
+    double lat,
+    double lng, {
+    double radiusKm = 10,
+    String? sortBy,
+    bool? inStock,
+  }) async {
+    final queryParams = <String, String>{
+      'lat': '$lat',
+      'lng': '$lng',
+      'radius': '${(radiusKm * 1000).round()}',
+      if (sortBy != null) 'sortBy': sortBy,
+      if (inStock != null) 'inStock': inStock ? 'true' : 'false',
+    };
     final body = await _send(() async => _client.get(
-        _uri('/retailers/nearby', {
-          'lat': '$lat',
-          'lng': '$lng',
-          'radius': '${(radiusKm * 1000).round()}'
-        }),
+        _uri('/retailers/nearby', queryParams),
         headers: _headers()));
     return (body['stations'] as List? ?? const [])
         .map(
@@ -313,11 +347,16 @@ class XpApi {
     required double south,
     required double east,
     required double north,
+    String? sortBy,
+    bool? inStock,
   }) async {
+    final queryParams = <String, String>{
+      'bbox': '$west,$south,$east,$north',
+      if (sortBy != null) 'sortBy': sortBy,
+      if (inStock != null) 'inStock': inStock ? 'true' : 'false',
+    };
     final body = await _send(() async => _client.get(
-        _uri('/retailers/nearby', {
-          'bbox': '$west,$south,$east,$north',
-        }),
+        _uri('/retailers/nearby', queryParams),
         headers: _headers()));
     return (body['stations'] as List? ?? const [])
         .map(
@@ -435,6 +474,7 @@ class XpApi {
     required double latitude,
     required double longitude,
     double? pricePerKg,
+    String? about,
   }) async {
     final body = await _sendAuthed((h) => _client.post(
           _uri('/retailers'),
@@ -449,6 +489,8 @@ class XpApi {
             'latitude': latitude,
             'longitude': longitude,
             if (pricePerKg != null) 'pricePerKg': pricePerKg,
+            if (about != null && about.trim().isNotEmpty)
+              'about': about.trim(),
           }),
         ));
     final r = body['retailer'] as Map;
@@ -466,6 +508,7 @@ class XpApi {
     bool? isAvailable,
     double? pricePerKg,
     Map<String, dynamic>? openingHours,
+    String? about,
   }) async {
     final payload = <String, dynamic>{};
     if (name != null) payload['name'] = name.trim();
@@ -478,12 +521,73 @@ class XpApi {
     if (isAvailable != null) payload['isAvailable'] = isAvailable;
     if (pricePerKg != null) payload['pricePerKg'] = pricePerKg;
     if (openingHours != null) payload['openingHours'] = openingHours;
+    if (about != null) {
+      payload['about'] = about.trim().isEmpty ? null : about.trim();
+    }
 
     final body = await _sendAuthed((h) => _client.patch(
           _uri('/retailers/me'),
           headers: h,
           body: jsonEncode(payload),
         ));
+    final r = body['retailer'] as Map;
+    return RetailerProfile.fromJson(Map<String, dynamic>.from(r));
+  }
+
+  /// Pings or pins the station's live location and current price per kg.
+  /// Preserves approved status so the station remains immediately visible to customers.
+  Future<RetailerProfile> pinLocation({
+    required double latitude,
+    required double longitude,
+    double? pricePerKg,
+    bool? isAvailable,
+    String? address,
+    String? name,
+    String? phone,
+  }) async {
+    final payload = <String, dynamic>{
+      'latitude': latitude,
+      'longitude': longitude,
+      if (pricePerKg != null) 'pricePerKg': pricePerKg,
+      if (isAvailable != null) 'isAvailable': isAvailable,
+      if (address != null && address.trim().isNotEmpty)
+        'address': address.trim(),
+      if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+      if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+    };
+
+    final body = await _sendAuthed((h) => _client.post(
+          _uri('/retailers/me/pin'),
+          headers: h,
+          body: jsonEncode(payload),
+        ));
+    final r = body['retailer'] as Map;
+    return RetailerProfile.fromJson(Map<String, dynamic>.from(r));
+  }
+
+  /// Uploads the station logo. [bytes] should already be resized/compressed
+  /// on-device (see the registration screen picker); the server caps files
+  /// at 512KB and accepts jpeg/png/webp.
+  Future<RetailerProfile> uploadRetailerLogo({
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
+    final body = await _sendAuthed((h) => _client.post(
+          _uri('/retailers/me/logo'),
+          headers: h,
+          body: jsonEncode({
+            'imageBase64': base64Encode(bytes),
+            'contentType': contentType,
+          }),
+        ));
+    final r = body['retailer'] as Map;
+    return RetailerProfile.fromJson(Map<String, dynamic>.from(r));
+  }
+
+  /// Removes the station logo.
+  Future<RetailerProfile> deleteRetailerLogo() async {
+    final body = await _sendAuthed(
+        (h) => _client.delete(_uri('/retailers/me/logo'), headers: h));
     final r = body['retailer'] as Map;
     return RetailerProfile.fromJson(Map<String, dynamic>.from(r));
   }

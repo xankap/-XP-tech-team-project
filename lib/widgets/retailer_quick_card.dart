@@ -4,6 +4,7 @@ import '../screens/retailer_registration_screen.dart';
 import '../services/session_controller.dart';
 import '../services/xp_api.dart';
 import '../theme/app_theme.dart';
+import 'station_logo_avatar.dart';
 
 /// Dashboard quick-action card for gas plant owners.
 ///
@@ -97,15 +98,20 @@ class _RetailerQuickCardState extends State<RetailerQuickCard> {
           children: [
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppTheme.corporateBlue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+                if (profile?.logoUrl != null &&
+                    profile!.logoUrl!.trim().isNotEmpty)
+                  StationLogoAvatar(
+                      logoUrl: profile!.logoUrl, radius: 22)
+                else
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.corporateBlue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.local_gas_station_rounded,
+                        color: AppTheme.corporateBlue, size: 26),
                   ),
-                  child: const Icon(Icons.local_gas_station_rounded,
-                      color: AppTheme.corporateBlue, size: 26),
-                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -115,7 +121,9 @@ class _RetailerQuickCardState extends State<RetailerQuickCard> {
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 2),
                       Text(
-                        profile?.name ?? 'Finish registering your station',
+                        profile == null
+                            ? 'Finish registering your station'
+                            : '${profile.name}${profile.pricePerKg != null ? ' · ₦${profile.pricePerKg!.toStringAsFixed(0)}/kg' : ''}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),

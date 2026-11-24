@@ -49,7 +49,14 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '32kb' }));
+// The logo upload carries a base64 image, so it gets a larger JSON limit;
+// everything else keeps the tight 32kb cap.
+const jsonStandard = express.json({ limit: '32kb' });
+const jsonLogoUpload = express.json({ limit: '1mb' });
+app.use((req, res, next) => {
+  const isLogoUpload = req.method === 'POST' && req.path === '/retailers/me/logo';
+  return (isLogoUpload ? jsonLogoUpload : jsonStandard)(req, res, next);
+});
 
 app.get('/health', (_req, res) => {
   res.json({

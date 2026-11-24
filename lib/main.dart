@@ -34,6 +34,7 @@ import 'services/session_store.dart';
 import 'services/xp_api.dart';
 import 'widgets/business_gas_card.dart';
 import 'widgets/retailer_quick_card.dart';
+import 'widgets/station_logo_avatar.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1372,6 +1373,7 @@ class _MapScreenState extends State<MapScreen> {
   List<PartnerStation> _stations = const [];
   bool _loadingPartners = false;
   String? _partnerError;
+  String _selectedFilter = 'all'; // 'all', 'open', 'lowest_price'
 
   final XpApi _api = XpApi();
 
@@ -1389,6 +1391,225 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  void _showRefillCalculator(PartnerStation s) {
+    final price = s.pricePerKg ?? 1400.0;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        double selectedKg = 12.5;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final total = selectedKg * price;
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      if (s.logoUrl != null && s.logoUrl!.isNotEmpty) ...[
+                        StationLogoAvatar(logoUrl: s.logoUrl),
+                        const SizedBox(width: 10),
+                      ] else ...[
+                        const Icon(Icons.local_gas_station_rounded,
+                            color: AppTheme.corporateBlue, size: 28),
+                        const SizedBox(width: 10),
+                      ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(s.displayName,
+                                style: const TextStyle(
+                                    fontSize: 17, fontWeight: FontWeight.bold)),
+                            Text(
+                              s.pricePerKg == null
+                                  ? 'Price not set by station'
+                                  : '₦${price.toStringAsFixed(2)} per kg',
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppTheme.corporateBlue,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: (s.isAvailable
+                                  ? AppTheme.statusOK
+                                  : Colors.grey)
+                              .withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          s.isAvailable ? 'In Stock' : 'Closed',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: s.isAvailable
+                                ? AppTheme.statusOK
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 24),
+                  const Text('Select Cylinder Size to Fill',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [3.0, 5.0, 6.0, 10.0, 12.5, 25.0, 50.0].map((kg) {
+                      final isSelected = (selectedKg == kg);
+                      return ChoiceChip(
+                        label: Text('${kg % 1 == 0 ? kg.toInt() : kg} kg'),
+                        selected: isSelected,
+                        selectedColor: AppTheme.corporateBlue,
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : AppTheme.textPrimary,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                        onSelected: (_) =>
+                            setSheetState(() => selectedKg = kg),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Estimated Refill Cost',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppTheme.textSecondary)),
+                            const SizedBox(height: 2),
+                            Text(
+                              '₦${total.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.corporateBlue),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          '${selectedKg % 1 == 0 ? selectedKg.toInt() : selectedKg} kg × ₦${price.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                              fontSize: 12, color: AppTheme.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            final tel = s.telUrl;
+                            if (tel != null) {
+                              _openUrl(tel, 'Could not open phone dialer.');
+                            }
+                          },
+                          icon: const Icon(Icons.call_rounded, size: 18),
+                          label: const Text('Call Station'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _openUrl(s.directionsUrl, 'Could not open Maps.');
+                          },
+                          icon: const Icon(Icons.directions_rounded, size: 18),
+                          label: const Text('Directions'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.corporateBlue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildRefillChip(String size, String price, PartnerStation s) {
+    return InkWell(
+      onTap: () => _showRefillCalculator(s),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Text(
+          '$size: $price',
+          style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF334155)),
+        ),
+      ),
+    );
+  }
+
   Widget _buildStationCard(PartnerStation s) {
     final open = s.isAvailable;
     final stockColor = open ? AppTheme.statusOK : Colors.grey.shade700;
@@ -1396,7 +1617,7 @@ class _MapScreenState extends State<MapScreen> {
         ? 'Address not provided'
         : s.address!.trim();
     return SizedBox(
-      width: 300,
+      width: 310,
       child: Card(
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1408,6 +1629,10 @@ class _MapScreenState extends State<MapScreen> {
             children: [
               Row(
                 children: [
+                  if (s.logoUrl != null && s.logoUrl!.isNotEmpty) ...[
+                    StationLogoAvatar(logoUrl: s.logoUrl),
+                    const SizedBox(width: 8),
+                  ],
                   Expanded(
                     child: Text(s.displayName,
                         maxLines: 1,
@@ -1475,22 +1700,78 @@ class _MapScreenState extends State<MapScreen> {
                 ],
               ),
               const SizedBox(height: 6),
-              Text(
-                s.pricePerKg == null
-                    ? 'Price available on request'
-                    : '₦${s.pricePerKg!.toStringAsFixed(2)} / kg',
-                style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.corporateBlue),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    s.pricePerKg == null
+                        ? 'Price on request'
+                        : '₦${s.pricePerKg!.toStringAsFixed(0)} / kg',
+                    style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.corporateBlue),
+                  ),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => _showRefillCalculator(s),
+                    child: const Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.calculate_outlined,
+                              size: 14, color: AppTheme.corporateBlue),
+                          SizedBox(width: 4),
+                          Text(
+                            'Refill Calculator',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.corporateBlue,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
+              if (s.pricePerKg != null) ...[
+                const SizedBox(height: 4),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildRefillChip('6kg', s.formatRefillPrice(6), s),
+                      const SizedBox(width: 6),
+                      _buildRefillChip('12.5kg', s.formatRefillPrice(12.5), s),
+                      const SizedBox(width: 6),
+                      _buildRefillChip('25kg', s.formatRefillPrice(25), s),
+                      const SizedBox(width: 6),
+                      _buildRefillChip('50kg', s.formatRefillPrice(50), s),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 6),
               Text(address,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       fontSize: 12, color: AppTheme.textSecondary)),
-              const SizedBox(height: 10),
+              if (s.about != null && s.about!.trim().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(s.about!.trim(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                        fontStyle: FontStyle.italic)),
+              ],
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
@@ -1548,7 +1829,9 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _loadPartnerStations() => _fetchStations(
         () => _api.nearbyStations(
             _currentPos.latitude, _currentPos.longitude,
-            radiusKm: 10),
+            radiusKm: 10,
+            sortBy: _selectedFilter == 'lowest_price' ? 'price' : 'distance',
+            inStock: _selectedFilter == 'open' ? true : null),
         emptyMessage: 'No approved XP Tech partner stations within 10 km yet.',
       );
 
@@ -1576,12 +1859,168 @@ class _MapScreenState extends State<MapScreen> {
           south: bounds.southwest.latitude,
           east: bounds.northeast.longitude,
           north: bounds.northeast.latitude,
+          sortBy: _selectedFilter == 'lowest_price' ? 'price' : 'distance',
+          inStock: _selectedFilter == 'open' ? true : null,
         ),
         emptyMessage: 'No approved XP Tech partner stations in this area yet.',
       );
     } catch (_) {
       // Map not ready — the radius pins already on screen stay put.
     }
+  }
+
+  Future<void> _quickPinStation() async {
+    final session = SessionController.instance;
+    if (session == null || !session.isSignedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Sign in to pin or update your gas station location.')),
+      );
+      Navigator.of(context)
+          .push(
+            MaterialPageRoute(
+                builder: (_) => const RetailerRegistrationScreen()),
+          )
+          .then((_) => _loadPartnerStations());
+      return;
+    }
+
+    try {
+      final profile = await _api.getMyRetailer();
+      if (!mounted) return;
+      if (profile == null) {
+        Navigator.of(context)
+            .push(
+              MaterialPageRoute(
+                  builder: (_) => const RetailerRegistrationScreen()),
+            )
+            .then((_) => _loadPartnerStations());
+        return;
+      }
+
+      final priceCtrl = TextEditingController(
+        text: profile.pricePerKg != null
+            ? profile.pricePerKg!.toStringAsFixed(0)
+            : '',
+      );
+
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.pin_drop_rounded, color: AppTheme.corporateBlue),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Pin Station Location',
+                    style: TextStyle(fontSize: 18)),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Pin "${profile.name}" to your current GPS position:\n'
+                '${_currentPos.latitude.toStringAsFixed(5)}, ${_currentPos.longitude.toStringAsFixed(5)}',
+                style: const TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: priceCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Gas Price per kg (₦)',
+                  prefixText: '₦ ',
+                  suffixText: ' / kg',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Nearby customers will immediately see your station and updated price on the refill map.',
+                style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(ctx, true),
+              icon: const Icon(Icons.check_rounded, size: 18),
+              label: const Text('Pin Station Now'),
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.corporateBlue),
+            ),
+          ],
+        ),
+      );
+
+      final priceVal =
+          double.tryParse(priceCtrl.text.replaceAll(',', '').trim());
+      priceCtrl.dispose();
+
+      if (confirmed != true) return;
+
+      setState(() => _loadingPartners = true);
+      await _api.pinLocation(
+        latitude: _currentPos.latitude,
+        longitude: _currentPos.longitude,
+        pricePerKg: priceVal,
+        isAvailable: true,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Station location and price pinned! Visible to nearby customers.'),
+        ),
+      );
+      await _loadPartnerStations();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingPartners = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pin location: $e')),
+      );
+    }
+  }
+
+  Widget _buildFilterChip(String value, String label, IconData icon) {
+    final isSelected = _selectedFilter == value;
+    return Material(
+      color: Colors.transparent,
+      elevation: isSelected ? 3 : 1,
+      borderRadius: BorderRadius.circular(20),
+      child: FilterChip(
+        avatar: Icon(
+          icon,
+          size: 14,
+          color: isSelected ? Colors.white : AppTheme.corporateBlue,
+        ),
+        label: Text(label),
+        selected: isSelected,
+        selectedColor: AppTheme.corporateBlue,
+        backgroundColor: Colors.white,
+        showCheckmark: false,
+        labelStyle: TextStyle(
+          color: isSelected ? Colors.white : AppTheme.textPrimary,
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+        ),
+        onSelected: (_) {
+          setState(() => _selectedFilter = value);
+          _loadPartnerStations();
+        },
+      ),
+    );
   }
 
   Future<void> _fetchStations(
@@ -1691,6 +2130,12 @@ class _MapScreenState extends State<MapScreen> {
         title: const Text('Find Gas Refill Stations'),
         actions: [
           IconButton(
+            key: const Key('map-pin-station-button'),
+            tooltip: 'Pin Station Location & Price',
+            icon: const Icon(Icons.pin_drop_rounded),
+            onPressed: _quickPinStation,
+          ),
+          IconButton(
             key: const Key('map-register-plant-button'),
             tooltip: 'Register your Gas Plant',
             icon: const Icon(Icons.add_business_rounded),
@@ -1713,13 +2158,31 @@ class _MapScreenState extends State<MapScreen> {
             },
             onCameraIdle: _loadPartnerStationsInView,
           ),
+          // Filter Chips bar
+          Positioned(
+            top: 12,
+            left: 12,
+            right: 12,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildFilterChip('all', 'All Stations', Icons.local_gas_station_rounded),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('open', 'In Stock (Open)', Icons.check_circle_outline_rounded),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('lowest_price', 'Lowest Price', Icons.sell_outlined),
+                ],
+              ),
+            ),
+          ),
           if (_stations.isNotEmpty && !_locLoading)
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
               child: SizedBox(
-                height: 212,
+                height: 248,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),

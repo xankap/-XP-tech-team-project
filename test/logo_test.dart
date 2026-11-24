@@ -29,7 +29,7 @@ void main() {
       // Landing page
       expect(find.text('Continue'), findsOneWidget);
       expect(_logoImage(), findsOneWidget, reason: 'landing @ $size');
-      expect(find.byIcon(Icons.local_gas_station_rounded), findsNothing);
+      expect(find.byKey(const Key('landing-gas-station-portal-button')), findsOneWidget);
 
       // Greeting page
       await tester.tap(find.text('Continue'));

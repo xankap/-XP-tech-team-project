@@ -3,7 +3,11 @@ import 'package:xp_gas_monitor/services/xp_api.dart';
 
 void main() {
   PartnerStation station(String name,
-          {String? phone, bool? isAvailable, double? pricePerKg}) =>
+          {String? phone,
+          bool? isAvailable,
+          double? pricePerKg,
+          String? logoUrl,
+          String? about}) =>
       PartnerStation.fromJson({
         'id': 'r1',
         'name': name,
@@ -12,6 +16,8 @@ void main() {
         'longitude': 7.0498,
         if (isAvailable != null) 'isAvailable': isAvailable,
         if (pricePerKg != null) 'pricePerKg': pricePerKg,
+        if (logoUrl != null) 'logoUrl': logoUrl,
+        if (about != null) 'about': about,
       });
 
   group('PartnerStation badges and links (refill card)', () {
@@ -52,5 +58,30 @@ void main() {
 
   test('price per kg is decoded from the nearby API response', () {
     expect(station('A', pricePerKg: 1400).pricePerKg, 1400);
+  });
+
+  test('cylinder refill prices calculate correctly', () {
+    final s = station('A', pricePerKg: 1400);
+    expect(s.refillCost(6), 8400);
+    expect(s.formatRefillPrice(6), '₦8400');
+    expect(s.refillCost(12.5), 17500);
+    expect(s.formatRefillPrice(12.5), '₦17500');
+    expect(s.refillCost(25), 35000);
+    expect(s.formatRefillPrice(25), '₦35000');
+    expect(s.refillCost(50), 70000);
+    expect(s.formatRefillPrice(50), '₦70000');
+
+    final noPrice = station('A');
+    expect(noPrice.refillCost(12.5), isNull);
+    expect(noPrice.formatRefillPrice(12.5), 'Price on request');
+  });
+
+  test('logo and about decode from the nearby API response', () {
+    final s = station('A',
+        logoUrl: 'https://cdn.example/logo.png', about: 'Family-run plant.');
+    expect(s.logoUrl, 'https://cdn.example/logo.png');
+    expect(s.about, 'Family-run plant.');
+    expect(station('A').logoUrl, isNull);
+    expect(station('A').about, isNull);
   });
 }

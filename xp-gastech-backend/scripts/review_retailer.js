@@ -114,12 +114,14 @@ function printRow(r) {
   console.log(`  ${r.phone_e164} | ${r.address_line}${r.city_lga ? `, ${r.city_lga}` : ''}${r.state ? `, ${r.state}` : ''}`);
   console.log(`  ${Number(r.latitude).toFixed(6)}, ${Number(r.longitude).toFixed(6)} | created ${r.created_at.toISOString()}`);
   if (r.status_reason) console.log(`  reason: ${r.status_reason}`);
+  if (r.about) console.log(`  about: ${r.about}`);
+  if (r.logo_url) console.log(`  logo: ${r.logo_url}`);
 }
 
 async function listRetailers(client, { status, limit }) {
   const { rows } = await client.query(
     `select id, name, phone_e164, address_line, state, city_lga, latitude, longitude,
-            is_available, status, status_reason, created_at
+            is_available, status, status_reason, about, logo_url, created_at
        from public.retailers where status = $1 order by created_at limit $2`,
     [status, limit]
   );
@@ -143,7 +145,7 @@ async function reviewRetailer(client, { id, decision, reason, by }) {
     `update public.retailers set status = $1, status_reason = $2, reviewed_by = $3, reviewed_at = now()
      where id = $4
      returning id, name, phone_e164, address_line, state, city_lga, latitude, longitude,
-               is_available, status, status_reason, created_at, app_user_id`,
+               is_available, status, status_reason, about, logo_url, created_at, app_user_id`,
     [decision, reason, by, id]
   );
   if (!rows[0]) {

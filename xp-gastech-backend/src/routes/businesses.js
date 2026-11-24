@@ -56,6 +56,22 @@ router.put('/me', writeLimiter, route(async (req, res) => {
   return res.json({ business: toBusiness(rows[0]) });
 }));
 
+// Quick location pin/update for business premises.
+router.post('/me/location', writeLimiter, route(async (req, res) => {
+  const b = req.body || {};
+  const lat = v.num(b.latitude ?? b.lat, 'latitude', { min: -90, max: 90 });
+  const lng = v.num(b.longitude ?? b.lng, 'longitude', { min: -180, max: 180 });
+  const { rows } = await pool.query(
+    `update public.businesses set
+       location = extensions.st_setsrid(extensions.st_makepoint($1::float8, $2::float8), 4326)::extensions.geography,
+       updated_at = now()
+     where app_user_id = $3 returning ${BIZ_COLUMNS}`,
+    [lng, lat, req.user.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'No business profile yet. Create profile via PUT /businesses/me first.' });
+  return res.json({ ok: true, business: toBusiness(rows[0]) });
+}));
+
 // Record one or more gas readings (single object or { readings: [...] }, max 200).
 router.post('/me/gas-readings', writeLimiter, route(async (req, res) => {
   const businessId = await myBusinessId(req.user.id);

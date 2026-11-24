@@ -101,3 +101,15 @@ powershell -ExecutionPolicy Bypass -File scripts\run_web.ps1
 
 Release web build is green (`flutter build web` → `✓ Built build\web`,
 verified 2026-11-08). Analyzer: 0 errors, 11 pre-existing infos/warnings.
+## 7. Station logos (Supabase Storage, one-time setup)
+
+The app lets stations upload a logo (POST /retailers/me/logo), shown on the
+consumer map next to the station name. Uploads need three one-time steps:
+
+1. Supabase dashboard -> SQL: run xp-gastech-backend/sql/010_retailer_logo_about.sql`n   (after 002..009). It adds logo_url + bout and extends 
+earby_retailers().
+2. Supabase dashboard -> Storage: create a PUBLIC bucket named etailer-logos.
+   Station files land at <userId>/logo.<jpg|png|webp> (one logo per station).
+3. Set SUPABASE_SERVICE_ROLE_KEY (Project Settings -> API, service_role key)
+   in the backend .env and on the Vercel backend project. Without it the
+   endpoint answers 503 and the app shows 'Logo uploads are not set up yet'.

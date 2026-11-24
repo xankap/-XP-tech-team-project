@@ -226,5 +226,36 @@ void main() {
       expect(body['isAvailable'], isTrue);
       expect(profile.isAvailable, isTrue);
     });
+
+    test('pinLocation posts coordinates and price to /retailers/me/pin', () async {
+      http.BaseRequest? seen;
+      final api = XpApi(
+          client: MockClient((req) async {
+        seen = req;
+        return http.Response(
+            '{"ok":true,"retailer":{"id":"ret-456","name":"TotalEnergies Plant","phone":"+2348099999999",'
+            '"address":"12 Station Road","latitude":6.4422,"longitude":7.5033,"pricePerKg":1450,"isAvailable":true,"status":"approved"}}',
+            200);
+      }));
+
+      final profile = await api.pinLocation(
+        latitude: 6.4422,
+        longitude: 7.5033,
+        pricePerKg: 1450,
+        isAvailable: true,
+      );
+
+      final req = seen! as http.Request;
+      expect(req.method, 'POST');
+      expect(req.url.path, '/retailers/me/pin');
+      expect(req.headers['Authorization'], 'Bearer test-token');
+      final body = jsonDecode(req.body) as Map<String, dynamic>;
+      expect(body['latitude'], 6.4422);
+      expect(body['longitude'], 7.5033);
+      expect(body['pricePerKg'], 1450);
+      expect(body['isAvailable'], isTrue);
+      expect(profile.status, 'approved');
+      expect(profile.pricePerKg, 1450);
+    });
   });
 }

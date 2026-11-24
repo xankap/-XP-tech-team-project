@@ -119,6 +119,62 @@ test('integration: register, PATCH /me, review -> nearby visibility', { skip: !D
   assert.equal(r.body.retailer.status, 'approved');
   assert.equal(r.body.retailer.pricePerKg, 1450);
 
+  // About blurb + logo round-trip (station stays approved throughout).
+  r = await call(owner, 'PATCH', '/retailers/me', { about: 'Family-run LPG refill plant with home delivery.' });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.retailer.status, 'approved');
+  assert.equal(r.body.retailer.about, 'Family-run LPG refill plant with home delivery.');
+  assert.equal((await nearby()).body.stations[0].about, 'Family-run LPG refill plant with home delivery.');
+
+  // Logo upload goes to Supabase Storage; here a fake storage server stands in.
+  const storageSeen = [];
+  const storage = require('node:http').createServer((req, res) => {
+    let seen = 0;
+    req.on('data', (c) => { seen += c.length; });
+    req.on('end', () => {
+      storageSeen.push({ method: req.method, url: req.url, auth: req.headers.authorization, type: req.headers['content-type'], bytes: seen });
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{}');
+    });
+  });
+  await new Promise((resolve) => storage.listen(0, '127.0.0.1', resolve));
+  t.after(() => storage.close());
+  const savedStorageUrl = process.env.SUPABASE_URL;
+  const savedStorageKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_URL = `http://127.0.0.1:${storage.address().port}`;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
+  t.after(() => {
+    if (savedStorageUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = savedStorageUrl;
+    if (savedStorageKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = savedStorageKey;
+  });
+
+  const tinyPng = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  r = await call(owner, 'POST', '/retailers/me/logo', { imageBase64: tinyPng, contentType: 'image/png' });
+  assert.equal(r.status, 200);
+  const expectedLogo = `${process.env.SUPABASE_URL}/storage/v1/object/public/retailer-logos/${owner.id}/logo.png`;
+  assert.equal(r.body.retailer.logoUrl, expectedLogo);
+  assert.equal(storageSeen[0].method, 'POST');
+  assert.ok(storageSeen[0].url.includes(`/storage/v1/object/retailer-logos/${owner.id}/logo.png`));
+  assert.equal(storageSeen[0].auth, 'Bearer test-service-key');
+  assert.equal(storageSeen[0].type, 'image/png');
+  assert.ok(storageSeen[0].bytes > 0);
+  assert.equal((await nearby()).body.stations[0].logoUrl, expectedLogo);
+
+  // Re-uploading with a different type replaces the logo; delete clears it.
+  const tinyJpg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('x'.repeat(64))]).toString('base64');
+  r = await call(owner, 'POST', '/retailers/me/logo', { imageBase64: tinyJpg, contentType: 'image/jpeg' });
+  assert.equal(r.status, 200);
+  assert.ok(r.body.retailer.logoUrl.endsWith('/logo.jpg'));
+  r = await call(owner, 'DELETE', '/retailers/me/logo');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.retailer.logoUrl, null);
+  assert.equal((await nearby()).body.stations[0].logoUrl, null);
+
+  // Bad uploads are rejected without touching the profile.
+  assert.equal((await call(owner, 'POST', '/retailers/me/logo', { imageBase64: tinyPng, contentType: 'image/gif' })).status, 400);
+  assert.equal((await call(owner, 'POST', '/retailers/me/logo', { contentType: 'image/png' })).status, 400);
   // rejecting excludes it again; rejections need a reason
   assert.equal((await call(admin, 'POST', `/retailers/${retailerId}/review`, { decision: 'rejected' })).status, 400);
   r = await call(admin, 'POST', `/retailers/${retailerId}/review`, { decision: 'rejected', reason: 'Test rejection' });
@@ -181,4 +237,63 @@ test('retailers validation: openingHours', () => {
 
   assert.throws(() => v.openingHours({ invalidDay: { open: '08:00', close: '18:00' } }), /unknown day/);
   assert.throws(() => v.openingHours({ mon: { open: '8am', close: '6pm' } }), /HH:MM/);
+});
+
+test('location ping payload validation', () => {
+  const validLat = v.num('4.8156', 'latitude', { min: -90, max: 90 });
+  const validLng = v.num('7.0498', 'longitude', { min: -180, max: 180 });
+  const validPrice = v.num(1450, 'pricePerKg', { min: 0, max: 1000000, optional: true });
+  assert.equal(validLat, 4.8156);
+  assert.equal(validLng, 7.0498);
+  assert.equal(validPrice, 1450);
+
+  assert.throws(() => v.num(-95, 'latitude', { min: -90, max: 90 }), /latitude must be a number between -90 and 90/);
+  assert.throws(() => v.num(190, 'longitude', { min: -180, max: 180 }), /longitude must be a number between -180 and 180/);
+  assert.throws(() => v.num(-10, 'pricePerKg', { min: 0, max: 1000000 }), /pricePerKg must be a number between 0 and 1000000/);
+});
+test('station logo upload validation', () => {
+  const logoStore = require('../src/services/logoStore');
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('fakepngdata')]);
+  const jpg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('fakejpgdata')]);
+  const webp = Buffer.concat([Buffer.from('RIFF', 'ascii'), Buffer.from([1, 2, 3, 4]), Buffer.from('WEBP', 'ascii'), Buffer.from('x')]);
+
+  assert.equal(logoStore.parseLogoUpload({ imageBase64: png.toString('base64'), contentType: 'image/png' }).ext, 'png');
+  assert.equal(logoStore.parseLogoUpload({ imageBase64: jpg.toString('base64'), contentType: 'image/jpeg' }).ext, 'jpg');
+  assert.equal(logoStore.parseLogoUpload({ imageBase64: webp.toString('base64'), contentType: 'image/webp' }).ext, 'webp');
+  const wrapped = logoStore.parseLogoUpload({ imageBase64: 'data:image/png;base64,' + png.toString('base64'), contentType: 'image/png' });
+  assert.deepEqual(wrapped.bytes, png);
+
+  assert.throws(() => logoStore.parseLogoUpload({ imageBase64: png.toString('base64'), contentType: 'image/gif' }), /contentType must be one of/);
+  assert.throws(() => logoStore.parseLogoUpload({ contentType: 'image/png' }), /imageBase64 is required/);
+  assert.throws(() => logoStore.parseLogoUpload({ imageBase64: '!!!not-base64!!!', contentType: 'image/png' }), /valid base64/);
+  assert.throws(() => logoStore.parseLogoUpload({ imageBase64: jpg.toString('base64'), contentType: 'image/png' }), /do not match contentType/);
+  const big = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(logoStore.MAX_BYTES)]);
+  assert.throws(() => logoStore.parseLogoUpload({ imageBase64: big.toString('base64'), contentType: 'image/png' }), /512KB or smaller/);
+
+  assert.equal(logoStore.objectPath('user-1', 'png'), 'user-1/logo.png');
+  assert.equal(logoStore.publicUrl('https://proj.supabase.co/', 'user-1/logo.png'),
+    'https://proj.supabase.co/storage/v1/object/public/retailer-logos/user-1/logo.png');
+
+  const savedUrl = process.env.SUPABASE_URL;
+  const savedKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  try {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    assert.equal(logoStore.isConfigured(), false);
+    process.env.SUPABASE_URL = 'https://proj.supabase.co';
+    assert.equal(logoStore.isConfigured(), false);
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+    assert.equal(logoStore.isConfigured(), true);
+  } finally {
+    if (savedUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = savedUrl;
+    if (savedKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = savedKey;
+  }
+});
+
+test('station about blurb validation', () => {
+  assert.equal(v.text('Family-run LPG plant.', 'about', { min: 2, max: 500, optional: true }), 'Family-run LPG plant.');
+  assert.equal(v.text('', 'about', { min: 2, max: 500, optional: true }), null);
+  assert.equal(v.text(undefined, 'about', { min: 2, max: 500, optional: true }), null);
+  assert.throws(() => v.text('x', 'about', { min: 2, max: 500, optional: true }), /about must be 2-500 characters/);
+  assert.throws(() => v.text('y'.repeat(501), 'about', { min: 2, max: 500, optional: true }), /about must be 2-500 characters/);
 });

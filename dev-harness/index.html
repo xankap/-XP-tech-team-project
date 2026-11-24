@@ -110,6 +110,9 @@
       <div class="field"><label>City / LGA</label><input id="rCity" placeholder="Ikeja"></div>
     </div>
     <div class="row" style="margin-top:8px">
+      <div class="field" style="flex:2"><label>About (shown on the consumer map)</label><input id="rAbout" maxlength="500" placeholder="Family-run plant, home delivery available"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
       <div class="field"><label>Latitude *</label><input id="rLat" inputmode="decimal" placeholder="6.4520"></div>
       <div class="field"><label>Longitude *</label><input id="rLng" inputmode="decimal" placeholder="7.5105"></div>
       <div class="field"><label>Availability</label><select id="rAvail"><option value="true">Open / in stock</option><option value="false">Closed / out of stock</option></select></div>
@@ -397,6 +400,7 @@ function retailerPayload(forRegister) {
   payload.longitude = parseFloat($('rLng').value);
   var price = parseFloat(String($('rPrice').value).replace(/,/g, ''));
   if (!isNaN(price)) payload.pricePerKg = price;
+  if ($('rAbout').value.trim()) payload.about = $('rAbout').value.trim();
   if (!forRegister) payload.isAvailable = $('rAvail').value === 'true';
   return payload;
 }
@@ -410,6 +414,7 @@ function fillRetailerForm(r) {
   $('rLat').value = r.latitude;
   $('rLng').value = r.longitude;
   $('rPrice').value = (r.pricePerKg === null || r.pricePerKg === undefined) ? '' : r.pricePerKg;
+  $('rAbout').value = r.about || '';
   $('rAvail').value = r.isAvailable ? 'true' : 'false';
 }
 
@@ -422,6 +427,8 @@ function renderRetailerStatus(r) {
     ((r.pricePerKg === null || r.pricePerKg === undefined)
       ? '' : ' · ₦' + Number(r.pricePerKg).toFixed(2) + '/kg') +
     ' · ' + (r.isAvailable ? 'OPEN' : 'CLOSED') +
+    (r.about ? '<br>' + esc(r.about) : '') +
+    (r.logoUrl ? '<br><a href="' + esc(r.logoUrl) + '" target="_blank" rel="noopener">View logo</a>' : '') +
     (r.statusReason ? '<br>Reviewer note: ' + esc(r.statusReason) : ''),
     r.status === 'approved' ? 'ok' : 'muted');
 }
@@ -499,10 +506,14 @@ function stationCard(s) {
   var phoneBtn = s.phone
     ? '<a href="tel:' + esc(s.phone) + '">Call</a>'
     : '<a href="#" onclick="return false" style="opacity:.4">No phone</a>';
-  return '<div class="card"><b>' + esc(s.name) + '</b>' + statusPill + '<br>' +
+  var logo = s.logoUrl
+    ? '<img src="' + esc(s.logoUrl) + '" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px" onerror="this.remove()">'
+    : '';
+  var about = s.about ? '<br><span class="muted"><i>' + esc(s.about) + '</i></span>' : '';
+  return '<div class="card">' + logo + '<b>' + esc(s.name) + '</b>' + statusPill + '<br>' +
     '<span class="pill ' + (open ? 'open' : 'closed') + '">' + (open ? 'In Stock · Open' : 'Out of Stock · Closed') + '</span>' +
     (dist ? ' <span class="muted">' + esc(dist) + '</span>' : '') + '<br>' +
-    '<b>' + esc(price) + '</b><br><span class="muted">' + addr + '</span>' +
+    '<b>' + esc(price) + '</b><br><span class="muted">' + addr + '</span>' + about +
     '<div class="actions">' + phoneBtn +
     '<a href="https://www.google.com/maps/dir/?api=1&amp;destination=' +
     s.latitude + ',' + s.longitude + '" target="_blank" rel="noopener">Directions</a></div></div>';

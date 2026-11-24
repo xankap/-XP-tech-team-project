@@ -4,6 +4,7 @@ const { pool } = require('../db/pool');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const v = require('../validation');
 const { asyncRoute } = require('./http');
+const logoStore = require('../services/logoStore');
 
 const router = express.Router();
 const route = asyncRoute('Retailer request failed', 'retailers');
@@ -16,13 +17,15 @@ const writeLimiter = limiter(30);
 const nearbyLimiter = limiter(60, 60 * 1000);
 
 const OWN_COLUMNS = `id, name, phone_e164 as phone, address_line as address, state, city_lga,
-  latitude, longitude, is_available, opening_hours, price_per_kg, status, status_reason, created_at, updated_at`;
+  latitude, longitude, is_available, opening_hours, price_per_kg, logo_url, about,
+  status, status_reason, created_at, updated_at`;
 
 function toRetailer(r) {
   return {
     id: r.id, name: r.name, phone: r.phone, address: r.address, state: r.state, cityLga: r.city_lga,
     latitude: r.latitude, longitude: r.longitude, isAvailable: r.is_available,
     openingHours: r.opening_hours, pricePerKg: r.price_per_kg === null ? null : Number(r.price_per_kg),
+    logoUrl: r.logo_url ?? null, about: r.about ?? null,
     status: r.status, statusReason: r.status_reason,
     createdAt: r.created_at, updatedAt: r.updated_at,
   };
@@ -83,14 +86,30 @@ async function nearbyHandler(req, res) {
       [lat, lng, Math.round(radiusM), limit]
     );
     res.set('Cache-Control', 'public, max-age=30');
-    res.json({
-      stations: rows.map((r) => ({
-        id: r.id, name: r.name, phone: r.phone_e164, address: r.address_line,
-        latitude: r.latitude, longitude: r.longitude, isAvailable: r.is_available,
-        openingHours: r.opening_hours, pricePerKg: r.price_per_kg === null ? null : Number(r.price_per_kg),
-        distanceM: Math.round(r.distance_m),
-      })),
-    });
+    let stations = rows.map((r) => ({
+      id: r.id, name: r.name, phone: r.phone_e164, address: r.address_line,
+      latitude: r.latitude, longitude: r.longitude, isAvailable: r.is_available,
+      openingHours: r.opening_hours, pricePerKg: r.price_per_kg === null ? null : Number(r.price_per_kg),
+      logoUrl: r.logo_url ?? null, about: r.about ?? null,
+      distanceM: Math.round(r.distance_m),
+    }));
+
+    // Optional client-side filtering / sorting
+    if (q.inStock === 'true') {
+      stations = stations.filter((s) => s.isAvailable);
+    }
+    if (q.sortBy === 'price') {
+      stations.sort((a, b) => {
+        if (a.pricePerKg === null && b.pricePerKg === null) return 0;
+        if (a.pricePerKg === null) return 1;
+        if (b.pricePerKg === null) return -1;
+        return a.pricePerKg - b.pricePerKg;
+      });
+    } else if (q.sortBy === 'distance') {
+      stations.sort((a, b) => (a.distanceM ?? Infinity) - (b.distanceM ?? Infinity));
+    }
+
+    res.json({ stations });
   } catch (err) {
     require('./http').sendError(res, err, 'Could not load nearby retailers', 'retailers');
   }
@@ -111,10 +130,11 @@ router.post('/', writeLimiter, requireAuth, route(async (req, res) => {
     v.num(b.longitude, 'longitude', { min: -180, max: 180 }),
     v.openingHours(b.openingHours),
     v.num(b.pricePerKg, 'pricePerKg', { min: 0, max: 1000000, optional: true }),
+    v.text(b.about, 'about', { min: 2, max: 500, optional: true }),
   ];
   const { rows } = await pool.query(
-    `insert into public.retailers (app_user_id, name, phone_e164, address_line, state, city_lga, latitude, longitude, opening_hours, price_per_kg)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    `insert into public.retailers (app_user_id, name, phone_e164, address_line, state, city_lga, latitude, longitude, opening_hours, price_per_kg, about)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      on conflict (app_user_id) do nothing
      returning ${OWN_COLUMNS}`,
     values
@@ -132,6 +152,86 @@ router.get('/me', requireAuth, route(async (req, res) => {
   return res.json({ retailer: toRetailer(rows[0]) });
 }));
 
+// Pin or ping station coordinates and current price.
+// Designed for mobile/map/live-ping workflows. Preserves existing approval status
+// so active plants remain visible on the customer map immediately.
+async function pinLocationHandler(req, res) {
+  const b = req.body || {};
+  const lat = v.num(b.latitude ?? b.lat, 'latitude', { min: -90, max: 90 });
+  const lng = v.num(b.longitude ?? b.lng, 'longitude', { min: -180, max: 180 });
+
+  const { rows: existing } = await pool.query(
+    `select ${OWN_COLUMNS} from public.retailers where app_user_id = $1`,
+    [req.user.id]
+  );
+
+  if (!existing[0]) {
+    // If name and phone are provided, auto-create a profile on first pin
+    if (b.name && b.phone) {
+      const name = v.text(b.name, 'name', { min: 2, max: 120 });
+      const phone = v.phone(b.phone);
+      const address = v.text(b.address || 'Address pending verification', 'address', { min: 3, max: 200 });
+      const pricePerKg = v.num(b.pricePerKg, 'pricePerKg', { min: 0, max: 1000000, optional: true });
+      const isAvailable = b.isAvailable !== undefined ? v.bool(b.isAvailable, 'isAvailable') : true;
+      const about = v.text(b.about, 'about', { min: 2, max: 500, optional: true });
+      const { rows } = await pool.query(
+        `insert into public.retailers (app_user_id, name, phone_e164, address_line, latitude, longitude, price_per_kg, is_available, about)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         on conflict (app_user_id) do update set
+           latitude = excluded.latitude, longitude = excluded.longitude,
+           price_per_kg = coalesce(excluded.price_per_kg, public.retailers.price_per_kg),
+           is_available = coalesce(excluded.is_available, public.retailers.is_available),
+           updated_at = now()
+         returning ${OWN_COLUMNS}`,
+        [req.user.id, name, phone, address, lat, lng, pricePerKg, isAvailable, about]
+      );
+      try {
+        await pool.query("update public.users set role = 'retailer' where id = $1 and role = 'consumer'", [req.user.id]);
+      } catch (_) {}
+      return res.status(201).json({
+        ok: true,
+        message: 'Station registered and location pinned successfully.',
+        retailer: toRetailer(rows[0]),
+      });
+    }
+    return res.status(404).json({
+      error: 'No retailer profile yet. Register first via POST /retailers or include name and phone to initialize.',
+    });
+  }
+
+  const sets = ['latitude = $1', 'longitude = $2', 'updated_at = now()'];
+  const vals = [lat, lng];
+
+  if (b.pricePerKg !== undefined) {
+    vals.push(v.num(b.pricePerKg, 'pricePerKg', { min: 0, max: 1000000, optional: true }));
+    sets.push(`price_per_kg = $${vals.length}`);
+  }
+  if (b.isAvailable !== undefined) {
+    vals.push(v.bool(b.isAvailable, 'isAvailable'));
+    sets.push(`is_available = $${vals.length}`);
+  }
+  if (b.address !== undefined) {
+    vals.push(v.text(b.address, 'address', { min: 3, max: 200 }));
+    sets.push(`address_line = $${vals.length}`);
+  }
+
+  vals.push(req.user.id);
+  const { rows } = await pool.query(
+    `update public.retailers set ${sets.join(', ')} where app_user_id = $${vals.length} returning ${OWN_COLUMNS}`,
+    vals
+  );
+
+  return res.json({
+    ok: true,
+    message: 'Station location and pricing pinned successfully.',
+    retailer: toRetailer(rows[0]),
+  });
+}
+
+router.post('/me/location', writeLimiter, requireAuth, route(pinLocationHandler));
+router.post('/me/pin', writeLimiter, requireAuth, route(pinLocationHandler));
+router.post('/me/ping', writeLimiter, requireAuth, route(pinLocationHandler));
+
 // Owner updates availability / hours / contact details. Editing address or
 // location of an approved retailer sends it back to pending review.
 router.patch('/me', writeLimiter, requireAuth, route(async (req, res) => {
@@ -144,6 +244,7 @@ router.patch('/me', writeLimiter, requireAuth, route(async (req, res) => {
   if (b.name !== undefined) add('name', v.text(b.name, 'name', { min: 2, max: 120 }));
   if (b.phone !== undefined) add('phone_e164', v.phone(b.phone));
   if (b.pricePerKg !== undefined) add('price_per_kg', v.num(b.pricePerKg, 'pricePerKg', { min: 0, max: 1000000, optional: true }));
+  if (b.about !== undefined) add('about', v.text(b.about, 'about', { min: 2, max: 500, optional: true }));
   let relocate = false;
   if (b.address !== undefined) { add('address_line', v.text(b.address, 'address', { min: 3, max: 200 })); relocate = true; }
   if (b.state !== undefined) add('state', v.text(b.state, 'state', { min: 2, max: 80, optional: true }));
@@ -161,6 +262,36 @@ router.patch('/me', writeLimiter, requireAuth, route(async (req, res) => {
     vals
   );
   if (!rows[0]) return res.status(404).json({ error: 'No retailer profile yet' });
+  return res.json({ retailer: toRetailer(rows[0]) });
+}));
+
+// Station logo upload. Body: { imageBase64, contentType }. Stored in the
+// Supabase "retailer-logos" bucket; the public URL is saved as logo_url.
+// Needs a larger JSON limit than the global 32kb (see server.js).
+router.post('/me/logo', writeLimiter, requireAuth, route(async (req, res) => {
+  if (!logoStore.isConfigured()) {
+    return res.status(503).json({ error: 'Logo uploads are not set up yet. Try again later.' });
+  }
+  const { rows: existing } = await pool.query(
+    'select id from public.retailers where app_user_id = $1', [req.user.id]);
+  if (!existing[0]) return res.status(404).json({ error: 'No retailer profile yet' });
+  const parsed = logoStore.parseLogoUpload(req.body);
+  const { url } = await logoStore.uploadLogo({ userId: req.user.id, ...parsed });
+  const { rows } = await pool.query(
+    `update public.retailers set logo_url = $1 where app_user_id = $2 returning ${OWN_COLUMNS}`,
+    [url, req.user.id]
+  );
+  return res.json({ retailer: toRetailer(rows[0]) });
+}));
+
+// Removes the station logo (profile field cleared, stored file deleted best-effort).
+router.delete('/me/logo', writeLimiter, requireAuth, route(async (req, res) => {
+  const { rows } = await pool.query(
+    `update public.retailers set logo_url = null where app_user_id = $1 returning ${OWN_COLUMNS}`,
+    [req.user.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'No retailer profile yet' });
+  await logoStore.deleteLogo(req.user.id);
   return res.json({ retailer: toRetailer(rows[0]) });
 }));
 

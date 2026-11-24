@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xp_gas_monitor/screens/auth_flow.dart';
 import 'package:xp_gas_monitor/screens/station_auth_screen.dart';
 import 'package:xp_gas_monitor/services/auth_api.dart';
+import 'package:xp_gas_monitor/main.dart' show MapScreen;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -341,5 +342,27 @@ void main() {
 
     expect(signedIn, isTrue);
     expect(find.text('Gas Plant & Retailer Sign-up'), findsOneWidget);
+  });
+
+  testWidgets('MapScreen displays station location pin button and refill filter chips',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: MapScreen(),
+      ),
+    );
+    await tester.pump();
+
+    // Verify AppBar action buttons
+    expect(find.byKey(const Key('map-pin-station-button')), findsOneWidget);
+    expect(find.byKey(const Key('map-register-plant-button')), findsOneWidget);
+
+    // Verify filter chips
+    expect(find.text('All Stations'), findsOneWidget);
+    expect(find.text('In Stock (Open)'), findsOneWidget);
+    expect(find.text('Lowest Price'), findsOneWidget);
   });
 }

@@ -1,9 +1,13 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../services/xp_api.dart';
 import '../theme/app_theme.dart';
+import '../widgets/station_logo_avatar.dart';
 
 const List<String> _kNigerianStates = [
   'Abia',
@@ -67,6 +71,7 @@ class _RetailerRegistrationScreenState
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
   final _priceController = TextEditingController();
+  final _aboutController = TextEditingController();
 
   String? _selectedState;
   String _selectedFacilityType = 'LPG Refill Plant';
@@ -83,6 +88,7 @@ class _RetailerRegistrationScreenState
   bool _fetchingLocation = false;
   bool _isEditing = false;
   bool _togglingAvailability = false;
+  bool _uploadingLogo = false;
   String? _error;
   RetailerProfile? _currentProfile;
 
@@ -103,6 +109,7 @@ class _RetailerRegistrationScreenState
     _latController.dispose();
     _lngController.dispose();
     _priceController.dispose();
+    _aboutController.dispose();
     super.dispose();
   }
 
@@ -145,6 +152,7 @@ class _RetailerRegistrationScreenState
     _latController.text = p.latitude.toStringAsFixed(6);
     _lngController.text = p.longitude.toStringAsFixed(6);
     _priceController.text = p.pricePerKg?.toStringAsFixed(2) ?? '';
+    _aboutController.text = p.about ?? '';
 
     if (p.state != null && _kNigerianStates.contains(p.state)) {
       _selectedState = p.state;
@@ -235,34 +243,172 @@ class _RetailerRegistrationScreenState
     }
   }
 
+  /// Detects the logo image type from its magic bytes (the gallery file
+  /// extension is unreliable after on-device compression).
+  String _logoContentType(Uint8List bytes) {
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4e &&
+        bytes[3] == 0x47) {
+      return 'image/png';
+    }
+    if (bytes.length >= 12 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46 &&
+        bytes[8] == 0x57 &&
+        bytes[9] == 0x45 &&
+        bytes[10] == 0x42 &&
+        bytes[11] == 0x50) {
+      return 'image/webp';
+    }
+    return 'image/jpeg';
+  }
+
+  /// Picks a station logo from the gallery, compresses it on-device, and
+  /// uploads it. The logo appears on the consumer map next to the station.
+  Future<void> _pickAndUploadLogo() async {
+    if (_currentProfile == null) return;
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 80,
+      );
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      setState(() => _uploadingLogo = true);
+      final updated = await _api.uploadRetailerLogo(
+        bytes: bytes,
+        contentType: _logoContentType(bytes),
+      );
+      if (!mounted) return;
+      setState(() {
+        _currentProfile = updated;
+        _uploadingLogo = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Station logo updated.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _uploadingLogo = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not upload logo: $e')),
+      );
+    }
+  }
+
+  Future<void> _removeLogo() async {
+    if (_currentProfile == null) return;
+    setState(() => _uploadingLogo = true);
+    try {
+      final updated = await _api.deleteRetailerLogo();
+      if (!mounted) return;
+      setState(() {
+        _currentProfile = updated;
+        _uploadingLogo = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Station logo removed.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _uploadingLogo = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not remove logo: $e')),
+      );
+    }
+  }
+
   Future<void> _savePrice() async {
     final controller = TextEditingController(text: _priceController.text);
     final price = await showDialog<double>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Update price per kg'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration:
-              const InputDecoration(prefixText: '₦ ', suffixText: ' / kg'),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              final value =
-                  double.tryParse(controller.text.replaceAll(',', '').trim());
-              if (value == null || value < 0) return;
-              Navigator.pop(context, value);
-            },
-            child: const Text('Save Price'),
-          ),
-        ],
-      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            final entered =
+                double.tryParse(controller.text.replaceAll(',', '').trim()) ??
+                    0.0;
+            return AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.payments_outlined, color: AppTheme.corporateBlue),
+                  SizedBox(width: 8),
+                  Text('Update Gas Price'),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: controller,
+                      autofocus: true,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Price per kg',
+                        prefixText: '₦ ',
+                        suffixText: ' / kg',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (_) => setDialogState(() {}),
+                    ),
+                    if (entered > 0) ...[
+                      const SizedBox(height: 14),
+                      const Text('Estimated Cylinder Refill Rates:',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textSecondary)),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          children: [
+                            _calcRow('6 kg cylinder', entered * 6),
+                            const Divider(height: 10),
+                            _calcRow('12.5 kg cylinder', entered * 12.5),
+                            const Divider(height: 10),
+                            _calcRow('25 kg cylinder', entered * 25),
+                            const Divider(height: 10),
+                            _calcRow('50 kg cylinder', entered * 50),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel')),
+                FilledButton(
+                  onPressed: () {
+                    final value = double.tryParse(
+                        controller.text.replaceAll(',', '').trim());
+                    if (value == null || value < 0) return;
+                    Navigator.pop(context, value);
+                  },
+                  child: const Text('Save Price'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
     controller.dispose();
     if (price == null) return;
@@ -285,20 +431,141 @@ class _RetailerRegistrationScreenState
     }
   }
 
+  static Widget _calcRow(String label, double amount) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12)),
+        Text('₦${amount.toStringAsFixed(0)}',
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.corporateBlue)),
+      ],
+    );
+  }
+
+  Future<void> _quickPinLiveLocation() async {
+    setState(() => _fetchingLocation = true);
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception(
+            'Location services are disabled. Please enable GPS on your device.');
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Location permission was denied.');
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception(
+            'Location permissions are permanently denied. Please enable them in device settings.');
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+
+      final priceVal =
+          double.tryParse(_priceController.text.replaceAll(',', '').trim()) ??
+              _currentProfile?.pricePerKg;
+
+      final updated = await _api.pinLocation(
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        pricePerKg: priceVal,
+        isAvailable: true,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _currentProfile = updated;
+        _latController.text = pos.latitude.toStringAsFixed(6);
+        _lngController.text = pos.longitude.toStringAsFixed(6);
+        _fetchingLocation = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Station pinned to GPS (${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)})! Live on refill map.'),
+          backgroundColor: AppTheme.statusOK,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _fetchingLocation = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+      );
+    }
+  }
+
+  Future<void> _pinLocationFromMap() async {
+    var initial = const LatLng(4.8156, 7.0498);
+    if (_currentProfile != null) {
+      initial =
+          LatLng(_currentProfile!.latitude, _currentProfile!.longitude);
+    }
+    final picked = await _openMapPickerWithTarget(initial);
+    if (picked == null) return;
+
+    setState(() => _fetchingLocation = true);
+    try {
+      final priceVal =
+          double.tryParse(_priceController.text.replaceAll(',', '').trim()) ??
+              _currentProfile?.pricePerKg;
+
+      final updated = await _api.pinLocation(
+        latitude: picked.latitude,
+        longitude: picked.longitude,
+        pricePerKg: priceVal,
+        isAvailable: true,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _currentProfile = updated;
+        _latController.text = picked.latitude.toStringAsFixed(6);
+        _lngController.text = picked.longitude.toStringAsFixed(6);
+        _fetchingLocation = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Station pinned on map (${picked.latitude.toStringAsFixed(5)}, ${picked.longitude.toStringAsFixed(5)})!'),
+          backgroundColor: AppTheme.statusOK,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _fetchingLocation = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pin location: $e')),
+      );
+    }
+  }
+
   /// Opens a full-screen map to fine-tune the plant's gate/entrance pin.
-  /// Optional: if Maps is unavailable the manual fields and Auto-Detect GPS
-  /// below keep working as fallbacks.
-  Future<void> _openMapPicker() async {
-    var initial = const LatLng(4.8156, 7.0498); // Port Harcourt fallback
-    final lat = double.tryParse(_latController.text.trim());
-    final lng = double.tryParse(_lngController.text.trim());
-    if (lat != null &&
-        lat >= -90 &&
-        lat <= 90 &&
-        lng != null &&
-        lng >= -180 &&
-        lng <= 180) {
-      initial = LatLng(lat, lng);
+  Future<LatLng?> _openMapPickerWithTarget([LatLng? target]) async {
+    var initial = target ?? const LatLng(4.8156, 7.0498); // Port Harcourt fallback
+    if (target == null) {
+      final lat = double.tryParse(_latController.text.trim());
+      final lng = double.tryParse(_lngController.text.trim());
+      if (lat != null &&
+          lat >= -90 &&
+          lat <= 90 &&
+          lng != null &&
+          lng >= -180 &&
+          lng <= 180) {
+        initial = LatLng(lat, lng);
+      }
     }
     try {
       final picked = await Navigator.of(context).push<LatLng>(
@@ -374,20 +641,26 @@ class _RetailerRegistrationScreenState
           },
         ),
       );
-      if (!mounted || picked == null) return;
-      _latController.text = picked.latitude.toStringAsFixed(6);
-      _lngController.text = picked.longitude.toStringAsFixed(6);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pin location applied to coordinates.')),
-      );
+      return picked;
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) return null;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text(
                 'Map is unavailable — type coordinates manually or use Auto-Detect GPS.')),
       );
+      return null;
     }
+  }
+
+  Future<void> _openMapPicker() async {
+    final picked = await _openMapPickerWithTarget();
+    if (!mounted || picked == null) return;
+    _latController.text = picked.latitude.toStringAsFixed(6);
+    _lngController.text = picked.longitude.toStringAsFixed(6);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Pin location applied to coordinates.')),
+    );
   }
 
   Future<void> _submit() async {
@@ -439,6 +712,7 @@ class _RetailerRegistrationScreenState
           latitude: lat,
           longitude: lng,
           pricePerKg: pricePerKg,
+          about: _aboutController.text,
         );
       } else {
         // New registration
@@ -453,6 +727,7 @@ class _RetailerRegistrationScreenState
           latitude: lat,
           longitude: lng,
           pricePerKg: pricePerKg,
+          about: _aboutController.text,
         );
       }
 
@@ -699,11 +974,7 @@ class _RetailerRegistrationScreenState
                 children: [
                   Row(
                     children: [
-                      const CircleAvatar(
-                        backgroundColor: Color(0xFFEFF6FF),
-                        child: Icon(Icons.local_gas_station_rounded,
-                            color: AppTheme.corporateBlue),
-                      ),
+                      StationLogoAvatar(logoUrl: p.logoUrl, radius: 20),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
@@ -726,6 +997,30 @@ class _RetailerRegistrationScreenState
                     ],
                   ),
                   const Divider(height: 28),
+                  if (_uploadingLogo)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: LinearProgressIndicator(),
+                    )
+                  else
+                    Row(
+                      children: [
+                        TextButton.icon(
+                          onPressed: _pickAndUploadLogo,
+                          icon: const Icon(Icons.photo_camera_rounded, size: 18),
+                          label: Text(p.logoUrl == null
+                              ? 'Add station logo'
+                              : 'Change logo'),
+                        ),
+                        if (p.logoUrl != null)
+                          TextButton.icon(
+                            onPressed: _removeLogo,
+                            icon: const Icon(Icons.delete_outline_rounded,
+                                size: 18),
+                            label: const Text('Remove'),
+                          ),
+                      ],
+                    ),
                   _infoRow(Icons.phone_rounded, 'Contact Phone', p.phone),
                   _infoRow(Icons.location_on_rounded, 'Address', p.address),
                   if (p.cityLga != null || p.state != null)
@@ -739,6 +1034,10 @@ class _RetailerRegistrationScreenState
                       p.pricePerKg == null
                           ? 'Not set'
                           : '₦${p.pricePerKg!.toStringAsFixed(2)} / kg'),
+                  if (p.about != null && p.about!.isNotEmpty)
+                    _infoRow(Icons.info_outline_rounded, 'About', p.about!),
+                  if (p.about != null && p.about!.isNotEmpty)
+                    _infoRow(Icons.info_outline_rounded, 'About', p.about!),
                   if (p.createdAt != null)
                     _infoRow(Icons.calendar_today_rounded, 'Registered On',
                         '${p.createdAt!.day}/${p.createdAt!.month}/${p.createdAt!.year}'),
@@ -746,14 +1045,90 @@ class _RetailerRegistrationScreenState
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+
+          // Station Location Pin & Live Ping Card
+          Card(
+            elevation: 2,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.pin_drop_rounded,
+                          color: AppTheme.corporateBlue, size: 22),
+                      SizedBox(width: 8),
+                      Text('Station Map Pin & Location Ping',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Pin or ping your plant coordinates so nearby customers find you to fill their cooking gas. Keeps your station verified on the map.',
+                    style: TextStyle(
+                        fontSize: 12, color: AppTheme.textSecondary),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _fetchingLocation
+                              ? null
+                              : _quickPinLiveLocation,
+                          icon: _fetchingLocation
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.my_location_rounded,
+                                  size: 16),
+                          label: const Text('Pin Live GPS Location',
+                              style: TextStyle(fontSize: 12)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.corporateBlue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _pinLocationFromMap,
+                          icon: const Icon(Icons.map_rounded, size: 16),
+                          label: const Text('Pick on Map',
+                              style: TextStyle(fontSize: 12)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.corporateBlue,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
 
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: _submitting ? null : _savePrice,
               icon: const Icon(Icons.sell_outlined),
-              label: const Text('Save Price per Kg'),
+              label: const Text('Update Gas Price per Kg'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.corporateBlue,
                 foregroundColor: Colors.white,
@@ -935,6 +1310,30 @@ class _RetailerRegistrationScreenState
               if (v == null || v.trim().isEmpty) return null;
               final price = double.tryParse(v.replaceAll(',', '').trim());
               return price == null || price < 0 ? 'Enter a valid price' : null;
+            },
+          ),
+          const SizedBox(height: 16),
+
+          TextFormField(
+            controller: _aboutController,
+            maxLines: 3,
+            maxLength: 500,
+            decoration: InputDecoration(
+              labelText: 'About your station (optional)',
+              hintText: 'e.g. Family-run plant, home delivery available',
+              prefixIcon: const Icon(Icons.info_outline_rounded),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return null;
+              if (v.trim().length < 2) {
+                return 'About must be at least 2 characters';
+              }
+              if (v.trim().length > 500) {
+                return 'About cannot exceed 500 characters';
+              }
+              return null;
             },
           ),
           const SizedBox(height: 16),
