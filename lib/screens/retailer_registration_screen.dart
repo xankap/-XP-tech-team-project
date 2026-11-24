@@ -93,6 +93,40 @@ class _RetailerRegistrationScreenState
   String? _error;
   RetailerProfile? _currentProfile;
 
+  TimeOfDay _openTime = const TimeOfDay(hour: 8, minute: 0);
+  TimeOfDay _closeTime = const TimeOfDay(hour: 20, minute: 0);
+  bool _openSundays = true;
+
+  String _formatHhMm(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  TimeOfDay _parseHhMm(String? raw, TimeOfDay fallback) {
+    if (raw == null) return fallback;
+    final parts = raw.split(':');
+    if (parts.length != 2) return fallback;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null || h < 0 || h > 23 || m < 0 || m > 59) {
+      return fallback;
+    }
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  Map<String, dynamic> _buildOpeningHoursMap() {
+    final openStr = _formatHhMm(_openTime);
+    final closeStr = _formatHhMm(_closeTime);
+    final slot = {'open': openStr, 'close': closeStr};
+    return {
+      'mon': slot,
+      'tue': slot,
+      'wed': slot,
+      'thu': slot,
+      'fri': slot,
+      'sat': slot,
+      'sun': _openSundays ? slot : null,
+    };
+  }
+
   @override
   void initState() {
     super.initState();
@@ -154,6 +188,16 @@ class _RetailerRegistrationScreenState
     _lngController.text = p.longitude.toStringAsFixed(6);
     _priceController.text = p.pricePerKg?.toStringAsFixed(2) ?? '';
     _aboutController.text = p.about ?? '';
+
+    final hours = p.openingHours;
+    if (hours != null) {
+      final sample = hours['mon'] ?? hours['tue'] ?? hours['sat'];
+      if (sample is Map) {
+        _openTime = _parseHhMm(sample['open']?.toString(), _openTime);
+        _closeTime = _parseHhMm(sample['close']?.toString(), _closeTime);
+      }
+      _openSundays = hours['sun'] != null;
+    }
 
     if (p.state != null && _kNigerianStates.contains(p.state)) {
       _selectedState = p.state;
@@ -644,6 +688,7 @@ class _RetailerRegistrationScreenState
           latitude: lat,
           longitude: lng,
           pricePerKg: pricePerKg,
+          openingHours: _buildOpeningHoursMap(),
           about: _aboutController.text,
         );
       } else {
@@ -659,6 +704,7 @@ class _RetailerRegistrationScreenState
           latitude: lat,
           longitude: lng,
           pricePerKg: pricePerKg,
+          openingHours: _buildOpeningHoursMap(),
           about: _aboutController.text,
         );
       }
@@ -966,8 +1012,10 @@ class _RetailerRegistrationScreenState
                       p.pricePerKg == null
                           ? 'Not set'
                           : '₦${p.pricePerKg!.toStringAsFixed(2)} / kg'),
-                  if (p.about != null && p.about!.isNotEmpty)
-                    _infoRow(Icons.info_outline_rounded, 'About', p.about!),
+                  _infoRow(
+                      Icons.access_time_rounded,
+                      'Operating Hours',
+                      p.formattedHours ?? 'Not set'),
                   if (p.about != null && p.about!.isNotEmpty)
                     _infoRow(Icons.info_outline_rounded, 'About', p.about!),
                   if (p.createdAt != null)
@@ -1267,6 +1315,98 @@ class _RetailerRegistrationScreenState
               }
               return null;
             },
+          ),
+          const SizedBox(height: 16),
+
+          // Opening & Closing Time selector
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade400),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.access_time_rounded,
+                        size: 18, color: AppTheme.corporateBlue),
+                    SizedBox(width: 8),
+                    Text('Operating Hours (Opening & Closing Time)',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 14)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: _openTime,
+                          );
+                          if (picked != null) {
+                            setState(() => _openTime = picked);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Opening Time',
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                          ),
+                          child: Text(_openTime.format(context),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: _closeTime,
+                          );
+                          if (picked != null) {
+                            setState(() => _closeTime = picked);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Closing Time',
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                          ),
+                          child: Text(_closeTime.format(context),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Open on Sundays',
+                      style: TextStyle(fontSize: 13)),
+                  value: _openSundays,
+                  onChanged: (v) => setState(() => _openSundays = v),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
 

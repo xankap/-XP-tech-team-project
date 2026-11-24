@@ -223,6 +223,10 @@ router.patch('/retailers/:id', route(async (req, res) => {
     params.push(v.bool(b.isAvailable, 'isAvailable'));
     updates.push(`is_available = $${params.length}`);
   }
+  if (b.openingHours !== undefined) {
+    params.push(v.openingHours(b.openingHours));
+    updates.push(`opening_hours = $${params.length}`);
+  }
   if (b.about !== undefined) {
     params.push(v.text(b.about, 'about', { min: 1, max: 1000, optional: true }));
     updates.push(`about = $${params.length}`);

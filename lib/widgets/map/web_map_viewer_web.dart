@@ -116,6 +116,7 @@ class _WebMapViewerState extends State<_WebMapViewer> {
               'isAvailable': s.isAvailable,
               'pricePerKg': s.pricePerKg,
               'address': s.address,
+              'formattedHours': s.formattedHours,
             })
         .toList();
 

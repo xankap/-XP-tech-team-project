@@ -136,6 +136,9 @@
         const badgeClass = s.isAvailable ? 'badge-open' : 'badge-closed';
         const badgeText = s.isAvailable ? '● In Stock · Open' : '○ Out of Stock';
         const priceText = s.pricePerKg != null ? `₦${Math.round(s.pricePerKg)} / kg` : 'Price on request';
+        const hoursHtml = s.formattedHours
+          ? `<div style="font-size:11px; color:#475569; margin-top:4px;">🕒 ${s.formattedHours}</div>`
+          : '';
 
         m.bindPopup(`
           <div class="station-popup">
@@ -143,6 +146,7 @@
             <span class="station-badge ${badgeClass}">${badgeText}</span>
             <div class="station-price">${priceText}</div>
             <div class="station-address">${s.address || 'Address on file'}</div>
+            ${hoursHtml}
           </div>
         `);
 

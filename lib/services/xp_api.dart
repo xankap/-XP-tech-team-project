@@ -41,6 +41,7 @@ class PartnerStation {
   final double? pricePerKg;
   final String? logoUrl;
   final String? about;
+  final Map<String, dynamic>? openingHours;
   const PartnerStation(
       {required this.id,
       required this.name,
@@ -52,7 +53,8 @@ class PartnerStation {
       this.isAvailable = true,
       this.pricePerKg,
       this.logoUrl,
-      this.about});
+      this.about,
+      this.openingHours});
 
   factory PartnerStation.fromJson(Map<String, dynamic> j) => PartnerStation(
         id: j['id'].toString(),
@@ -66,7 +68,12 @@ class PartnerStation {
         pricePerKg: (j['pricePerKg'] as num?)?.toDouble(),
         logoUrl: j['logoUrl']?.toString(),
         about: j['about']?.toString(),
+        openingHours: j['openingHours'] is Map
+            ? Map<String, dynamic>.from(j['openingHours'])
+            : null,
       );
+
+  String? get formattedHours => formatOpeningHoursSummary(openingHours);
 
   /// Short facility badge from the registration suffix, e.g.
   /// "Apex Energy (LPG Refill Plant)" -> "LPG Plant".
@@ -249,6 +256,49 @@ class RetailerProfile {
             ? DateTime.tryParse(j['updatedAt'].toString())
             : null,
       );
+
+  String? get formattedHours => formatOpeningHoursSummary(openingHours);
+}
+
+/// Formats an openingHours JSON map into a concise display string.
+String? formatOpeningHoursSummary(Map<String, dynamic>? hours) {
+  if (hours == null || hours.isEmpty) return null;
+  const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  final entries = <String, String>{};
+  for (final d in days) {
+    final val = hours[d];
+    if (val is Map && val['open'] != null && val['close'] != null) {
+      entries[d] = '${_fmt12h(val['open'].toString())} – ${_fmt12h(val['close'].toString())}';
+    }
+  }
+  if (entries.isEmpty) return null;
+  final unique = entries.values.toSet();
+  if (unique.length == 1) {
+    final range = unique.first;
+    if (entries.length == 7) return 'Daily: $range';
+    if (entries.length == 6 && !entries.containsKey('sun')) {
+      return 'Mon–Sat: $range';
+    }
+    if (entries.length == 5 &&
+        !entries.containsKey('sat') &&
+        !entries.containsKey('sun')) {
+      return 'Mon–Fri: $range';
+    }
+    return range;
+  }
+  return entries.values.first;
+}
+
+String _fmt12h(String hhmm) {
+  final parts = hhmm.split(':');
+  if (parts.length != 2) return hhmm;
+  final h = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  if (h == null || m == null) return hhmm;
+  final suffix = h >= 12 ? 'PM' : 'AM';
+  final h12 = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+  final minStr = m.toString().padLeft(2, '0');
+  return '$h12:$minStr $suffix';
 }
 
 /// Data API for xp-gastech-backend (retailers, business gas). Auth endpoints live in AuthApi.
@@ -474,6 +524,7 @@ class XpApi {
     required double latitude,
     required double longitude,
     double? pricePerKg,
+    Map<String, dynamic>? openingHours,
     String? about,
   }) async {
     final body = await _sendAuthed((h) => _client.post(
@@ -489,6 +540,7 @@ class XpApi {
             'latitude': latitude,
             'longitude': longitude,
             if (pricePerKg != null) 'pricePerKg': pricePerKg,
+            if (openingHours != null) 'openingHours': openingHours,
             if (about != null && about.trim().isNotEmpty)
               'about': about.trim(),
           }),

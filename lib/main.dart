@@ -1701,6 +1701,27 @@ class _MapScreenState extends State<MapScreen> {
                   ],
                 ],
               ),
+              if (s.formattedHours != null) ...[
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    const Icon(Icons.access_time_rounded,
+                        size: 13, color: AppTheme.textSecondary),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        s.formattedHours!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 6),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

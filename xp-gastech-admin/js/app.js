@@ -248,10 +248,12 @@ async function fetchStationList() {
         ? '<span style="color:#10b981;font-weight:600">● In Stock</span>'
         : '<span style="color:#ef4444;font-weight:600">● Out of Stock</span>';
 
+      const hoursSummary = formatOpeningHours(r.openingHours);
       tr.innerHTML = `
         <td>
           <strong>${escapeHtml(r.name)}</strong>
           <br><small class="text-muted">${escapeHtml(r.address || '')}, ${escapeHtml(r.state || '')}</small>
+          ${hoursSummary ? `<br><small style="color:var(--primary);font-weight:600">🕒 ${escapeHtml(hoursSummary)}</small>` : ''}
         </td>
         <td>${escapeHtml(r.phone || 'N/A')}</td>
         <td><strong>₦${r.pricePerKg ? r.pricePerKg.toLocaleString() : '---'}</strong> / kg</td>
@@ -286,6 +288,19 @@ window.inspectRetailer = async function(id) {
     const p = retailer.pricePerKg || 0;
     document.getElementById('calc-6kg').textContent = p ? `₦${(p * 6).toLocaleString()}` : '---';
     document.getElementById('calc-12kg').textContent = p ? `₦${(p * 12.5).toLocaleString()}` : '---';
+
+    // Operating hours
+    const hoursEl = document.getElementById('modal-station-hours');
+    const formattedHours = formatOpeningHours(retailer.openingHours);
+    if (hoursEl) hoursEl.textContent = formattedHours || 'Not set';
+
+    const openInput = document.getElementById('modal-edit-open-time');
+    const closeInput = document.getElementById('modal-edit-close-time');
+    const sunInput = document.getElementById('modal-edit-open-sunday');
+    const sampleSlot = retailer.openingHours?.mon || retailer.openingHours?.tue || retailer.openingHours?.sat;
+    if (openInput) openInput.value = sampleSlot?.open || '08:00';
+    if (closeInput) closeInput.value = sampleSlot?.close || '20:00';
+    if (sunInput) sunInput.checked = retailer.openingHours ? Boolean(retailer.openingHours.sun) : true;
 
     // WhatsApp / Call links
     const phoneClean = (retailer.phone || '').replace(/[^0-9]/g, '');
@@ -379,10 +394,12 @@ async function loadMap() {
         fillOpacity: 0.85,
       }).addTo(leafletMap);
 
+      const hoursStr = formatOpeningHours(r.openingHours);
       circle.bindPopup(`
         <div style="font-family:system-ui;min-width:180px">
           <h4 style="margin:0 0 4px 0;font-size:14px;color:#0f172a">${escapeHtml(r.name)}</h4>
           <p style="margin:0 0 6px 0;font-size:12px;color:#64748b">${escapeHtml(r.address || '')}</p>
+          ${hoursStr ? `<p style="margin:0 0 6px 0;font-size:11px;color:#475569;font-weight:600">🕒 ${escapeHtml(hoursStr)}</p>` : ''}
           <div style="margin-bottom:8px">
             <span style="font-weight:700;color:#0053BA">₦${r.pricePerKg ? r.pricePerKg.toLocaleString() : '---'} / kg</span>
             <span style="font-size:11px;padding:2px 6px;border-radius:4px;margin-left:6px;background:${color}22;color:${color};font-weight:700">${r.status}</span>
@@ -629,6 +646,29 @@ function initModals() {
     btn.onclick = () => closeModal();
   });
 
+  // Save Operating Hours
+  document.getElementById('btn-save-station-hours')?.addEventListener('click', async () => {
+    if (!currentRetailer) return;
+    const open = document.getElementById('modal-edit-open-time')?.value || '08:00';
+    const close = document.getElementById('modal-edit-close-time')?.value || '20:00';
+    const openSun = document.getElementById('modal-edit-open-sunday')?.checked ?? true;
+    const slot = { open, close };
+    const openingHours = {
+      mon: slot, tue: slot, wed: slot, thu: slot, fri: slot, sat: slot,
+      sun: openSun ? slot : null,
+    };
+
+    try {
+      const { retailer } = await window.api.updateRetailer(currentRetailer.id, { openingHours });
+      currentRetailer = retailer;
+      document.getElementById('modal-station-hours').textContent = formatOpeningHours(retailer.openingHours) || 'Updated';
+      showToast('Operating hours saved!', 'success');
+      if (activeTab === 'stations') fetchStationList();
+    } catch (err) {
+      showToast(`Failed to save hours: ${err.message}`, 'error');
+    }
+  });
+
   // Review Plant Actions
   document.getElementById('btn-approve-plant')?.addEventListener('click', async () => {
     if (!currentRetailer) return;
@@ -732,4 +772,36 @@ function formatDate(isoStr) {
   if (!isoStr) return '---';
   const d = new Date(isoStr);
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function fmt12h(hhmm) {
+  if (!hhmm || !hhmm.includes(':')) return hhmm || '';
+  const [hStr, mStr] = hhmm.split(':');
+  const h = parseInt(hStr, 10);
+  if (Number.isNaN(h)) return hhmm;
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+  return `${h12}:${mStr} ${suffix}`;
+}
+
+function formatOpeningHours(hours) {
+  if (!hours || typeof hours !== 'object') return null;
+  const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  const entries = [];
+  for (const d of days) {
+    const val = hours[d];
+    if (val && val.open && val.close) {
+      entries.push({ d, text: `${fmt12h(val.open)} – ${fmt12h(val.close)}` });
+    }
+  }
+  if (entries.length === 0) return null;
+  const unique = [...new Set(entries.map((e) => e.text))];
+  if (unique.length === 1) {
+    const range = unique[0];
+    const hasSun = entries.some((e) => e.d === 'sun');
+    if (entries.length === 7) return `Daily: ${range}`;
+    if (entries.length === 6 && !hasSun) return `Mon–Sat: ${range}`;
+    return range;
+  }
+  return entries[0].text;
 }
