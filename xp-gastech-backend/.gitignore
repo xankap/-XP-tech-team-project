@@ -6,3 +6,5 @@ node_modules/
 backend.*.log
 npm-debug.log*
 .DS_Store
+.vercel
+.env*
