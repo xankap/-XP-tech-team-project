@@ -33,6 +33,8 @@ import 'services/session_controller.dart';
 import 'services/session_store.dart';
 import 'services/xp_api.dart';
 import 'widgets/business_gas_card.dart';
+import 'widgets/interactive_map_picker.dart';
+import 'widgets/map/web_map_viewer.dart';
 import 'widgets/retailer_quick_card.dart';
 import 'widgets/station_logo_avatar.dart';
 import 'package:flutter/services.dart';
@@ -1829,10 +1831,10 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _loadPartnerStations() => _fetchStations(
         () => _api.nearbyStations(
             _currentPos.latitude, _currentPos.longitude,
-            radiusKm: 10,
+            radiusKm: 50,
             sortBy: _selectedFilter == 'lowest_price' ? 'price' : 'distance',
             inStock: _selectedFilter == 'open' ? true : null),
-        emptyMessage: 'No approved XP Tech partner stations within 10 km yet.',
+        emptyMessage: 'No XP Tech partner stations within 50 km yet.',
       );
 
   /// Reloads stations for the visible map region (GasGrid bbox contract)
@@ -2147,17 +2149,57 @@ class _MapScreenState extends State<MapScreen> {
       ),
       body: Stack(
         children: [
-          GoogleMap(
-            initialCameraPosition:
-                CameraPosition(target: _currentPos, zoom: 14),
-            markers: _markers,
-            myLocationEnabled: true,
-            myLocationButtonEnabled: true,
-            onMapCreated: (ctrl) {
-              _mapCtrl = ctrl;
-            },
-            onCameraIdle: _loadPartnerStationsInView,
-          ),
+          if (kIsWeb)
+            buildWebMapViewer(
+              center: _currentPos,
+              stations: _stations,
+              onStationSelected: (id) {
+                final match = _stations.where((s) => s.id == id).toList();
+                if (match.isNotEmpty) {
+                  setState(() {
+                    _stations = [
+                      match.first,
+                      ..._stations.where((s) => s.id != id),
+                    ];
+                  });
+                }
+              },
+              onBoundsChanged: (south, west, north, east) {
+                _api
+                    .nearbyStationsByBbox(
+                      west: west,
+                      south: south,
+                      east: east,
+                      north: north,
+                      sortBy: _selectedFilter == 'lowest_price'
+                          ? 'price'
+                          : 'distance',
+                      inStock: _selectedFilter == 'open' ? true : null,
+                    )
+                    .then((stations) {
+                      if (mounted && stations.isNotEmpty) {
+                        setState(() {
+                          _stations = stations;
+                          _partnerError = null;
+                        });
+                      }
+                    })
+                    .catchError((_) {});
+              },
+              onLocateUser: () => _determinePosition(),
+            )
+          else
+            GoogleMap(
+              initialCameraPosition:
+                  CameraPosition(target: _currentPos, zoom: 14),
+              markers: _markers,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
+              onMapCreated: (ctrl) {
+                _mapCtrl = ctrl;
+              },
+              onCameraIdle: _loadPartnerStationsInView,
+            ),
           // Filter Chips bar
           Positioned(
             top: 12,

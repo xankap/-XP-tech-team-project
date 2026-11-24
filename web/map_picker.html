@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Pick Plant Location - XP Tech</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, html { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    #map { width: 100%; height: 100%; }
+    
+    /* Top Search & City Bar */
+    .top-controls {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .search-box {
+      pointer-events: auto;
+      display: flex;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+    }
+    .search-box input {
+      flex: 1;
+      padding: 12px 14px;
+      font-size: 14px;
+      border: none;
+      outline: none;
+    }
+    .search-box button {
+      background: #0053BA;
+      color: white;
+      border: none;
+      padding: 0 16px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .search-box button:hover { background: #003e8c; }
+
+    .city-chips {
+      pointer-events: auto;
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .city-chips::-webkit-scrollbar { display: none; }
+    .chip {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(4px);
+      border: 1px solid #cbd5e1;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #1e293b;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      transition: all 0.15s ease;
+    }
+    .chip:hover { background: #0053BA; color: white; border-color: #0053BA; }
+    .chip.active { background: #0053BA; color: white; border-color: #0053BA; }
+
+    /* Bottom Info & Action Card */
+    .bottom-card {
+      position: absolute;
+      bottom: 16px;
+      left: 12px;
+      right: 12px;
+      z-index: 1000;
+      background: white;
+      border-radius: 16px;
+      padding: 14px 16px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.22);
+      border: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .coords-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .coords-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #64748b;
+      letter-spacing: 0.5px;
+    }
+    .coords-val {
+      font-size: 13px;
+      font-weight: 700;
+      color: #0053BA;
+      font-family: monospace;
+    }
+    .hint-text {
+      font-size: 12px;
+      color: #475569;
+      line-height: 1.3;
+    }
+    .action-row {
+      display: flex;
+      gap: 10px;
+    }
+    .locate-btn {
+      background: #f1f5f9;
+      color: #0f172a;
+      border: 1px solid #cbd5e1;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .locate-btn:hover { background: #e2e8f0; }
+    .confirm-btn {
+      flex: 1;
+      background: #0053BA;
+      color: white;
+      border: none;
+      padding: 12px 18px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 3px 10px rgba(0,83,186,0.35);
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .confirm-btn:hover { background: #003e8c; }
+    
+    /* Pulse pin styling */
+    .custom-pin {
+      width: 32px;
+      height: 42px;
+      display: block;
+      transform: translate(-16px, -42px);
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Top Search & Quick Cities -->
+  <div class="top-controls">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Search street, town, or city in Nigeria..." />
+      <button onclick="searchLocation()">Search</button>
+    </div>
+    <div class="city-chips">
+      <button class="chip" onclick="jumpTo(4.8156, 7.0498, 'Port Harcourt')">Port Harcourt</button>
+      <button class="chip" onclick="jumpTo(6.5244, 3.3792, 'Lagos')">Lagos</button>
+      <button class="chip" onclick="jumpTo(9.0765, 7.3986, 'Abuja')">Abuja</button>
+      <button class="chip" onclick="jumpTo(7.3775, 3.9470, 'Ibadan')">Ibadan</button>
+      <button class="chip" onclick="jumpTo(12.0022, 8.5920, 'Kano')">Kano</button>
+      <button class="chip" onclick="jumpTo(6.3350, 5.6037, 'Benin City')">Benin City</button>
+      <button class="chip" onclick="jumpTo(5.5442, 5.7603, 'Warri')">Warri</button>
+    </div>
+  </div>
+
+  <!-- Bottom Card -->
+  <div class="bottom-card">
+    <div class="coords-row">
+      <span class="coords-title">Pinned Plant Location</span>
+      <span class="coords-val" id="coordsText">4.815600, 7.049800</span>
+    </div>
+    <div class="hint-text" id="statusHint">
+      📍 Tap anywhere on the map or drag the pin to your station entrance/gate.
+    </div>
+    <div class="action-row">
+      <button class="locate-btn" onclick="locateMe()" title="Find my current location">
+        🎯 My GPS
+      </button>
+      <button class="confirm-btn" onclick="confirmLocation()">
+        ✓ Use This Plant Location
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // Parse query params (e.g. ?lat=4.8156&lng=7.0498&name=Apex%20Gas)
+    const urlParams = new URLSearchParams(window.location.search);
+    let initialLat = parseFloat(urlParams.get('lat')) || 4.8156;
+    let initialLng = parseFloat(urlParams.get('lng')) || 7.0498;
+    const initialName = urlParams.get('name') || 'Gas Station';
+
+    // Initialize Leaflet map with OpenStreetMap tiles
+    const map = L.map('map', {
+      center: [initialLat, initialLng],
+      zoom: 15,
+      zoomControl: false
+    });
+
+    L.control.zoom({ position: 'topright' }).addTo(map);
+
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    // Custom SVG Pin Icon
+    const gasIcon = L.divIcon({
+      className: 'gas-pin-wrapper',
+      html: `
+        <svg viewBox="0 0 36 48" width="36" height="48" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));">
+          <path d="M18 0C8.06 0 0 8.06 0 18C0 31.5 18 48 18 48S36 31.5 36 18C36 8.06 27.94 0 18 0Z" fill="#0053BA"/>
+          <circle cx="18" cy="18" r="10" fill="white"/>
+          <path d="M14 13H22V23H14V13Z" fill="#0053BA"/>
+          <path d="M16 10H20V13H16V10Z" fill="#0053BA"/>
+          <circle cx="18" cy="18" r="3" fill="#FFB703"/>
+        </svg>
+      `,
+      iconSize: [36, 48],
+      iconAnchor: [18, 48],
+      popupAnchor: [0, -42]
+    });
+
+    // Create Draggable Marker
+    let marker = L.marker([initialLat, initialLng], {
+      draggable: true,
+      icon: gasIcon
+    }).addTo(map);
+
+    marker.bindPopup(`<b>${initialName}</b><br>Drag to fine-tune entrance`).openPopup();
+
+    function updateCoords(lat, lng) {
+      document.getElementById('coordsText').innerText = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
+    updateCoords(initialLat, initialLng);
+
+    marker.on('dragend', function(e) {
+      const pos = marker.getLatLng();
+      updateCoords(pos.lat, pos.lng);
+      document.getElementById('statusHint').innerText = `📍 Pinned at entrance (${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)})`;
+    });
+
+    map.on('click', function(e) {
+      marker.setLatLng(e.latlng);
+      updateCoords(e.latlng.lat, e.latlng.lng);
+      document.getElementById('statusHint').innerText = `📍 Location adjusted (${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)})`;
+    });
+
+    function jumpTo(lat, lng, name) {
+      map.setView([lat, lng], 15);
+      marker.setLatLng([lat, lng]);
+      updateCoords(lat, lng);
+      document.getElementById('statusHint').innerText = `📍 Centered on ${name}`;
+    }
+
+    function locateMe() {
+      if (!navigator.geolocation) {
+        alert('Geolocation is not supported by your browser.');
+        return;
+      }
+      document.getElementById('statusHint').innerText = '⏳ Detecting current GPS location...';
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          map.setView([lat, lng], 16);
+          marker.setLatLng([lat, lng]);
+          updateCoords(lat, lng);
+          document.getElementById('statusHint').innerText = `✓ Centered on your device GPS (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+        },
+        (err) => {
+          document.getElementById('statusHint').innerText = '⚠️ Could not get GPS. Please tap or search on the map.';
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+
+    function searchLocation() {
+      const q = document.getElementById('searchInput').value.trim();
+      if (!q) return;
+      document.getElementById('statusHint').innerText = `⏳ Searching "${q}"...`;
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=ng&limit=1`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.length > 0) {
+            const lat = parseFloat(data[0].lat);
+            const lng = parseFloat(data[0].lon);
+            map.setView([lat, lng], 15);
+            marker.setLatLng([lat, lng]);
+            updateCoords(lat, lng);
+            document.getElementById('statusHint').innerText = `✓ Found: ${data[0].display_name.split(',').slice(0,3).join(',')}`;
+          } else {
+            document.getElementById('statusHint').innerText = `⚠️ Location "${q}" not found. Try a major road or city.`;
+          }
+        })
+        .catch(() => {
+          document.getElementById('statusHint').innerText = '⚠️ Search error. Tap on the map to pin.';
+        });
+    }
+
+    document.getElementById('searchInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') searchLocation();
+    });
+
+    function confirmLocation() {
+      const pos = marker.getLatLng();
+      const payload = {
+        type: 'XP_MAP_LOCATION_PICKED',
+        latitude: pos.lat,
+        longitude: pos.lng,
+        lat: pos.lat,
+        lng: pos.lng
+      };
+
+      // Post message to parent window (Flutter Web)
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(payload, '*');
+      }
+
+      // If opened in a popup window
+      if (window.opener && window.opener !== window) {
+        window.opener.postMessage(payload, '*');
+        window.close();
+      }
+    }
+  </script>
+</body>
+</html>

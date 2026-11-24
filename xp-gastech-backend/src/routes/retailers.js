@@ -71,14 +71,14 @@ async function nearbyHandler(req, res) {
     const q = req.query;
     let lat;
     let lng;
-    let radiusM = 10000;
+    let radiusM = 50000;
     if (q.bbox !== undefined) {
       ({ lat, lng, radiusM } = bboxToCenterRadius(q.bbox));
     } else {
       lat = v.num(q.lat ?? q.latitude, 'lat', { min: -90, max: 90 });
       lng = v.num(q.lng ?? q.longitude, 'lng', { min: -180, max: 180 });
-      if (q.radius !== undefined) radiusM = v.num(q.radius, 'radius', { min: 100, max: 50000 });
-      else if (q.radiusKm !== undefined) radiusM = v.num(q.radiusKm, 'radiusKm', { min: 0.1, max: 50 }) * 1000;
+      if (q.radius !== undefined) radiusM = v.num(q.radius, 'radius', { min: 100, max: 100000 });
+      else if (q.radiusKm !== undefined) radiusM = v.num(q.radiusKm, 'radiusKm', { min: 0.1, max: 100 }) * 1000;
     }
     const limit = q.limit !== undefined ? Math.trunc(v.num(q.limit, 'limit', { min: 1, max: 100 })) : 50;
     const { rows } = await pool.query(
@@ -175,12 +175,13 @@ async function pinLocationHandler(req, res) {
       const isAvailable = b.isAvailable !== undefined ? v.bool(b.isAvailable, 'isAvailable') : true;
       const about = v.text(b.about, 'about', { min: 2, max: 500, optional: true });
       const { rows } = await pool.query(
-        `insert into public.retailers (app_user_id, name, phone_e164, address_line, latitude, longitude, price_per_kg, is_available, about)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `insert into public.retailers (app_user_id, name, phone_e164, address_line, latitude, longitude, price_per_kg, is_available, about, status)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'approved')
          on conflict (app_user_id) do update set
            latitude = excluded.latitude, longitude = excluded.longitude,
            price_per_kg = coalesce(excluded.price_per_kg, public.retailers.price_per_kg),
            is_available = coalesce(excluded.is_available, public.retailers.is_available),
+           status = 'approved',
            updated_at = now()
          returning ${OWN_COLUMNS}`,
         [req.user.id, name, phone, address, lat, lng, pricePerKg, isAvailable, about]
@@ -199,7 +200,12 @@ async function pinLocationHandler(req, res) {
     });
   }
 
-  const sets = ['latitude = $1', 'longitude = $2', 'updated_at = now()'];
+  const sets = [
+    'latitude = $1',
+    'longitude = $2',
+    "status = case when status = 'rejected' then 'rejected' else 'approved' end",
+    'updated_at = now()'
+  ];
   const vals = [lat, lng];
 
   if (b.pricePerKg !== undefined) {

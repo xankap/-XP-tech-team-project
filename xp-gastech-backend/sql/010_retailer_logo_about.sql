@@ -31,9 +31,9 @@ as $$
          r.logo_url, r.about,
          extensions.st_distance(r.location, o.g) as distance_m
   from public.retailers r, origin o
-  where r.status = 'approved'
+  where r.status in ('approved', 'pending')
     and p_lat between -90 and 90 and p_lng between -180 and 180
-    and extensions.st_dwithin(r.location, o.g, least(greatest(p_radius_m, 100), 50000))
+    and extensions.st_dwithin(r.location, o.g, least(greatest(p_radius_m, 100), 100000))
   order by r.location operator(extensions.<->) o.g
   limit least(greatest(p_limit, 1), 100);
 $$;

@@ -3,10 +3,11 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../services/xp_api.dart';
 import '../theme/app_theme.dart';
+import '../widgets/file_picker/file_picker.dart';
+import '../widgets/interactive_map_picker.dart';
 import '../widgets/station_logo_avatar.dart';
 
 const List<String> _kNigerianStates = [
@@ -272,14 +273,8 @@ class _RetailerRegistrationScreenState
   Future<void> _pickAndUploadLogo() async {
     if (_currentProfile == null) return;
     try {
-      final picked = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 80,
-      );
-      if (picked == null) return;
-      final bytes = await picked.readAsBytes();
+      final bytes = await pickImageBytes();
+      if (bytes == null) return;
       setState(() => _uploadingLogo = true);
       final updated = await _api.uploadRetailerLogo(
         bytes: bytes,
@@ -552,7 +547,7 @@ class _RetailerRegistrationScreenState
     }
   }
 
-  /// Opens a full-screen map to fine-tune the plant's gate/entrance pin.
+  /// Opens a full-screen interactive map to fine-tune the plant's gate/entrance pin.
   Future<LatLng?> _openMapPickerWithTarget([LatLng? target]) async {
     var initial = target ?? const LatLng(4.8156, 7.0498); // Port Harcourt fallback
     if (target == null) {
@@ -570,75 +565,12 @@ class _RetailerRegistrationScreenState
     try {
       final picked = await Navigator.of(context).push<LatLng>(
         MaterialPageRoute(
-          builder: (_) {
-            var current = initial;
-            return StatefulBuilder(
-              builder: (pageContext, setPageState) => Scaffold(
-                appBar: AppBar(
-                  title: const Text('Pick plant location'),
-                  backgroundColor: AppTheme.corporateBlue,
-                  foregroundColor: Colors.white,
-                ),
-                body: Stack(
-                  children: [
-                    GoogleMap(
-                      initialCameraPosition:
-                          CameraPosition(target: initial, zoom: 15),
-                      markers: {
-                        Marker(
-                          markerId: const MarkerId('plant-pin'),
-                          position: current,
-                          draggable: true,
-                          onDragEnd: (p) => setPageState(() => current = p),
-                        ),
-                      },
-                      onTap: (p) => setPageState(() => current = p),
-                      myLocationEnabled: false,
-                      zoomControlsEnabled: true,
-                    ),
-                    Positioned(
-                      left: 16,
-                      right: 16,
-                      top: 16,
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
-                          child: Text(
-                            'Tap or drag the pin to your refill gate/entrance.\n'
-                            '${current.latitude.toStringAsFixed(6)}, ${current.longitude.toStringAsFixed(6)}',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                bottomNavigationBar: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.of(pageContext).pop(current),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.corporateBlue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Text('Use this location',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
+          builder: (_) => InteractiveMapPickerScreen(
+            initialPosition: initial,
+            stationName: _nameController.text.trim().isNotEmpty
+                ? _nameController.text.trim()
+                : (_currentProfile?.name),
+          ),
         ),
       );
       return picked;
