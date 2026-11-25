@@ -8,6 +8,7 @@ import '../services/xp_api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/file_picker/file_picker.dart';
 import '../widgets/interactive_map_picker.dart';
+import '../widgets/responsive_layout.dart';
 import '../widgets/station_logo_avatar.dart';
 
 const List<String> _kNigerianStates = [
@@ -769,13 +770,20 @@ class _RetailerRegistrationScreenState
             ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? _buildErrorView()
-              : _currentProfile != null && !_isEditing
-                  ? _buildExistingProfileView(_currentProfile!)
-                  : _buildRegistrationForm(),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: XpLayout.isDesktop(context) ? 920 : double.infinity,
+          ),
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+                  ? _buildErrorView()
+                  : _currentProfile != null && !_isEditing
+                      ? _buildExistingProfileView(_currentProfile!)
+                      : _buildRegistrationForm(),
+        ),
+      ),
     );
   }
 

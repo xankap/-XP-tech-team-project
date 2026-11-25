@@ -6,6 +6,7 @@ import '../services/auth_api.dart';
 import '../services/google_auth.dart';
 import '../theme/app_theme.dart';
 import '../widgets/gauge_loading.dart';
+import '../widgets/responsive_layout.dart';
 import '../widgets/xp_logo.dart';
 import 'auth_flow.dart';
 import 'retailer_registration_screen.dart';
@@ -785,8 +786,29 @@ class _GasStationAuthScreenState extends State<GasStationAuthScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      appBar: AppBar(
+    return XpDesktopSplitAuthShell(
+      heroTitle: 'XP GasTech\nPartner Plant Portal',
+      heroSubtitle:
+          'Manage your LPG refill station on the live map, update daily prices per kg, set opening & closing hours, and connect directly with nearby customers.',
+      highlights: const [
+        (
+          icon: Icons.pin_drop_rounded,
+          title: 'Live Map Visibility',
+          subtitle: 'Pin your exact entrance coordinates so customers find you.',
+        ),
+        (
+          icon: Icons.payments_outlined,
+          title: 'Instant Price & Stock Updates',
+          subtitle: 'Update ₦/kg rates and In-Stock status in one tap.',
+        ),
+        (
+          icon: Icons.access_time_rounded,
+          title: 'Operating Hours Control',
+          subtitle: 'Publish your daily opening & closing schedule.',
+        ),
+      ],
+      child: Scaffold(
+        appBar: AppBar(
         title: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -864,6 +886,7 @@ class _GasStationAuthScreenState extends State<GasStationAuthScreen> {
             ),
         ],
       ),
+    ),
     );
   }
 }

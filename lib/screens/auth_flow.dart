@@ -10,6 +10,7 @@ import '../services/session_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/gauge_loading.dart';
 import '../widgets/google_sign_in_button.dart';
+import '../widgets/responsive_layout.dart';
 import '../widgets/xp_logo.dart';
 import 'retailer_registration_screen.dart';
 import 'station_auth_screen.dart';
@@ -173,6 +174,83 @@ class _LandingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (XpLayout.isDesktop(context)) {
+      return XpDesktopSplitAuthShell(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Container(
+            padding: const EdgeInsets.all(36),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF141E33) : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Center(child: XpLogo(width: 130)),
+                const SizedBox(height: 22),
+                Text(
+                  'Welcome to XP GasTech',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Sign in or create an account to monitor your gas cylinder or locate verified refill plants.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 28),
+                ElevatedButton(
+                  onPressed: onContinue,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.corporateBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('Continue',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                ),
+                if (onOpenStationPortal != null) ...[
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    key: const Key('landing-gas-station-portal-button'),
+                    onPressed: onOpenStationPortal,
+                    icon: const Icon(Icons.local_gas_station_rounded, size: 20),
+                    label: const Text(
+                      'Own a Gas Plant / Refill Station? Sign Up Here',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.statusOK,
+                      side: BorderSide(
+                          color: AppTheme.statusOK.withValues(alpha: 0.45)),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -1229,8 +1307,9 @@ class _LoginPageState extends State<LoginPage> {
       body = _signupPhoneForm(context);
     }
 
-    return Scaffold(
-      body: Stack(
+    return XpDesktopSplitAuthShell(
+      child: Scaffold(
+        body: Stack(
         children: [
           SafeArea(
             child: Center(
@@ -1303,6 +1382,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
         ],
       ),
+    ),
     );
   }
 }

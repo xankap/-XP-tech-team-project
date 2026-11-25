@@ -35,6 +35,7 @@ import 'services/xp_api.dart';
 import 'widgets/business_gas_card.dart';
 import 'widgets/interactive_map_picker.dart';
 import 'widgets/map/web_map_viewer.dart';
+import 'widgets/responsive_layout.dart';
 import 'widgets/retailer_quick_card.dart';
 import 'widgets/station_logo_avatar.dart';
 import 'package:flutter/services.dart';
@@ -653,33 +654,217 @@ class _MainShellState extends State<MainShell> {
             session: widget.session),
       ];
 
+  void _selectTab(int i) {
+    if ((i == 1 || i == 2) && !_AppState.of(context).demoBusinessAccess) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Sign in or enable developer demo access in Settings to use this feature.')));
+      return;
+    }
+    setState(() => _index = i);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final wide = width >= 900;
+    final isDesktop = XpLayout.isDesktop(context);
 
-    final content = Scaffold(
-      body: IndexedStack(index: _index, children: _screens),
-      bottomNavigationBar: _buildNav(),
-    );
+    if (!isDesktop) {
+      return Scaffold(
+        body: IndexedStack(index: _index, children: _screens),
+        bottomNavigationBar: _buildNav(),
+      );
+    }
 
-    if (!wide) return content;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sidebarBg = isDark ? const Color(0xFF0E172B) : Colors.white;
+    final borderColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0);
+    final navItems = const [
+      (icon: Icons.speed_rounded, label: 'Dashboard'),
+      (icon: Icons.location_on_rounded, label: 'Find Refill'),
+      (icon: Icons.bar_chart_rounded, label: 'History'),
+      (icon: Icons.settings_rounded, label: 'Settings'),
+    ];
 
-    // Keep the same visual language on desktop/web by centering a phone-like frame
-    return ColoredBox(
-      color: const Color(0xFFE8EEF8),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 960),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: Material(
-              elevation: 10,
-              shadowColor: AppTheme.corporateBlue.withValues(alpha: 0.25),
-              child: content,
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0A1120) : const Color(0xFFF4F7FC),
+      body: Row(
+        children: [
+          Container(
+            width: 248,
+            decoration: BoxDecoration(
+              color: sidebarBg,
+              border: Border(right: BorderSide(color: borderColor)),
+            ),
+            child: SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [AppTheme.corporateBlue, Color(0xFF0284C7)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.local_fire_department_rounded,
+                              color: Colors.white, size: 22),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'XP GasTech',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                  color: isDark ? Colors.white : AppTheme.corporateBlue,
+                                ),
+                              ),
+                              Text(
+                                'Web Portal',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? Colors.white60 : AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Divider(height: 1, color: borderColor),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: navItems.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 4),
+                      itemBuilder: (context, idx) {
+                        final item = navItems[idx];
+                        final selected = _index == idx;
+                        return Material(
+                          color: selected
+                              ? AppTheme.corporateBlue.withValues(alpha: isDark ? 0.25 : 0.10)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => _selectTab(idx),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 12),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    item.icon,
+                                    size: 21,
+                                    color: selected
+                                        ? (isDark ? const Color(0xFF60A5FA) : AppTheme.corporateBlue)
+                                        : (isDark ? Colors.white70 : AppTheme.textSecondary),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    item.label,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                                      color: selected
+                                          ? (isDark ? Colors.white : AppTheme.corporateBlue)
+                                          : (isDark ? Colors.white70 : AppTheme.textSecondary),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Divider(height: 1, color: borderColor),
+                  Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (widget.accountLabel != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF16223B)
+                                  : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 14,
+                                  backgroundColor: AppTheme.corporateBlue,
+                                  child: Text(
+                                    widget.accountLabel!.isNotEmpty
+                                        ? widget.accountLabel![0].toUpperCase()
+                                        : 'U',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    widget.accountLabel!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? Colors.white : AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (widget.onLogout != null) ...[
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed: widget.onLogout,
+                            icon: const Icon(Icons.logout_rounded, size: 16),
+                            label: const Text('Sign Out'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppTheme.statusCritical,
+                              side: BorderSide(
+                                  color: AppTheme.statusCritical.withValues(alpha: 0.35)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
+          Expanded(
+            child: IndexedStack(index: _index, children: _screens),
+          ),
+        ],
       ),
     );
   }
@@ -700,16 +885,7 @@ class _MainShellState extends State<MainShell> {
         top: false,
         child: BottomNavigationBar(
           currentIndex: _index,
-          onTap: (i) {
-            if ((i == 1 || i == 2) &&
-                !_AppState.of(context).demoBusinessAccess) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text(
-                      'Sign in or enable developer demo access in Settings to use this feature.')));
-              return;
-            }
-            setState(() => _index = i);
-          },
+          onTap: _selectTab,
           items: const [
             BottomNavigationBarItem(
                 icon: Icon(Icons.speed_rounded), label: 'Dashboard'),
@@ -783,46 +959,177 @@ class _DashboardScreenState extends State<DashboardScreen>
         if (bt.state == BtState.connected) {
           NotificationService.evaluate(reading); // [FIX-09] no context arg
         }
-        return Scaffold(
-          backgroundColor: AppTheme.offWhite,
-          body: CustomScrollView(
-            slivers: [
-              _buildAppBar(bt, reading),
-              SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    if (widget.accountLabel != null &&
-                        widget.accountLabel!.trim().isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Hi, ${widget.accountLabel}',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.corporateBlue,
-                                ),
+        final isDesktop = XpLayout.isDesktop(context);
+        if (!isDesktop) {
+          return Scaffold(
+            backgroundColor: AppTheme.offWhite,
+            body: CustomScrollView(
+              slivers: [
+                _buildAppBar(bt, reading),
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      if (widget.accountLabel != null &&
+                          widget.accountLabel!.trim().isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Hi, ${widget.accountLabel}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.corporateBlue,
+                                  ),
+                            ),
                           ),
                         ),
-                      ),
-                    const SizedBox(height: 8),
-                    const RetailerQuickCard(),
-                    _buildGaugeCard(reading, bt.state),
-                    const SizedBox(height: 4),
-                    _buildStatusRow(reading, bt.state),
-                    const SizedBox(height: 4),
-                    _buildMetricsRow(reading, bt.state),
-                    const SizedBox(height: 16),
-                    if (bt.state != BtState.connected) _buildConnectPrompt(bt),
+                      const SizedBox(height: 8),
+                      const RetailerQuickCard(),
+                      _buildGaugeCard(reading, bt.state),
+                      const SizedBox(height: 4),
+                      _buildStatusRow(reading, bt.state),
+                      const SizedBox(height: 4),
+                      _buildMetricsRow(reading, bt.state),
+                      const SizedBox(height: 16),
+                      if (bt.state != BtState.connected) _buildConnectPrompt(bt),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Desktop Dashboard: 2-Column Adaptive Workspace
+        final connected = bt.state == BtState.connected;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return Scaffold(
+          backgroundColor:
+              isDark ? const Color(0xFF0A1120) : const Color(0xFFF4F7FC),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1180),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Desktop Top Header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.accountLabel != null &&
+                                      widget.accountLabel!.trim().isNotEmpty
+                                  ? 'Welcome back, ${widget.accountLabel}'
+                                  : 'Digital Gas Meter Dashboard',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.5,
+                                color: isDark
+                                    ? Colors.white
+                                    : AppTheme.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Live cylinder telemetry, safety monitoring, and refill readiness',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                color: isDark
+                                    ? Colors.white60
+                                    : AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: connected
+                                ? AppTheme.statusOK.withValues(alpha: 0.12)
+                                : AppTheme.corporateBlue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: connected
+                                  ? AppTheme.statusOK.withValues(alpha: 0.4)
+                                  : AppTheme.corporateBlue
+                                      .withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                connected
+                                    ? Icons.bluetooth_connected_rounded
+                                    : Icons.bluetooth_searching_rounded,
+                                size: 16,
+                                color: connected
+                                    ? AppTheme.statusOK
+                                    : AppTheme.corporateBlue,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                connected ? 'Meter Connected' : 'Meter Offline',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                  color: connected
+                                      ? AppTheme.statusOK
+                                      : AppTheme.corporateBlue,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 24),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 6,
+                          child: Column(
+                            children: [
+                              _buildGaugeCard(reading, bt.state),
+                              const SizedBox(height: 12),
+                              _buildStatusRow(reading, bt.state),
+                              const SizedBox(height: 12),
+                              _buildMetricsRow(reading, bt.state),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          flex: 4,
+                          child: Column(
+                            children: [
+                              const RetailerQuickCard(),
+                              if (bt.state != BtState.connected) ...[
+                                const SizedBox(height: 12),
+                                _buildConnectPrompt(bt),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
         );
       },
@@ -2146,81 +2453,196 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Find Gas Refill Stations'),
-        actions: [
-          IconButton(
-            key: const Key('map-pin-station-button'),
-            tooltip: 'Pin Station Location & Price',
-            icon: const Icon(Icons.pin_drop_rounded),
-            onPressed: _quickPinStation,
-          ),
-          IconButton(
-            key: const Key('map-register-plant-button'),
-            tooltip: 'Register your Gas Plant',
-            icon: const Icon(Icons.add_business_rounded),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const RetailerRegistrationScreen()),
-            ).then((_) => _loadPartnerStations()),
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          if (kIsWeb)
-            buildWebMapViewer(
-              center: _currentPos,
-              stations: _stations,
-              onStationSelected: (id) {
-                final match = _stations.where((s) => s.id == id).toList();
-                if (match.isNotEmpty) {
+  Widget _buildMapWidget() {
+    if (kIsWeb) {
+      return buildWebMapViewer(
+        center: _currentPos,
+        stations: _stations,
+        onStationSelected: (id) {
+          final match = _stations.where((s) => s.id == id).toList();
+          if (match.isNotEmpty) {
+            setState(() {
+              _stations = [
+                match.first,
+                ..._stations.where((s) => s.id != id),
+              ];
+            });
+          }
+        },
+        onBoundsChanged: (south, west, north, east) {
+          _api
+              .nearbyStationsByBbox(
+                west: west,
+                south: south,
+                east: east,
+                north: north,
+                sortBy: _selectedFilter == 'lowest_price'
+                    ? 'price'
+                    : 'distance',
+                inStock: _selectedFilter == 'open' ? true : null,
+              )
+              .then((stations) {
+                if (mounted && stations.isNotEmpty) {
                   setState(() {
-                    _stations = [
-                      match.first,
-                      ..._stations.where((s) => s.id != id),
-                    ];
+                    _stations = stations;
+                    _partnerError = null;
                   });
                 }
-              },
-              onBoundsChanged: (south, west, north, east) {
-                _api
-                    .nearbyStationsByBbox(
-                      west: west,
-                      south: south,
-                      east: east,
-                      north: north,
-                      sortBy: _selectedFilter == 'lowest_price'
-                          ? 'price'
-                          : 'distance',
-                      inStock: _selectedFilter == 'open' ? true : null,
-                    )
-                    .then((stations) {
-                      if (mounted && stations.isNotEmpty) {
-                        setState(() {
-                          _stations = stations;
-                          _partnerError = null;
-                        });
-                      }
-                    })
-                    .catchError((_) {});
-              },
-              onLocateUser: () => _determinePosition(),
-            )
-          else
-            GoogleMap(
-              initialCameraPosition:
-                  CameraPosition(target: _currentPos, zoom: 14),
-              markers: _markers,
-              myLocationEnabled: true,
-              myLocationButtonEnabled: true,
-              onMapCreated: (ctrl) {
-                _mapCtrl = ctrl;
-              },
-              onCameraIdle: _loadPartnerStationsInView,
+              })
+              .catchError((_) {});
+        },
+        onLocateUser: () => _determinePosition(),
+      );
+    }
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(target: _currentPos, zoom: 14),
+      markers: _markers,
+      myLocationEnabled: true,
+      myLocationButtonEnabled: true,
+      onMapCreated: (ctrl) {
+        _mapCtrl = ctrl;
+      },
+      onCameraIdle: _loadPartnerStationsInView,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop = XpLayout.isDesktop(context);
+    final appBar = AppBar(
+      title: const Text('Find Gas Refill Stations'),
+      actions: [
+        IconButton(
+          key: const Key('map-pin-station-button'),
+          tooltip: 'Pin Station Location & Price',
+          icon: const Icon(Icons.pin_drop_rounded),
+          onPressed: _quickPinStation,
+        ),
+        IconButton(
+          key: const Key('map-register-plant-button'),
+          tooltip: 'Register your Gas Plant',
+          icon: const Icon(Icons.add_business_rounded),
+          onPressed: () => Navigator.of(context)
+              .push(
+                MaterialPageRoute(
+                    builder: (_) => const RetailerRegistrationScreen()),
+              )
+              .then((_) => _loadPartnerStations()),
+        ),
+      ],
+    );
+
+    if (isDesktop) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final panelBg = isDark ? const Color(0xFF0E172B) : Colors.white;
+      final borderColor =
+          isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0);
+      return Scaffold(
+        appBar: appBar,
+        body: Row(
+          children: [
+            Container(
+              width: 400,
+              decoration: BoxDecoration(
+                color: panelBg,
+                border: Border(right: BorderSide(color: borderColor)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildFilterChip('all', 'All Stations',
+                              Icons.local_gas_station_rounded),
+                          const SizedBox(width: 8),
+                          _buildFilterChip('open', 'In Stock',
+                              Icons.check_circle_outline_rounded),
+                          const SizedBox(width: 8),
+                          _buildFilterChip('lowest_price', 'Lowest Price',
+                              Icons.sell_outlined),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      _locLoading
+                          ? 'Locating nearby stations...'
+                          : '${_stations.length} gas stations found nearby',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? Colors.white60
+                            : AppTheme.textSecondary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Divider(height: 1, color: borderColor),
+                  if (_partnerError != null)
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Card(
+                        elevation: 1,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.info_outline_rounded,
+                                  size: 18, color: AppTheme.corporateBlue),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                  child: Text(_partnerError!,
+                                      style: const TextStyle(fontSize: 12))),
+                              TextButton(
+                                onPressed: _loadPartnerStations,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  Expanded(
+                    child: _stations.isEmpty && !_locLoading
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Text(
+                                'No stations in this area yet.\nUse "Pin Station" or pan the map.',
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.all(14),
+                            itemCount: _stations.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (context, i) =>
+                                _buildStationCard(_stations[i]),
+                          ),
+                  ),
+                ],
+              ),
             ),
+            Expanded(child: _buildMapWidget()),
+          ],
+        ),
+      );
+    }
+
+    return Scaffold(
+      appBar: appBar,
+      body: Stack(
+        children: [
+          _buildMapWidget(),
           // Filter Chips bar
           Positioned(
             top: 12,
@@ -2355,9 +2777,12 @@ class HistoryScreen extends StatelessWidget {
         return Scaffold(
           appBar: AppBar(title: const Text('Usage History & Analytics')),
           body: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1020),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                 const SizedBox(height: 16),
                 const BusinessGasCard(),
                 if (sessions.isEmpty)
@@ -2507,6 +2932,8 @@ class HistoryScreen extends StatelessWidget {
                   const SizedBox(height: 32),
                 ],
               ],
+            ),
+              ),
             ),
           ),
         );
@@ -2788,9 +3215,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final connected = bt.state == BtState.connected;
         return Scaffold(
           appBar: AppBar(title: const Text('Settings & Configuration')),
-          body: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              children: [
+          body: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 880),
+              child: ListView(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  children: [
                 Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text('Hardware Connection',
@@ -3019,6 +3449,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         subtitle: Text(
                             'Business backend integration is configurable through XP_API_BASE_URL.'))),
               ]),
+            ),
+          ),
         );
       },
     );
