@@ -195,10 +195,29 @@ class _LandingPage extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Center(child: XpLogo(width: 130)),
-                const SizedBox(height: 22),
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    XpLogo(
+                      width: 48,
+                      padding: EdgeInsets.all(8),
+                      shadow: false,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'XP GAS',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                        color: AppTheme.corporateBlue,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
                 Text(
-                  'Welcome to XP GasTech',
+                  'Welcome to XP GAS',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w900,
@@ -274,8 +293,8 @@ class _LandingPage extends StatelessWidget {
                     const Spacer(flex: 2),
                     const XpLogo(width: 160),
                     const SizedBox(height: 28),
-                    const Text('XP TECHNOLOGY',
-                        style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: 1.6)),
+                    const Text('XP GAS',
+                        style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: 2.0)),
                     const SizedBox(height: 8),
                     Text('SMART GAS MONITORING',
                         style: TextStyle(color: AppTheme.lightBlue.withValues(alpha: 0.95), fontSize: 12, letterSpacing: 2.4, fontWeight: FontWeight.w600)),

@@ -1,11 +1,11 @@
 {
-    "name": "XP Tech",
-    "short_name": "XP Tech",
+    "name": "XP GAS",
+    "short_name": "XP GAS",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#FFFFFF",
+    "background_color": "#0D47A1",
     "theme_color": "#0053BA",
-    "description": "XP Tech - gas monitoring and station finder.",
+    "description": "XP GAS - Smart gas monitoring and refill station finder.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

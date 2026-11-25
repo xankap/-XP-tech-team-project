@@ -38,6 +38,7 @@ import 'widgets/map/web_map_viewer.dart';
 import 'widgets/responsive_layout.dart';
 import 'widgets/retailer_quick_card.dart';
 import 'widgets/station_logo_avatar.dart';
+import 'widgets/xp_logo.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -703,19 +704,10 @@ class _MainShellState extends State<MainShell> {
                     padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
                     child: Row(
                       children: [
-                        Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppTheme.corporateBlue, Color(0xFF0284C7)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.local_fire_department_rounded,
-                              color: Colors.white, size: 22),
+                        const XpLogo(
+                          width: 32,
+                          padding: EdgeInsets.all(6),
+                          shadow: false,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -723,10 +715,11 @@ class _MainShellState extends State<MainShell> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'XP GasTech',
+                                'XP GAS',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w900,
-                                  fontSize: 16,
+                                  fontSize: 17,
+                                  letterSpacing: 0.5,
                                   color: isDark ? Colors.white : AppTheme.corporateBlue,
                                 ),
                               ),
@@ -3445,7 +3438,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: ListTile(
                         leading: Icon(Icons.info_outline_rounded,
                             color: AppTheme.skyBlue),
-                        title: Text('XP Technology Digital Gas Meter'),
+                        title: Text('XP GAS Digital Gas Meter'),
                         subtitle: Text(
                             'Business backend integration is configurable through XP_API_BASE_URL.'))),
               ]),

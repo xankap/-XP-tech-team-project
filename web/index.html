@@ -1,31 +1,23 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="google-signin-client_id" content="264320031504-avqcsa5p6kic2toh3edv9ueje8h5dh10.apps.googleusercontent.com">
-  <meta name="description" content="XP Tech - gas monitoring and station finder.">
+  <meta name="description" content="XP GAS - Smart gas monitoring and refill station finder.">
   <meta name="theme-color" content="#0053BA">
+
+  <!-- Preconnect to live API for faster initial auth & station fetch -->
+  <link rel="preconnect" href="https://api.xptechltd.com" crossorigin>
+  <link rel="dns-prefetch" href="https://api.xptechltd.com">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="XP Tech">
+  <meta name="apple-mobile-web-app-title" content="XP GAS">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=2">
 
   <!-- Favicon -->
@@ -34,22 +26,92 @@
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=2"/>
   <link rel="shortcut icon" type="image/png" href="favicon.png?v=2"/>
 
-  <title>XP Tech</title>
+  <title>XP GAS</title>
   <link rel="manifest" href="manifest.json?v=2">
 
-  <!-- Leaflet & OpenStreetMap (interactive map support) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #0D47A1;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #xp-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #003B8E 0%, #0D47A1 55%, #0284C7 100%);
+      color: #ffffff;
+      transition: opacity 0.25s ease-out;
+    }
+    #xp-splash.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .xp-splash-brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .xp-splash-logo {
+      background: #ffffff;
+      padding: 10px 14px;
+      border-radius: 16px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+      height: 44px;
+      width: auto;
+    }
+    .xp-splash-title {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: 1.5px;
+    }
+    .xp-splash-bar {
+      width: 180px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.22);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .xp-splash-bar::after {
+      content: "";
+      display: block;
+      width: 45%;
+      height: 100%;
+      background: #ffffff;
+      border-radius: 999px;
+      animation: xpLoad 1.1s ease-in-out infinite;
+    }
+    @keyframes xpLoad {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(260%); }
+    }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <div id="xp-splash" aria-label="Loading XP GAS">
+    <div class="xp-splash-brand">
+      <img src="xp_logo.png" alt="XP GAS Logo" class="xp-splash-logo">
+      <span class="xp-splash-title">XP GAS</span>
+    </div>
+    <div class="xp-splash-bar"></div>
+  </div>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var splash = document.getElementById('xp-splash');
+      if (splash) {
+        splash.classList.add('fade-out');
+        setTimeout(function () { splash.remove(); }, 280);
+      }
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

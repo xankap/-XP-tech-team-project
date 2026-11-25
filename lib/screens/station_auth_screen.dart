@@ -787,7 +787,7 @@ class _GasStationAuthScreenState extends State<GasStationAuthScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return XpDesktopSplitAuthShell(
-      heroTitle: 'XP GasTech\nPartner Plant Portal',
+      heroTitle: 'XP GAS\nPartner Plant Portal',
       heroSubtitle:
           'Manage your LPG refill station on the live map, update daily prices per kg, set opening & closing hours, and connect directly with nearby customers.',
       highlights: const [

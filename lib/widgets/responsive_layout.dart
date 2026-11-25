@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'xp_logo.dart';
 
 /// Breakpoints and adaptive layout helpers for Mobile, Tablet, and Desktop.
 class XpLayout {
@@ -86,26 +87,19 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.16),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.28)),
-                            ),
-                            child: const Icon(Icons.local_fire_department_rounded,
-                                color: Colors.white, size: 26),
+                          const XpLogo(
+                            width: 38,
+                            padding: EdgeInsets.all(7),
+                            shadow: false,
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 14),
                           const Text(
-                            'XP GasTech',
+                            'XP GAS',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 22,
+                              fontSize: 24,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: -0.3,
+                              letterSpacing: 0.8,
                             ),
                           ),
                         ],
@@ -135,53 +129,15 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
                       ),
                       const SizedBox(height: 36),
                       ...items.map(
-                        (item) => Padding(
-                          padding: const EdgeInsets.only(bottom: 18),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.14),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(item.icon,
-                                    color: Colors.white, size: 20),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      item.title,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 14.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      item.subtitle,
-                                      style: TextStyle(
-                                        color:
-                                            Colors.white.withValues(alpha: 0.78),
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
+                        (item) => _InteractiveHighlightCard(
+                          icon: item.icon,
+                          title: item.title,
+                          subtitle: item.subtitle,
                         ),
                       ),
                       const Spacer(),
                       Text(
-                        'XP Technologies Ltd • Clean Cooking Energy Platform',
+                        'XP GAS • Clean Cooking Energy Network',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.65),
                           fontSize: 12,
@@ -206,6 +162,85 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _InteractiveHighlightCard extends StatefulWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _InteractiveHighlightCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  State<_InteractiveHighlightCard> createState() =>
+      _InteractiveHighlightCardState();
+}
+
+class _InteractiveHighlightCardState extends State<_InteractiveHighlightCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: _hovered ? 0.16 : 0.07),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: _hovered ? 0.35 : 0.12),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: _hovered ? 0.24 : 0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(widget.icon, color: Colors.white, size: 19),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    widget.subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.80),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

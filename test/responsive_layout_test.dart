@@ -24,7 +24,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Desktop split shell shows the brand showcase + form body
-    expect(find.text('XP GasTech'), findsOneWidget);
+    expect(find.text('XP GAS'), findsOneWidget);
     expect(find.text('Live Smart Cylinder Telemetry'), findsOneWidget);
     expect(find.text('Form Body'), findsOneWidget);
 
@@ -53,7 +53,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('XP GasTech'), findsOneWidget);
+    expect(find.text('XP GAS'), findsOneWidget);
     expect(find.text('Welcome back'), findsOneWidget);
     expect(tester.takeException(), isNull);
     // Advance past _checkBackend's 3s timer
