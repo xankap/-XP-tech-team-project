@@ -29,8 +29,8 @@ app.set('trust proxy', 1);
 // dev server on 5050, 8080, …) plus anything listed in CORS_ORIGINS
 // (comma-separated, exact match) for deployed front-ends.
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
-const XP_ORIGIN = /^https?:\/\/([a-z0-9-]+\.)?xptechltd\.com$/i;
-const VERCEL_ORIGIN = /^https?:\/\/.*-papagedonlabs-4556s-projects\.vercel\.app$/i;
+const XP_ORIGIN = /^https:\/\/([a-z0-9-]+\.)?xptechltd\.com$/i;
+const VERCEL_ORIGIN = /^https:\/\/[a-z0-9-]+-papagedonlabs-4556s-projects\.vercel\.app$/i;
 const extraOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
   .map((o) => o.trim())

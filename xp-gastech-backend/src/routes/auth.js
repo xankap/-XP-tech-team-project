@@ -6,7 +6,7 @@ const { getEmailConfig, esc, layout } = require('../services/sendchampEmail');
 const { loginWithGoogleIdToken } = require('../services/googleAuth');
 const jwt = require('jsonwebtoken');
 const { requireAuth } = require('../middleware/auth');
-const { refreshSession, revokeSession, revokeFamily } = require('../services/sessions');
+const { refreshSession, revokeSession, revokeFamily, revokeAllForUser } = require('../services/sessions');
 
 const router = express.Router();
 
@@ -198,6 +198,28 @@ router.post('/logout', refreshLimiter, async (req, res) => {
     console.error('[auth] logout revoke failed:', err && err.code);
   }
   res.status(200).json({ ok: true });
+});
+
+// Revoke all active sessions for the signed-in user ("sign out everywhere").
+router.post('/logout-all', requireAuth, async (req, res) => {
+  try {
+    await revokeAllForUser(req.user.id);
+    res.status(200).json({ ok: true, message: 'Signed out from all devices.' });
+  } catch (err) {
+    sendError(res, err, 'Could not sign out all sessions');
+  }
+});
+
+// Delete the signed-in user's account and revoke all sessions (NDPR/GDPR).
+router.delete('/me', requireAuth, async (req, res) => {
+  const { pool } = require('../db/pool');
+  try {
+    await revokeAllForUser(req.user.id);
+    await pool.query('delete from public.users where id = $1', [req.user.id]);
+    res.status(200).json({ ok: true, message: 'Account deleted.' });
+  } catch (err) {
+    sendError(res, err, 'Could not delete account');
+  }
 });
 
 router.post('/send-sms-code', smsSendLimiter, async (req, res) => {

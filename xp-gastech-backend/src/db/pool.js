@@ -7,7 +7,11 @@ const poolMax = Number(process.env.PG_POOL_MAX) || (process.env.VERCEL ? 1 : 10)
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : undefined,
+  ssl: process.env.DATABASE_URL
+    ? (process.env.PG_SSL_CA && process.env.PG_SSL_CA.trim()
+        ? { ca: process.env.PG_SSL_CA.replace(/\\n/g, '\n'), rejectUnauthorized: true }
+        : { rejectUnauthorized: false })
+    : undefined,
   connectionTimeoutMillis: 10000,
   max: poolMax,
 });

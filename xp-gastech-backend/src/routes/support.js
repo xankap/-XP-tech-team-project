@@ -59,7 +59,7 @@ router.post('/', submitLimiter, route(async (req, res) => {
 // GET /support/my - list inquiries submitted by current user
 router.get('/my', requireAuth, route(async (req, res) => {
   const query = `
-    select id, name, email, phone, subject, message, category, status, admin_notes, created_at, updated_at
+    select id, name, email, phone, subject, message, category, status, created_at, updated_at
     from public.support_inquiries
     where user_id = $1
     order by created_at desc

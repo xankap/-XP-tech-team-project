@@ -252,7 +252,11 @@ router.post('/chat', chatLimiter, route(async (req, res) => {
     fetchLiveStationSummary(),
     fetchUserDeviceDiagnostics(userId),
   ]);
-  const geminiReply = await callGemini(message, history, liveStations, deviceDiagnostics).catch(() => null);
+  // Only authenticated users invoke the paid Gemini API; unauthenticated
+  // landing-page visitors use the zero-cost local XP GAS knowledge base.
+  const geminiReply = userId
+    ? await callGemini(message, history, liveStations, deviceDiagnostics).catch(() => null)
+    : null;
   const reply = geminiReply || localXpGasReply(message, liveStations);
   const provider = geminiReply ? 'gemini' : 'xp-knowledge-base';
   const resources = recommendResources(`${message} ${reply}`);

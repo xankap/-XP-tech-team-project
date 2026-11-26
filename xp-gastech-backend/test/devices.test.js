@@ -388,3 +388,100 @@ test('GET /admin/diagnostics requires admin authentication', async (t) => {
   const res = await fetch(`${base}/admin/diagnostics`);
   assert.equal(res.status, 401);
 });
+
+test('POST /auth/logout-all and DELETE /auth/me require Bearer auth', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  const r1 = await fetch(`${base}/auth/logout-all`, { method: 'POST' });
+  assert.equal(r1.status, 401);
+
+  const r2 = await fetch(`${base}/auth/me`, { method: 'DELETE' });
+  assert.equal(r2.status, 401);
+});
+
+test('POST /retailers/me/pin creates pending station without self-approval', async (t) => {
+  const origQuery = pool.query.bind(pool);
+  const queries = [];
+  pool.query = async (sql, params) => {
+    queries.push({ sql, params });
+    if (sql.includes('from users u where u.id = $1')) {
+      return {
+        rows: [
+          {
+            id: TEST_USER_ID,
+            email: 'owner@xptechltd.com',
+            phone: null,
+            username: 'owner',
+            role: 'consumer',
+            phone_verified_at: null,
+            email_verified_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            session_active: true,
+          },
+        ],
+      };
+    }
+    if (sql.includes('from public.retailers where app_user_id = $1')) {
+      return { rows: [] };
+    }
+    if (sql.includes('insert into public.retailers')) {
+      return {
+        rows: [
+          {
+            id: '66666666-6666-4666-8666-666666666666',
+            name: 'Test Plant',
+            phone_e164: '+2348012345678',
+            address_line: '1 Test St',
+            state: null,
+            city_lga: null,
+            latitude: 6.5,
+            longitude: 3.3,
+            opening_hours: null,
+            is_available: true,
+            price_per_kg: 1200,
+            logo_url: null,
+            about: null,
+            status: 'pending',
+            status_reason: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ],
+      };
+    }
+    return { rows: [] };
+  };
+  t.after(() => {
+    pool.query = origQuery;
+  });
+
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const token = jwt.sign({ sub: TEST_USER_ID, typ: 'access' }, process.env.JWT_SECRET, {
+    expiresIn: '1h',
+  });
+
+  const res = await fetch(`${base}/retailers/me/pin`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      name: 'Test Plant',
+      phone: '+2348012345678',
+      latitude: 6.5,
+      longitude: 3.3,
+      pricePerKg: 1200,
+    }),
+  });
+
+  assert.equal(res.status, 201);
+  const data = await res.json();
+  assert.equal(data.retailer.status, 'pending');
+  assert.ok(!queries.some((q) => q.sql.includes("set role = 'retailer'")));
+  assert.ok(!queries.some((q) => q.sql.includes("'approved'")));
+});

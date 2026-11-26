@@ -169,9 +169,6 @@ router.post('/', writeLimiter, requireAuth, route(async (req, res) => {
     values
   );
   if (!rows[0]) return res.status(409).json({ error: 'You already have a retailer profile. Use PATCH /retailers/me.' });
-  try {
-    await pool.query("update public.users set role = 'retailer' where id = $1 and role = 'consumer'", [req.user.id]);
-  } catch (_) { /* non-fatal role update */ }
   return res.status(201).json({ retailer: toRetailer(rows[0]) });
 }));
 
@@ -182,8 +179,7 @@ router.get('/me', requireAuth, route(async (req, res) => {
 }));
 
 // Pin or ping station coordinates and current price.
-// Designed for mobile/map/live-ping workflows. Preserves existing approval status
-// so active plants remain visible on the customer map immediately.
+// Preserves existing approval status; new registrations start as 'pending' for admin review.
 async function pinLocationHandler(req, res) {
   const b = req.body || {};
   const lat = v.num(b.latitude ?? b.lat, 'latitude', { min: -90, max: 90 });
@@ -195,7 +191,7 @@ async function pinLocationHandler(req, res) {
   );
 
   if (!existing[0]) {
-    // If name and phone are provided, auto-create a profile on first pin
+    // If name and phone are provided, auto-create a pending profile on first pin
     if (b.name && b.phone) {
       const name = v.text(b.name, 'name', { min: 2, max: 120 });
       const phone = v.phone(b.phone);
@@ -205,22 +201,18 @@ async function pinLocationHandler(req, res) {
       const about = v.text(b.about, 'about', { min: 2, max: 500, optional: true });
       const { rows } = await pool.query(
         `insert into public.retailers (app_user_id, name, phone_e164, address_line, latitude, longitude, price_per_kg, is_available, about, status)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'approved')
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
          on conflict (app_user_id) do update set
            latitude = excluded.latitude, longitude = excluded.longitude,
            price_per_kg = coalesce(excluded.price_per_kg, public.retailers.price_per_kg),
            is_available = coalesce(excluded.is_available, public.retailers.is_available),
-           status = 'approved',
            updated_at = now()
          returning ${OWN_COLUMNS}`,
         [req.user.id, name, phone, address, lat, lng, pricePerKg, isAvailable, about]
       );
-      try {
-        await pool.query("update public.users set role = 'retailer' where id = $1 and role = 'consumer'", [req.user.id]);
-      } catch (_) {}
       return res.status(201).json({
         ok: true,
-        message: 'Station registered and location pinned successfully.',
+        message: 'Station registered and location pinned. Pending admin approval before appearing publicly.',
         retailer: toRetailer(rows[0]),
       });
     }
@@ -232,7 +224,6 @@ async function pinLocationHandler(req, res) {
   const sets = [
     'latitude = $1',
     'longitude = $2',
-    "status = case when status = 'rejected' then 'rejected' else 'approved' end",
     'updated_at = now()'
   ];
   const vals = [lat, lng];
