@@ -3,6 +3,7 @@ const { pool } = require('../db/pool');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const v = require('../validation');
 const { asyncRoute } = require('./http');
+const { notifyRetailerReview } = require('./retailers');
 
 const router = express.Router();
 const route = asyncRoute('Admin request failed', 'admin');
@@ -267,6 +268,14 @@ router.patch('/retailers/:id', route(async (req, res) => {
     try {
       await pool.query("update public.users set role = 'retailer' where id = $1 and role != 'admin'", [rows[0].app_user_id]);
     } catch (_) { /* non-fatal */ }
+  }
+  if (b.status === 'approved' || b.status === 'rejected') {
+    notifyRetailerReview({
+      userId: rows[0].app_user_id,
+      stationName: rows[0].name,
+      decision: b.status,
+      reason: b.statusReason,
+    });
   }
 
   return res.json({ retailer: formatRetailer(rows[0]) });

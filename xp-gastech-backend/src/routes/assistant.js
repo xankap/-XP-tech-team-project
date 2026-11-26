@@ -1,5 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const { pool } = require('../db/pool');
 const v = require('../validation');
 const { asyncRoute } = require('./http');
 
@@ -15,10 +16,10 @@ const chatLimiter = rateLimit({
 });
 
 const XP_GAS_SYSTEM_PROMPT = `You are "Pip", the friendly miniature AI assistant for XP GAS (XP Technologies Ltd, web app at https://xptechltd.com, admin portal at https://admin.xptechltd.com).
-Answer user questions concisely, warmly, and accurately using ONLY verified XP GAS features:
+Answer user questions concisely, warmly, and accurately using ONLY verified XP GAS features and the live station snapshot below:
 
 1. GAS METER CALIBRATION & MONITORING:
-- Hardware: XP GAS Digital Gas Meter connects over Bluetooth (HC-05 module) to track live cylinder percentage, remaining kg, days left, battery level, and gas leak alerts.
+- Hardware: XP GAS Digital Gas Meter connects over Bluetooth (HC-05 module) or Wi-Fi/IoT direct telemetry to track live cylinder percentage, remaining kg, days left, battery level, and gas leak alerts.
 - Calibration / Setup:
   1) Place the smart scale/meter on a flat, stable surface with nothing on it to zero (tare) the sensor.
   2) Select your exact cylinder size (e.g., 6kg, 12.5kg, 25kg, or 50kg) in Settings or during meter registration.
@@ -41,6 +42,33 @@ Answer user questions concisely, warmly, and accurately using ONLY verified XP G
 
 Keep replies short (2-5 sentences or crisp bullet points) and recommend the most relevant next step.`;
 
+async function fetchLiveStationSummary() {
+  try {
+    const { rows } = await Promise.race([
+      pool.query(`
+        select name, state, city_lga, price_per_kg, is_available, opening_hours
+        from public.retailers
+        where status = 'approved'
+        order by is_available desc, updated_at desc
+        limit 10
+      `),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500)),
+    ]);
+    return rows || [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function formatHoursBrief(hours) {
+  if (!hours || typeof hours !== 'object') return null;
+  const sample = hours.mon || hours.tue || hours.sat;
+  if (sample && sample.open && sample.close) {
+    return `${sample.open}-${sample.close}`;
+  }
+  return null;
+}
+
 function recommendResources(text) {
   const q = text.toLowerCase();
   const resources = [];
@@ -62,7 +90,7 @@ function recommendResources(text) {
   return resources;
 }
 
-function localXpGasReply(message) {
+function localXpGasReply(message, liveStations = []) {
   const q = message.toLowerCase();
   if (/(calibrat|tare|zero|scale|bluetooth|hc-05|meter|pair)/.test(q)) {
     return 'To calibrate your XP GAS digital meter:\n1. Place the meter scale on a flat surface with no cylinder on it so it zeroes cleanly.\n2. Set your cylinder size (6kg, 12.5kg, 25kg, or 50kg) in Settings.\n3. Enable Bluetooth and tap "Connect Meter" on your Dashboard to pair with your HC-05 unit.';
@@ -70,21 +98,38 @@ function localXpGasReply(message) {
   if (/(leak|smell|danger|alarm|safety)/.test(q)) {
     return 'If your XP GAS leak sensor triggers or you smell gas: immediately close the cylinder valve, open all doors and windows, avoid switches or flames, and check your regulator/hose connection before relighting.';
   }
-  if (/(plant|station|retailer|register|business|pin|opening|closing|hours)/.test(q)) {
+  if (/(plant|station|retailer|register|business|pin|opening|closing|hours)/.test(q) && !/(find|near|cheapest|open now|which|list)/.test(q)) {
     return 'To set up your Gas Plant on XP GAS:\n1. Click "Own a Gas Plant / Refill Station? Sign Up Here" on the login screen (or the "+" store button on the Find Refill map).\n2. Enter your plant name, +234 phone, price per kg, Opening & Closing times, and pin your entrance on the map.\n3. XP GAS Admin will verify your coordinates at admin.xptechltd.com and publish your station.';
   }
   if (/(admin|support|ticket|contact|help|human|verify)/.test(q)) {
     return 'You can reach the XP GAS Admin team directly from here! Tap "Send Ticket to XP Admin" below to submit your question, and our team will view and respond to it in the Support Desk.';
   }
-  if (/(refill|map|near|price|buy|find)/.test(q)) {
+  if (/(refill|map|near|price|buy|find|cheapest|open|which|list)/.test(q)) {
+    if (liveStations.length > 0) {
+      const top = liveStations.slice(0, 3).map((s) => {
+        const price = s.price_per_kg != null ? `₦${Number(s.price_per_kg).toLocaleString()}/kg` : 'price on request';
+        const hrs = formatHoursBrief(s.opening_hours);
+        const loc = s.state ? ` (${s.state})` : '';
+        return `• ${s.name}${loc}: ${price}${hrs ? `, ${hrs}` : ''}`;
+      }).join('\n');
+      return `Here are verified XP GAS plants currently live:\n${top}\nOpen the "Find Refill" tab to view all ${liveStations.length} stations on the map and get directions.`;
+    }
     return 'Open the "Find Refill" tab to see verified LPG plants near you, filter by "In Stock" or "Lowest Price", check each plant\'s opening/closing hours, and tap Directions or Call.';
   }
   return 'Hi! I\'m Pip, your XP GAS assistant. I can help you calibrate your digital gas meter, set up and pin your gas plant, find nearby refills, or send a message straight to XP GAS Admin. What would you like help with?';
 }
 
-async function callGemini(message, history = []) {
+async function callGemini(message, history = [], liveStations = []) {
   const apiKey = (process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey) return null;
+
+  const liveContext = liveStations.length > 0
+    ? `\n\nLIVE VERIFIED GAS STATIONS (${liveStations.length}):\n` + liveStations.map((s) => {
+      const price = s.price_per_kg != null ? `₦${s.price_per_kg}/kg` : 'price unset';
+      const hrs = formatHoursBrief(s.opening_hours) || 'hours unset';
+      return `- ${s.name} (${s.city_lga || ''}, ${s.state || ''}): ${price}, ${s.is_available ? 'In Stock' : 'Out of Stock'}, hours ${hrs}`;
+    }).join('\n')
+    : '';
 
   const contents = [];
   if (Array.isArray(history)) {
@@ -103,7 +148,7 @@ async function callGemini(message, history = []) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: XP_GAS_SYSTEM_PROMPT }] },
+      systemInstruction: { parts: [{ text: XP_GAS_SYSTEM_PROMPT + liveContext }] },
       contents,
       generationConfig: {
         temperature: 0.4,
@@ -128,14 +173,16 @@ router.post('/chat', chatLimiter, route(async (req, res) => {
   const message = v.text(req.body?.message, 'message', { min: 1, max: 1000 });
   const history = Array.isArray(req.body?.history) ? req.body.history : [];
 
-  const geminiReply = await callGemini(message, history).catch(() => null);
-  const reply = geminiReply || localXpGasReply(message);
+  const liveStations = await fetchLiveStationSummary();
+  const geminiReply = await callGemini(message, history, liveStations).catch(() => null);
+  const reply = geminiReply || localXpGasReply(message, liveStations);
   const provider = geminiReply ? 'gemini' : 'xp-knowledge-base';
   const resources = recommendResources(`${message} ${reply}`);
 
   return res.json({
     reply,
     provider,
+    liveStationsCount: liveStations.length,
     resources,
   });
 }));

@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { pool } = require('../db/pool');
-const { getEmailConfig, sendEmail, verificationEmail, welcomeEmail } = require('./sendchampEmail');
+const { getEmailConfig, sendEmail, verificationEmail, welcomeEmail, esc, layout } = require('./sendchampEmail');
 const { issueSession } = require('./sessions');
 const {
   normalizeUsername,
@@ -287,4 +287,106 @@ async function setUsername(userId, raw) {
   }
 }
 
-module.exports = { signup, login, publicUser, verifyEmailToken, resendVerification, hashToken, checkUsernameAvailable, setUsername };
+async function requestPasswordReset(rawEmail) {
+  const email = normalizeEmail(rawEmail);
+  if (!email) {
+    const err = new Error('Valid email is required');
+    err.status = 400;
+    throw err;
+  }
+
+  try {
+    const { rows } = await pool.query(
+      'select id, email, password_hash from public.users where email = $1',
+      [email]
+    );
+    const u = rows[0];
+    if (u) {
+      const token = crypto.randomBytes(32).toString('hex');
+      const tokenHash = hashToken(token);
+      await pool.query(
+        `insert into public.password_reset_tokens (user_id, token_hash, expires_at)
+         values ($1, $2, now() + interval '1 hour')`,
+        [u.id, tokenHash]
+      );
+      const { apiBaseUrl } = getEmailConfig();
+      const resetUrl = `${apiBaseUrl.replace(/\/$/, '')}/auth/reset-password?token=${encodeURIComponent(token)}`;
+      const html = layout(
+        'Reset your XP GAS password',
+        `<p style="font-size:15px;line-height:24px;color:#1b2430">We received a request to reset the password for your XP GAS account (${esc(u.email)}).</p>
+         <p style="margin:24px 0"><a href="${esc(resetUrl)}" style="display:inline-block;background:#0053BA;color:#ffffff;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none">Reset Password</a></p>
+         <p style="font-size:13px;color:#64748b">This link expires in 1 hour. If you did not request a password reset, you can safely ignore this email.</p>`
+      );
+      await sendEmail({
+        to: u.email,
+        subject: 'Reset your XP GAS password',
+        html,
+        text: `Reset your XP GAS password using this link (valid for 1 hour): ${resetUrl}`,
+      }).catch((e) => console.error('[email] password reset send failed:', e && e.message));
+    }
+  } catch (e) {
+    console.error('[auth] requestPasswordReset failed:', e && e.code, e && e.message);
+  }
+
+  return {
+    ok: true,
+    message: 'If an account exists for that email, a password reset link has been sent.',
+  };
+}
+
+async function resetPassword({ token, newPassword }) {
+  const raw = typeof token === 'string' ? token.trim() : '';
+  if (!/^[a-f0-9]{64}$/i.test(raw)) {
+    const err = new Error('Invalid or expired password reset link');
+    err.status = 400;
+    throw err;
+  }
+  if (typeof newPassword !== 'string' || newPassword.length < 8 || newPassword.length > 72) {
+    const err = new Error('Password must be 8-72 characters');
+    err.status = 400;
+    throw err;
+  }
+
+  const tokenHash = hashToken(raw);
+  const hash = await bcrypt.hash(newPassword, BCRYPT_COST);
+
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    const { rows } = await client.query(
+      `update public.password_reset_tokens
+          set used_at = now()
+        where token_hash = $1 and used_at is null and expires_at > now()
+        returning user_id`,
+      [tokenHash]
+    );
+    if (!rows[0]) {
+      await client.query('rollback');
+      const err = new Error('Invalid or expired password reset link');
+      err.status = 400;
+      throw err;
+    }
+    const userId = rows[0].user_id;
+    await client.query(
+      `update public.users
+          set password_hash = $1,
+              email_verified_at = coalesce(email_verified_at, now())
+        where id = $2`,
+      [hash, userId]
+    );
+    await client.query(
+      'update public.auth_sessions set revoked_at = now() where user_id = $1 and revoked_at is null',
+      [userId]
+    ).catch(() => {});
+    await client.query('commit');
+  } catch (err) {
+    await client.query('rollback').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  return { ok: true, message: 'Password updated successfully. You can now sign in.' };
+}
+
+module.exports = { signup, login, publicUser, verifyEmailToken, resendVerification, hashToken, checkUsernameAvailable, setUsername, requestPasswordReset, resetPassword };

@@ -1,7 +1,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { sendSmsCode, verifySmsCode } = require('../services/smsAuth');
-const { signup, login, verifyEmailToken, resendVerification, checkUsernameAvailable, setUsername } = require('../services/emailAuth');
+const { signup, login, verifyEmailToken, resendVerification, checkUsernameAvailable, setUsername, requestPasswordReset, resetPassword } = require('../services/emailAuth');
 const { getEmailConfig, esc, layout } = require('../services/sendchampEmail');
 const { loginWithGoogleIdToken } = require('../services/googleAuth');
 const jwt = require('jsonwebtoken');
@@ -217,6 +217,57 @@ router.post('/verify-sms-code', smsVerifyLimiter, async (req, res) => {
   } catch (err) {
     sendError(res, err, 'Verification failed');
   }
+});
+
+router.post('/forgot-password', resendLimiter, async (req, res) => {
+  try {
+    const result = await requestPasswordReset(req.body?.email);
+    res.status(200).json(result);
+  } catch (err) {
+    sendError(res, err, 'Could not process password reset request');
+  }
+});
+
+router.post('/reset-password', verifyLimiter, async (req, res) => {
+  try {
+    const result = await resetPassword({
+      token: req.body?.token,
+      newPassword: req.body?.newPassword || req.body?.password,
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    sendError(res, err, 'Could not reset password');
+  }
+});
+
+router.get('/reset-password', verifyLimiter, (req, res) => {
+  const token = String(req.query?.token || '');
+  const { appBaseUrl } = getEmailConfig();
+  const body = `
+    <p style="font-size:15px;line-height:24px;color:#1b2430">Enter a new password (8–72 characters) for your XP GAS account.</p>
+    <form id="rf" style="margin-top:16px">
+      <input type="hidden" id="tok" value="${esc(token)}">
+      <input type="password" id="pwd" minlength="8" maxlength="72" required placeholder="New password" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;margin-bottom:12px">
+      <button type="submit" style="width:100%;background:#0053BA;color:#fff;font-weight:700;padding:12px;border:none;border-radius:8px;font-size:15px;cursor:pointer">Update Password</button>
+    </form>
+    <p id="msg" style="margin-top:14px;font-size:14px"></p>
+    <p style="margin-top:18px"><a href="${esc(appBaseUrl)}" style="color:#0053BA;font-weight:600;text-decoration:none">Back to XP GAS</a></p>
+    <script>
+      document.getElementById('rf').onsubmit = async function(e) {
+        e.preventDefault();
+        var msg = document.getElementById('msg');
+        msg.textContent = 'Updating...';
+        var r = await fetch('/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: document.getElementById('tok').value, newPassword: document.getElementById('pwd').value })
+        });
+        var d = await r.json();
+        msg.style.color = r.ok ? '#10b981' : '#ef4444';
+        msg.textContent = r.ok ? d.message : (d.error || 'Reset failed');
+      };
+    </script>`;
+  res.status(200).set('Cache-Control', 'no-store').type('html').send(layout('Reset Password', body));
 });
 
 module.exports = router;

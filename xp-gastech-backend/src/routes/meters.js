@@ -8,6 +8,7 @@
 //
 // Every query is scoped to req.user.id, so a user can never see or write
 // another account's meter (unknown or foreign ids both answer 404).
+const crypto = require('crypto');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { pool } = require('../db/pool');
@@ -17,11 +18,113 @@ const { asyncRoute } = require('./http');
 
 const router = express.Router();
 const route = asyncRoute('Meter request failed', 'meters');
-router.use(requireAuth);
 
 const MAX_BATCH = 100;
 const MAX_METERS_PER_ACCOUNT = 50;
-const SOURCES = new Set(['ble_offline', 'ble_live']);
+const SOURCES = new Set(['ble_offline', 'ble_live', 'device_direct']);
+
+const deviceLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many device readings. Try again shortly.' },
+});
+
+function hashDeviceKey(key) {
+  return crypto.createHash('sha256').update(String(key)).digest('hex');
+}
+
+// Direct device-to-database hardware ingest endpoint (authenticated via X-Device-Key).
+// Supports single reading object or { readings: [...] } batch from ESP32 / SIM800 / IoT units.
+router.post('/device/ingest', deviceLimiter, route(async (req, res) => {
+  const rawKey = req.get('x-device-key') || req.body?.deviceKey;
+  if (typeof rawKey !== 'string' || rawKey.trim().length < 16) {
+    return res.status(401).json({ error: 'Missing or invalid X-Device-Key header' });
+  }
+  const keyHash = hashDeviceKey(rawKey.trim());
+  const { rows: meterRows } = await pool.query(
+    'select id, bt_address from public.meters where device_key_hash = $1 and deleted_at is null',
+    [keyHash]
+  );
+  const meter = meterRows[0];
+  if (!meter) {
+    return res.status(401).json({ error: 'Unrecognized or revoked device key' });
+  }
+
+  const rawList = Array.isArray(req.body?.readings) ? req.body.readings : [req.body];
+  if (!rawList.length || rawList.length > MAX_BATCH) {
+    throw bad(`readings must be 1..${MAX_BATCH} items`);
+  }
+
+  const valid = new Map();
+  const rejected = [];
+  for (const item of rawList) {
+    try {
+      const normalized = {
+        ...(item && typeof item === 'object' ? item : {}),
+        client_reading_id: item?.client_reading_id || crypto.randomUUID(),
+        recorded_at: item?.recorded_at || new Date().toISOString(),
+        source: 'device_direct',
+      };
+      const row = parseReading(normalized);
+      if (!valid.has(row.clientReadingId)) valid.set(row.clientReadingId, row);
+    } catch (err) {
+      rejected.push({ error: err.message });
+    }
+  }
+
+  let inserted = 0;
+  const rows = [...valid.values()];
+  if (rows.length) {
+    const client = await pool.connect();
+    try {
+      await client.query('begin');
+      const ins = await client.query(
+        `insert into public.meter_readings
+           (meter_id, client_reading_id, recorded_at, percent, weight_kg, battery, leak_level, source)
+         select $1, t.cid, t.rec, t.pct, t.kg, t.bat, t.leak, t.src
+           from unnest($2::uuid[], $3::timestamptz[], $4::numeric[], $5::numeric[], $6::numeric[], $7::smallint[], $8::text[])
+                as t(cid, rec, pct, kg, bat, leak, src)
+         on conflict (meter_id, client_reading_id) do nothing
+         returning client_reading_id`,
+        [
+          meter.id,
+          rows.map((r) => r.clientReadingId),
+          rows.map((r) => r.recordedAt),
+          rows.map((r) => r.percent),
+          rows.map((r) => r.weightKg),
+          rows.map((r) => r.battery),
+          rows.map((r) => r.leak),
+          rows.map((r) => r.source),
+        ]
+      );
+      inserted = ins.rowCount;
+      await client.query(
+        `update public.meters
+            set last_reading_at = greatest(coalesce(last_reading_at, '-infinity'::timestamptz), $2::timestamptz)
+          where id = $1`,
+        [meter.id, rows.reduce((m, r) => (r.recordedAt > m ? r.recordedAt : m), rows[0].recordedAt)]
+      );
+      await client.query('commit');
+    } catch (err) {
+      await client.query('rollback').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  return res.status(200).json({
+    ok: true,
+    meterId: meter.id,
+    inserted,
+    duplicates: rows.length - inserted,
+    rejected,
+  });
+}));
+
+router.use(requireAuth);
 
 const perUser = (max, windowMs = 60 * 1000) => rateLimit({
   windowMs, max, standardHeaders: true, legacyHeaders: false,
@@ -272,6 +375,30 @@ router.get('/:id/readings', route(async (req, res) => {
       leakLevel: r.leak_level,
       source: r.source,
     })),
+  });
+}));
+
+// Generate or rotate a hardware API key for direct device-to-DB ingestion.
+router.post('/:id/device-key', writeLimiter, route(async (req, res) => {
+  const id = meterId(req);
+  const deviceKey = `xpdev_${crypto.randomBytes(24).toString('hex')}`;
+  const keyHash = hashDeviceKey(deviceKey);
+
+  const { rows } = await pool.query(
+    `update public.meters
+        set device_key_hash = $1, updated_at = now()
+      where id = $2 and owner_user_id = $3 and deleted_at is null
+      returning id, bt_address, label`,
+    [keyHash, id, req.user.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Meter not found' });
+
+  return res.status(200).json({
+    ok: true,
+    meterId: rows[0].id,
+    btAddress: rows[0].bt_address,
+    deviceKey,
+    ingestEndpoint: '/meters/device/ingest',
   });
 }));
 

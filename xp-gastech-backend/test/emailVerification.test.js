@@ -259,6 +259,9 @@ test('resendVerification: generic response, only sends for unverified, cooldown'
 
 async function withServer(fn) {
   const { app } = require('../server');
+  delete process.env.RESEND_API_KEY;
+  delete process.env.SENDCHAMP_PUBLIC_KEY;
+  delete process.env.SENDCHAMP_EMAIL_FROM;
   const srv = app.listen(0);
   try { await fn(`http://127.0.0.1:${srv.address().port}`); } finally { srv.close(); }
 }

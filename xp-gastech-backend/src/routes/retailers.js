@@ -5,6 +5,35 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 const v = require('../validation');
 const { asyncRoute } = require('./http');
 const logoStore = require('../services/logoStore');
+const { sendEmail, getEmailConfig, esc, layout } = require('../services/sendchampEmail');
+
+async function notifyRetailerReview({ userId, stationName, decision, reason }) {
+  if (!userId || !getEmailConfig().configured) return;
+  try {
+    const { rows } = await pool.query('select email from public.users where id = $1', [userId]);
+    const email = rows[0]?.email;
+    if (!email) return;
+    const { appBaseUrl } = getEmailConfig();
+    const approved = decision === 'approved';
+    const title = approved ? `${stationName} is now live on XP GAS!` : `Update on ${stationName} verification`;
+    const body = approved
+      ? `<p style="font-size:15px;line-height:24px;color:#1b2430">Great news! Your gas plant <strong>${esc(stationName)}</strong> has been verified by XP GAS Admin and is now live on the Find Refill map.</p>
+         <p style="margin:24px 0"><a href="${esc(appBaseUrl)}" style="display:inline-block;background:#0053BA;color:#ffffff;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none">Open Partner Portal</a></p>`
+      : `<p style="font-size:15px;line-height:24px;color:#1b2430">Your gas plant submission for <strong>${esc(stationName)}</strong> could not be approved yet.</p>
+         ${reason ? `<p style="font-size:14px;color:#991b1b;background:#fef2f2;padding:12px;border-radius:8px"><strong>Reason:</strong> ${esc(reason)}</p>` : ''}
+         <p style="font-size:14px;color:#475569">Please update your station details and coordinates in the app to re-submit for review.</p>`;
+    await sendEmail({
+      to: email,
+      subject: title,
+      html: layout(title, body),
+      text: approved
+        ? `${stationName} has been approved by XP GAS Admin and is now live at ${appBaseUrl}.`
+        : `${stationName} was not approved. Reason: ${reason || 'Please review your details.'}`,
+    });
+  } catch (e) {
+    console.warn('[retailers] review notification failed:', e && e.message);
+  }
+}
 
 const router = express.Router();
 const route = asyncRoute('Retailer request failed', 'retailers');
@@ -322,12 +351,19 @@ router.post('/:id/review', writeLimiter, requireAuth, requireAdmin, route(async 
   if (!rows[0]) return res.status(404).json({ error: 'Retailer not found' });
   if (decision === 'approved' && rows[0].app_user_id) {
     try {
-      await pool.query("update public.users set role = 'retailer' where id = $1", [rows[0].app_user_id]);
+      await pool.query("update public.users set role = 'retailer' where id = $1 and role != 'admin'", [rows[0].app_user_id]);
     } catch (_) { /* non-fatal role update */ }
   }
+  notifyRetailerReview({
+    userId: rows[0].app_user_id,
+    stationName: rows[0].name,
+    decision,
+    reason,
+  });
   return res.json({ retailer: toRetailer(rows[0]) });
 }));
 
 module.exports = router;
 module.exports.nearbyHandler = nearbyHandler;
 module.exports.bboxToCenterRadius = bboxToCenterRadius;
+module.exports.notifyRetailerReview = notifyRetailerReview;

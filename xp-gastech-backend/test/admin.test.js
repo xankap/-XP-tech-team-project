@@ -88,3 +88,44 @@ test('assistant chat returns XP GAS calibration guidance and resources', async (
     server.close();
   }
 });
+
+test('device ingest endpoint rejects missing or unknown X-Device-Key', async () => {
+  const { app } = require('../server');
+  const server = app.listen(0);
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  try {
+    const res = await fetch(`${base}/meters/device/ingest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ percent: 65, weight_kg: 8.1 }),
+    });
+    assert.equal(res.status, 401);
+  } finally {
+    server.close();
+  }
+});
+
+test('forgot-password validates email and reset-password validates token format', async () => {
+  const { app } = require('../server');
+  const server = app.listen(0);
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  try {
+    const r1 = await fetch(`${base}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'not-an-email' }),
+    });
+    assert.equal(r1.status, 400);
+
+    const r2 = await fetch(`${base}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: 'bad', newPassword: 'newpassword123' }),
+    });
+    assert.equal(r2.status, 400);
+  } finally {
+    server.close();
+  }
+});
