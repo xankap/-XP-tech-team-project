@@ -8,6 +8,7 @@ const businessRoutes = require('./src/routes/businesses');
 const meterRoutes = require('./src/routes/meters');
 const adminRoutes = require('./src/routes/admin');
 const supportRoutes = require('./src/routes/support');
+const assistantRoutes = require('./src/routes/assistant');
 const { getSmsConfig } = require('./src/services/sendchamp');
 const { getEmailConfig } = require('./src/services/sendchampEmail');
 
@@ -81,6 +82,7 @@ app.use('/businesses', businessRoutes);
 app.use('/meters', meterRoutes);
 app.use('/admin', adminRoutes);
 app.use('/support', supportRoutes);
+app.use('/assistant', assistantRoutes);
 // Flutter map contract alias: GET /partner-stations/nearby?latitude&longitude&radiusKm
 app.get('/partner-stations/nearby', retailerRoutes.nearbyHandler);
 

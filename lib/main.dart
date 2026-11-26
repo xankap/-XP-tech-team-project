@@ -38,6 +38,7 @@ import 'widgets/map/web_map_viewer.dart';
 import 'widgets/responsive_layout.dart';
 import 'widgets/retailer_quick_card.dart';
 import 'widgets/station_logo_avatar.dart';
+import 'widgets/xp_assistant_widget.dart';
 import 'widgets/xp_logo.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
@@ -128,11 +129,14 @@ class _DGMAppState extends State<DGMApp> {
   Widget build(BuildContext context) {
     return _AppState(
       child: MaterialApp(
-        title: 'XP Tech · Digital Gas Meter',
+        title: 'XP GAS · Digital Gas Meter',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: _themeMode,
+        builder: (context, child) => XpAssistantOverlay(
+          child: child ?? const SizedBox.shrink(),
+        ),
         home: AuthBootstrapFlow(
           session: widget.session,
           homeBuilder: (onLogout, user) => _ThemeScope(

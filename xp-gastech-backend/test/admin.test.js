@@ -68,3 +68,23 @@ test('public support submission validates required fields', async () => {
     server.close();
   }
 });
+
+test('assistant chat returns XP GAS calibration guidance and resources', async () => {
+  const { app } = require('../server');
+  const server = app.listen(0);
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  try {
+    const res = await fetch(`${base}/assistant/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'How do I calibrate my gas meter?' }),
+    });
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.match(data.reply, /calibrat|tare|flat/i);
+    assert.ok(Array.isArray(data.resources) && data.resources.length > 0);
+  } finally {
+    server.close();
+  }
+});

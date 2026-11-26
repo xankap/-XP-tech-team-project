@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:xp_gas_monitor/screens/auth_flow.dart';
 import 'package:xp_gas_monitor/services/auth_api.dart';
 import 'package:xp_gas_monitor/widgets/responsive_layout.dart';
+import 'package:xp_gas_monitor/widgets/xp_assistant_widget.dart';
 
 void main() {
   testWidgets('XpDesktopSplitAuthShell morphs between desktop and mobile viewports',
@@ -63,5 +64,36 @@ void main() {
   test('XpLayout breakpoints are consistent', () {
     expect(XpLayout.desktopBreakpoint, 900);
     expect(XpLayout.tabletBreakpoint, 650);
+  });
+
+  testWidgets('XpAssistantOverlay mascot opens chatbot and admin support form',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: XpAssistantOverlay(
+          child: Scaffold(body: Center(child: Text('App'))),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('xp-assistant-mascot-button')), findsOneWidget);
+    expect(find.text('Ask Pip · XP GAS'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('xp-assistant-mascot-button')));
+    await tester.pump();
+
+    expect(find.text('Pip · XP GAS Assistant'), findsOneWidget);
+    expect(find.text('Reach Admin'), findsOneWidget);
+
+    await tester.tap(find.text('Reach Admin'));
+    await tester.pump();
+
+    expect(find.text('Message XP GAS Admin'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
