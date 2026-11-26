@@ -544,4 +544,48 @@ router.patch('/support/:id', route(async (req, res) => {
   return res.json({ inquiry: rows[0] });
 }));
 
+// GET /admin/diagnostics — hardware fleet health, recent device alerts/events, and audit logs
+router.get('/diagnostics', route(async (_req, res) => {
+  const [eventsRes, auditsRes, summaryRes] = await Promise.all([
+    pool.query(
+      `select de.id, de.meter_id, de.event_type, de.severity, de.message, de.payload, de.created_at,
+              m.label as meter_label, m.bt_address, m.firmware_version, m.last_rssi,
+              u.email as owner_email, u.username as owner_username
+         from public.device_events de
+         join public.meters m on m.id = de.meter_id
+         left join public.users u on u.id = m.owner_user_id
+        order by de.created_at desc
+        limit 50`
+    ),
+    pool.query(
+      `select al.id, al.actor_user_id, al.action, al.target_type, al.target_id, al.metadata, al.created_at,
+              u.email as actor_email, u.username as actor_username
+         from public.audit_logs al
+         left join public.users u on u.id = al.actor_user_id
+        order by al.created_at desc
+        limit 50`
+    ),
+    pool.query(
+      `select
+         count(*) filter (where deleted_at is null)::int as total_meters,
+         count(*) filter (where deleted_at is null and device_key_hash is not null)::int as provisioned_devices,
+         count(*) filter (where deleted_at is null and last_reading_at >= now() - interval '24 hours')::int as active_24h,
+         count(*) filter (where deleted_at is null and firmware_version is not null)::int as with_firmware
+       from public.meters`
+    ),
+  ]);
+
+  res.json({
+    ok: true,
+    summary: summaryRes.rows[0] || {
+      total_meters: 0,
+      provisioned_devices: 0,
+      active_24h: 0,
+      with_firmware: 0,
+    },
+    recentEvents: eventsRes.rows,
+    recentAuditLogs: auditsRes.rows,
+  });
+}));
+
 module.exports = router;

@@ -1,8 +1,61 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const jwt = require('jsonwebtoken');
 const { pool } = require('../db/pool');
 const v = require('../validation');
 const { asyncRoute } = require('./http');
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function tryGetUserId(req) {
+  try {
+    const header = req.headers.authorization || '';
+    const match = header.match(/^Bearer\s+(.+)$/i);
+    const secret = process.env.JWT_SECRET;
+    if (!match || !secret) return null;
+    const payload = jwt.verify(match[1], secret);
+    if (!payload?.sub || (payload.typ && payload.typ !== 'access')) return null;
+    return UUID_RE.test(payload.sub) ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchUserDeviceDiagnostics(userId) {
+  if (!userId) return [];
+  try {
+    const { rows } = await pool.query(
+      `select m.id, m.label, m.bt_address, m.firmware_version, m.last_rssi, m.last_reading_at,
+              r.percent as latest_percent, r.battery as latest_battery, r.leak_level as latest_leak,
+              (
+                select coalesce(json_agg(ev order by ev.created_at desc), '[]'::json)
+                  from (
+                    select event_type, severity, message, created_at
+                      from public.device_events de
+                     where de.meter_id = m.id
+                     order by de.created_at desc
+                     limit 5
+                  ) ev
+              ) as recent_events
+         from public.meters m
+         left join lateral (
+           select percent, battery, leak_level
+             from public.meter_readings mr
+            where mr.meter_id = m.id
+            order by mr.recorded_at desc
+            limit 1
+         ) r on true
+        where m.owner_user_id = $1 and m.deleted_at is null
+        order by m.updated_at desc
+        limit 5`,
+      [userId]
+    );
+    return rows;
+  } catch (err) {
+    console.warn('[assistant] device diagnostics query skipped:', err.message);
+    return [];
+  }
+}
 
 const router = express.Router();
 const route = asyncRoute('Assistant request failed', 'assistant');
@@ -119,7 +172,7 @@ function localXpGasReply(message, liveStations = []) {
   return 'Hi! I\'m Pip, your XP GAS assistant. I can help you calibrate your digital gas meter, set up and pin your gas plant, find nearby refills, or send a message straight to XP GAS Admin. What would you like help with?';
 }
 
-async function callGemini(message, history = [], liveStations = []) {
+async function callGemini(message, history = [], liveStations = [], deviceDiagnostics = []) {
   const apiKey = (process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey) return null;
 
@@ -128,6 +181,15 @@ async function callGemini(message, history = [], liveStations = []) {
       const price = s.price_per_kg != null ? `₦${s.price_per_kg}/kg` : 'price unset';
       const hrs = formatHoursBrief(s.opening_hours) || 'hours unset';
       return `- ${s.name} (${s.city_lga || ''}, ${s.state || ''}): ${price}, ${s.is_available ? 'In Stock' : 'Out of Stock'}, hours ${hrs}`;
+    }).join('\n')
+    : '';
+
+  const deviceContext = deviceDiagnostics.length > 0
+    ? `\n\nUSER'S CONNECTED GAS METERS & RECENT DIAGNOSTICS:\n` + deviceDiagnostics.map((m) => {
+      const events = Array.isArray(m.recent_events) && m.recent_events.length > 0
+        ? m.recent_events.map((e) => `[${e.severity}] ${e.event_type}: ${e.message || ''}`).join('; ')
+        : 'no recent events';
+      return `- ${m.label || m.bt_address} (fw ${m.firmware_version || 'unknown'}, rssi ${m.last_rssi ?? 'n/a'}): gas=${m.latest_percent ?? 'n/a'}%, battery=${m.latest_battery ?? 'n/a'}%, leak=${m.latest_leak ?? 0}, events: ${events}`;
     }).join('\n')
     : '';
 
@@ -148,7 +210,7 @@ async function callGemini(message, history = [], liveStations = []) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: XP_GAS_SYSTEM_PROMPT + liveContext }] },
+      systemInstruction: { parts: [{ text: XP_GAS_SYSTEM_PROMPT + liveContext + deviceContext }] },
       contents,
       generationConfig: {
         temperature: 0.4,
@@ -172,9 +234,13 @@ async function callGemini(message, history = [], liveStations = []) {
 router.post('/chat', chatLimiter, route(async (req, res) => {
   const message = v.text(req.body?.message, 'message', { min: 1, max: 1000 });
   const history = Array.isArray(req.body?.history) ? req.body.history : [];
+  const userId = tryGetUserId(req);
 
-  const liveStations = await fetchLiveStationSummary();
-  const geminiReply = await callGemini(message, history, liveStations).catch(() => null);
+  const [liveStations, deviceDiagnostics] = await Promise.all([
+    fetchLiveStationSummary(),
+    fetchUserDeviceDiagnostics(userId),
+  ]);
+  const geminiReply = await callGemini(message, history, liveStations, deviceDiagnostics).catch(() => null);
   const reply = geminiReply || localXpGasReply(message, liveStations);
   const provider = geminiReply ? 'gemini' : 'xp-knowledge-base';
   const resources = recommendResources(`${message} ${reply}`);
@@ -183,6 +249,7 @@ router.post('/chat', chatLimiter, route(async (req, res) => {
     reply,
     provider,
     liveStationsCount: liveStations.length,
+    diagnosticsCount: deviceDiagnostics.length,
     resources,
   });
 }));

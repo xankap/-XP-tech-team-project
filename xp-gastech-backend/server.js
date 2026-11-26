@@ -6,9 +6,11 @@ const authRoutes = require('./src/routes/auth');
 const retailerRoutes = require('./src/routes/retailers');
 const businessRoutes = require('./src/routes/businesses');
 const meterRoutes = require('./src/routes/meters');
+const deviceRoutes = require('./src/routes/devices');
 const adminRoutes = require('./src/routes/admin');
 const supportRoutes = require('./src/routes/support');
 const assistantRoutes = require('./src/routes/assistant');
+const { securityHeaders, requestLogger } = require('./src/middleware/security');
 const { getSmsConfig } = require('./src/services/sendchamp');
 const { getEmailConfig } = require('./src/services/sendchampEmail');
 
@@ -42,13 +44,20 @@ function isAllowedOrigin(origin) {
     extraOrigins.includes(origin);
 }
 
+app.use(securityHeaders);
+app.use(requestLogger);
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && isAllowedOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization, X-Device-Key, X-Request-Id'
+    );
+    res.setHeader('Access-Control-Expose-Headers', 'X-Request-Id');
     res.setHeader('Access-Control-Max-Age', '600');
   }
   res.setHeader('Vary', 'Origin');
@@ -67,24 +76,37 @@ app.use((req, res, next) => {
   return (isLogoUpload ? jsonLogoUpload : jsonStandard)(req, res, next);
 });
 
-app.get('/health', (_req, res) => {
+function healthHandler(_req, res) {
   res.json({
     ok: true,
+    apiVersion: 'v1',
     smsConfigured: getSmsConfig().configured,
     emailConfigured: getEmailConfig().configured,
     googleConfigured: Boolean(process.env.GOOGLE_CLIENT_ID),
+    geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+    timestamp: new Date().toISOString(),
   });
-});
+}
 
-app.use('/auth', authRoutes);
-app.use('/retailers', retailerRoutes);
-app.use('/businesses', businessRoutes);
-app.use('/meters', meterRoutes);
-app.use('/admin', adminRoutes);
-app.use('/support', supportRoutes);
-app.use('/assistant', assistantRoutes);
-// Flutter map contract alias: GET /partner-stations/nearby?latitude&longitude&radiusKm
-app.get('/partner-stations/nearby', retailerRoutes.nearbyHandler);
+function mountApiRoutes(target) {
+  target.get('/health', healthHandler);
+  target.use('/auth', authRoutes);
+  target.use('/retailers', retailerRoutes);
+  target.use('/businesses', businessRoutes);
+  target.use('/meters', meterRoutes);
+  target.use('/devices', deviceRoutes);
+  target.use('/admin', adminRoutes);
+  target.use('/support', supportRoutes);
+  target.use('/assistant', assistantRoutes);
+  // Flutter map contract alias: GET /partner-stations/nearby?latitude&longitude&radiusKm
+  target.get('/partner-stations/nearby', retailerRoutes.nearbyHandler);
+}
+
+mountApiRoutes(app);
+
+const v1Router = express.Router();
+mountApiRoutes(v1Router);
+app.use('/api/v1', v1Router);
 
 // JSON 404 for unknown routes.
 app.use((_req, res) => {

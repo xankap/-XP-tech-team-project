@@ -29,6 +29,17 @@ All bodies are JSON. 🔒 = `Authorization: Bearer <token>` from `/auth/*`.
 | GET / PUT | `/businesses/me` 🔒 | PUT `{name, address?, state?, cityLga?, latitude?, longitude?}` creates or updates |
 | POST | `/businesses/me/gas-readings` 🔒 | `{kgLeft?, percentLeft?, cylinderLabel?, recordedAt?}` or `{readings: [...]}` (max 200) |
 | GET | `/businesses/me/gas?weeks=8` 🔒 | `{latest, weekly: [{weekStart, kgUsed, percentUsed, readings}]}` |
+| POST | `/meters/:id/device-key` 🔒 | Generates/rotates hardware `X-Device-Key` (stored as SHA-256 hash) |
+| POST | `/meters/device/ingest` 🔑 | Legacy direct hardware reading ingestion (`X-Device-Key`) |
+| POST | `/devices/handshake` 🔑 | Hardware boot sync: updates `firmwareVersion`, `hardwareModel`, `rssi`, returns calibration |
+| POST | `/devices/telemetry` 🔑 | Direct hardware single/batch telemetry (`source: device_direct`) + auto leak/low-battery events |
+| POST | `/devices/events` 🔑 | Explicit hardware diagnostic event logging (`sensor_fault`, `calibrated`, `offline_sync`, `heartbeat`) |
+| GET | `/devices/:id/diagnostics` 🔒 | Owner or admin device health (`healthy`/`warning`/`critical`), latest readings, and events |
+| PATCH | `/devices/:id/calibration` 🔒 | Owner or admin updates `tareOffsetKg`, `calibrationFactor`, `cylinderSizeKg` (audited) |
+| GET | `/admin/diagnostics` 🔒 admin | Fleet health summary, recent `device_events`, and `audit_logs` |
+| POST | `/assistant/chat` | Pip AI assistant (optional Bearer token enriches context with user's meter diagnostics) |
+
+All routes are also available under `/api/v1/*` (e.g., `/api/v1/health`, `/api/v1/devices/telemetry`). 🔑 = `X-Device-Key: <deviceKey>`.
 
 `openingHours`: `{"mon": {"open": "08:00", "close": "20:00"}, "sun": null}`.
 
