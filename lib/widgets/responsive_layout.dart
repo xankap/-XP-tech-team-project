@@ -81,18 +81,12 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
                 ),
               ),
               child: SafeArea(
-                child: LayoutBuilder(
-                  builder: (context, constraints) => SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 48, vertical: 32),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight - 64,
-                      ),
-                      child: IntrinsicHeight(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 48, vertical: 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Row(
                         children: [
                           const XpLogo(
@@ -112,7 +106,7 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const Spacer(),
+                      const SizedBox(height: 28),
                       Text(
                         heroTitle,
                         style: const TextStyle(
@@ -143,7 +137,7 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
                           subtitle: item.subtitle,
                         ),
                       ),
-                      const Spacer(),
+                      const SizedBox(height: 28),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -200,10 +194,7 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
                           ),
                         ],
                       ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    ],
                   ),
                 ),
               ),
