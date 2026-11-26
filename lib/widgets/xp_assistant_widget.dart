@@ -682,11 +682,21 @@ class _XpAssistantOverlayState extends State<XpAssistantOverlay>
               const Spacer(),
               if (stepIdx > 0)
                 TextButton(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                   onPressed: () => setState(() => _tourStep = stepIdx - 1),
                   child: const Text('Back'),
                 )
               else
                 TextButton(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                   onPressed: () => setState(() => _tourStep = null),
                   child: const Text('Skip'),
                 ),
@@ -703,11 +713,11 @@ class _XpAssistantOverlayState extends State<XpAssistantOverlay>
                   backgroundColor: AppTheme.corporateBlue,
                   foregroundColor: Colors.white,
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
                 ),
-                child: Text(isLast ? 'Finish Tour' : 'Next →'),
+                child: Text(isLast ? 'Finish' : 'Next →'),
               ),
             ],
           ),

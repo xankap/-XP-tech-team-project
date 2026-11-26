@@ -133,9 +133,9 @@ void main() {
     await tester.tap(find.text('Next →'));
     await tester.pump();
     expect(find.text('XP GAS Guided Tour (4/4)'), findsOneWidget);
-    expect(find.text('Finish Tour'), findsOneWidget);
+    expect(find.text('Finish'), findsOneWidget);
 
-    await tester.tap(find.text('Finish Tour'));
+    await tester.tap(find.text('Finish'));
     await tester.pump();
     expect(find.text('XP GAS Guided Tour (4/4)'), findsNothing);
     expect(tester.takeException(), isNull);
