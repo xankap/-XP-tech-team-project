@@ -4,122 +4,122 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="XP Technology — locally engineered smart electronics, IoT solutions, and technology education for Africa.">
-  <meta name="theme-color" content="#0D47A1">
-  <title>XP Technology | Smart Solutions, Built for Africa</title>
+  <meta name="theme-color" content="#071426">
+  <title>XP Technology | Smart Electronics &amp; IoT Systems</title>
   <link rel="icon" href="favicon.ico?v=2" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=2">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=2">
   <link rel="preconnect" href="https://api.xptechltd.com" crossorigin>
   <style>
     :root {
+      --navy: #071426;
+      --navy-2: #0b2244;
       --blue: #0d47a1;
-      --blue2: #1769d2;
-      --sky: #0284c7;
-      --navy: #061832;
-      --ink: #14243a;
-      --muted: #5b6b82;
-      --pale: #eef5ff;
-      --line: #dce6f2;
+      --blue-2: #1565c0;
+      --accent: #38bdf8;
+      --ink: #0f172a;
+      --slate: #475569;
+      --muted: #64748b;
+      --surface: #f8fafc;
+      --pale: #eff6ff;
+      --line: #e2e8f0;
       --white: #ffffff;
-      --red: #e53935;
-      --green: #16845b;
-      --shadow: 0 20px 54px rgba(6, 24, 50, 0.12);
+      --shadow-sm: 0 4px 16px rgba(7, 20, 38, 0.05);
+      --shadow-md: 0 18px 44px rgba(7, 20, 38, 0.10);
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       color: var(--ink);
-      background: #ffffff;
-      line-height: 1.6;
+      background: var(--white);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
       overflow-x: hidden;
     }
     a { color: inherit; text-decoration: none; }
     button, input, select, textarea { font: inherit; }
-    .container { width: min(1160px, calc(100% - 40px)); margin: auto; }
+    .container { width: min(1140px, calc(100% - 48px)); margin: 0 auto; }
 
-    /* Topbar & Header */
+    /* Top utility bar */
     .topbar {
       background: var(--navy);
-      color: #dce8fa;
-      font-size: 13px;
+      color: #cbd5e1;
+      font-size: 12.5px;
+      letter-spacing: 0.2px;
       padding: 8px 0;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
     .topbar .container {
       display: flex;
       justify-content: space-between;
-      gap: 15px;
+      align-items: center;
+      gap: 16px;
       flex-wrap: wrap;
     }
+
+    /* Sticky Header */
     header {
       position: sticky;
       top: 0;
-      z-index: 30;
-      background: rgba(255, 255, 255, 0.92);
+      z-index: 40;
+      background: rgba(255, 255, 255, 0.94);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--line);
-      transition: box-shadow 0.25s ease;
+      transition: box-shadow 0.3s ease;
     }
-    header.scrolled { box-shadow: 0 8px 30px rgba(6, 24, 50, 0.08); }
+    header.scrolled { box-shadow: 0 6px 24px rgba(7, 20, 38, 0.06); }
     nav {
-      height: 76px;
+      height: 74px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 24px;
+      gap: 32px;
     }
     .brand {
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      gap: 10px;
-      font-weight: 900;
-      letter-spacing: -1.2px;
-      color: var(--blue);
-      font-size: 26px;
+      gap: 12px;
+      flex-shrink: 0;
     }
     .brand-logo {
-      height: 38px;
+      height: 36px;
       width: auto;
-      border-radius: 9px;
-      padding: 4px 6px;
-      background: #fff;
-      border: 1px solid var(--line);
-      box-shadow: 0 4px 12px rgba(13, 71, 161, 0.12);
-    }
-    .brand small {
       display: block;
-      font-size: 9.5px;
-      letter-spacing: 2.2px;
-      color: #27364b;
-      margin-top: -6px;
-      text-align: right;
+      object-fit: contain;
+    }
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.05;
+    }
+    .brand-text strong {
+      font-size: 17px;
       font-weight: 800;
+      letter-spacing: -0.4px;
+      color: var(--navy);
+    }
+    .brand-text span {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.8px;
+      color: var(--muted);
+      text-transform: uppercase;
     }
     .navlinks {
       display: flex;
       align-items: center;
-      gap: 24px;
+      gap: 30px;
       font-size: 14px;
       font-weight: 600;
-      color: #34445a;
+      color: var(--slate);
     }
-    .navlinks a { position: relative; transition: color 0.2s; }
+    .navlinks a:not(.btn) {
+      transition: color 0.2s ease;
+    }
     .navlinks a:not(.btn):hover { color: var(--blue); }
-    .navlinks a:not(.btn)::after {
-      content: "";
-      position: absolute;
-      left: 0;
-      bottom: -4px;
-      width: 0;
-      height: 2px;
-      background: var(--blue);
-      transition: width 0.22s ease;
-    }
-    .navlinks a:not(.btn):hover::after { width: 100%; }
-    .nav-mobile-cta { display: none; }
 
     /* Buttons */
     .btn {
@@ -127,60 +127,69 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      border: 0;
-      border-radius: 10px;
-      padding: 12px 20px;
-      background: linear-gradient(135deg, var(--blue), var(--blue2));
-      color: #fff;
-      font-weight: 700;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 11px 20px;
+      background: var(--blue);
+      color: var(--white);
+      font-size: 14px;
+      font-weight: 650;
       cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+      transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .btn:hover {
+      background: #093780;
+      transform: translateY(-1px);
       box-shadow: 0 8px 20px rgba(13, 71, 161, 0.22);
     }
-    .btn:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(13, 71, 161, 0.32); }
-    .btn:active { transform: translateY(0); }
-    .btn:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
-    .btn.outline {
-      background: rgba(255, 255, 255, 0.08);
-      color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.34);
-      box-shadow: none;
-      backdrop-filter: blur(8px);
-    }
-    .btn.outline:hover { background: rgba(255, 255, 255, 0.16); }
-    .btn.outline-dark {
-      background: #fff;
-      color: var(--blue);
-      border: 1px solid #b9cce6;
-      box-shadow: none;
-    }
-    .btn.outline-dark:hover { background: var(--pale); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
     .btn.light {
-      background: #fff;
-      color: var(--blue);
-      box-shadow: 0 12px 28px rgba(0, 14, 38, 0.28);
+      background: var(--white);
+      color: var(--navy);
     }
-    .btn.light:hover { background: #f3f8ff; }
+    .btn.light:hover {
+      background: #f1f5f9;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+    }
+    .btn.ghost-light {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--white);
+      border-color: rgba(255, 255, 255, 0.26);
+    }
+    .btn.ghost-light:hover {
+      background: rgba(255, 255, 255, 0.14);
+      box-shadow: none;
+    }
+    .btn.outline {
+      background: transparent;
+      color: var(--blue);
+      border-color: #cbd5e1;
+    }
+    .btn.outline:hover {
+      background: var(--surface);
+      border-color: var(--blue);
+      box-shadow: none;
+    }
     .menu-toggle {
       display: none;
-      background: none;
+      background: transparent;
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 6px 10px;
-      font-size: 22px;
+      font-size: 20px;
       color: var(--navy);
       cursor: pointer;
     }
 
-    /* Interactive WebGL Hero */
+    /* Hero */
     .hero {
       position: relative;
-      background: radial-gradient(circle at 78% 24%, #1b5fb8 0%, transparent 45%),
-                  linear-gradient(125deg, #041126 0%, #061832 38%, #0d47a1 82%, #0284c7 100%);
-      color: #fff;
-      padding: 94px 0 92px;
+      background: radial-gradient(circle at 75% 30%, rgba(21, 101, 192, 0.38) 0%, transparent 52%),
+                  linear-gradient(135deg, #050d1a 0%, #071426 45%, #0b2a5b 100%);
+      color: var(--white);
+      padding: 96px 0 92px;
       overflow: hidden;
-      min-height: 620px;
+      min-height: 600px;
       display: flex;
       align-items: center;
     }
@@ -191,79 +200,103 @@
       height: 100%;
       z-index: 0;
       pointer-events: none;
+      opacity: 0.85;
     }
     .hero-glow {
       position: absolute;
-      width: 520px;
-      height: 520px;
+      width: 560px;
+      height: 560px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(56, 189, 248, 0.22) 0%, rgba(13, 71, 161, 0) 70%);
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.12) 0%, rgba(13, 71, 161, 0) 70%);
       pointer-events: none;
       transform: translate(-50%, -50%);
       z-index: 1;
-      transition: opacity 0.3s ease;
+      opacity: 0;
+      transition: opacity 0.6s ease;
     }
     .hero .container { position: relative; z-index: 2; }
     .hero-grid {
       display: grid;
-      grid-template-columns: 1.12fr 0.88fr;
+      grid-template-columns: 1.15fr 0.85fr;
       align-items: center;
-      gap: 54px;
+      gap: 64px;
     }
     .eyebrow {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       text-transform: uppercase;
       letter-spacing: 2px;
       font-size: 11px;
-      font-weight: 800;
-      color: #b8d5ff;
+      font-weight: 700;
+      color: #93c5fd;
     }
-    .eyebrow::before { content: ""; width: 24px; height: 2px; background: #38bdf8; }
+    .eyebrow::before {
+      content: "";
+      width: 24px;
+      height: 1.5px;
+      background: var(--accent);
+    }
     h1 {
-      font-size: clamp(40px, 5vw, 64px);
-      line-height: 1.06;
-      letter-spacing: -2.4px;
-      margin: 18px 0;
+      font-size: clamp(38px, 4.6vw, 56px);
+      line-height: 1.08;
+      letter-spacing: -1.8px;
+      font-weight: 800;
+      margin: 18px 0 20px;
     }
-    .hero p { font-size: 17px; color: #d8e7ff; max-width: 580px; margin: 0 0 28px; }
-    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
-    .hero-note { font-size: 12px; color: #b8d0f0; margin-top: 22px; letter-spacing: 0.2px; }
+    .hero p {
+      font-size: 16.5px;
+      color: #cbd5e1;
+      max-width: 540px;
+      margin: 0 0 32px;
+    }
+    .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; }
+    .hero-metrics {
+      display: flex;
+      gap: 28px;
+      flex-wrap: wrap;
+      margin-top: 38px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      font-size: 12.5px;
+      color: #94a3b8;
+    }
+    .hero-metrics strong {
+      display: block;
+      color: var(--white);
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
 
-    /* Interactive Floating Ripple Device Card */
+    /* Right-Center Slow Floating Ripple Card */
     .hero-visual {
       position: relative;
       min-height: 390px;
       display: grid;
       place-items: center;
-      perspective: 1100px;
+      perspective: 1200px;
     }
     .ripple-ring {
       position: absolute;
-      width: 280px;
-      height: 280px;
+      width: 270px;
+      height: 270px;
       border-radius: 50%;
-      border: 1.5px solid rgba(125, 211, 252, 0.38);
-      box-shadow: 0 0 28px rgba(56, 189, 248, 0.16) inset;
+      border: 1px solid rgba(147, 197, 253, 0.28);
       pointer-events: none;
-      animation: ripplePulse 4.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+      animation: slowRipple 11s cubic-bezier(0.25, 0.8, 0.25, 1) infinite;
     }
-    .ripple-ring.r2 { animation-delay: 1.4s; }
-    .ripple-ring.r3 { animation-delay: 2.8s; }
-    @keyframes ripplePulse {
-      0% { transform: scale(0.78); opacity: 0.75; }
-      70% { opacity: 0.25; }
-      100% { transform: scale(1.55); opacity: 0; }
-    }
-    .hero-visual:hover .ripple-ring {
-      border-color: rgba(125, 211, 252, 0.68);
-      animation-duration: 2.6s;
+    .ripple-ring.r2 { animation-delay: 3.6s; }
+    .ripple-ring.r3 { animation-delay: 7.2s; }
+    @keyframes slowRipple {
+      0% { transform: scale(0.84); opacity: 0.45; }
+      75% { opacity: 0.14; }
+      100% { transform: scale(1.62); opacity: 0; }
     }
     .orbit {
-      width: 320px;
-      height: 320px;
-      border: 1px dashed rgba(255, 255, 255, 0.24);
+      width: 316px;
+      height: 316px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
       border-radius: 50%;
       display: grid;
       place-items: center;
@@ -272,209 +305,264 @@
     }
     .device-card {
       z-index: 3;
-      width: 256px;
+      width: 268px;
       padding: 22px;
-      border-radius: 22px;
-      background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(220, 234, 255, 0.94));
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.97);
       color: var(--navy);
-      box-shadow: 0 28px 75px rgba(0, 14, 40, 0.58), 0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+      box-shadow: 0 30px 70px rgba(3, 10, 24, 0.52), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
       cursor: pointer;
       user-select: none;
       transform-style: preserve-3d;
-      transition: transform 0.16s ease-out, box-shadow 0.25s ease;
-      animation: floatBob 5.2s ease-in-out infinite;
+      transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.4s ease;
+      animation: slowFloat 9.5s ease-in-out infinite;
     }
     .device-card:hover {
-      box-shadow: 0 34px 90px rgba(2, 132, 199, 0.45), 0 0 0 1.5px rgba(125, 211, 252, 0.9) inset;
+      box-shadow: 0 36px 84px rgba(13, 71, 161, 0.38), 0 0 0 1px rgba(147, 197, 253, 0.85) inset;
     }
-    @keyframes floatBob {
+    @keyframes slowFloat {
       0%, 100% { margin-top: 0px; }
-      50% { margin-top: -12px; }
+      50% { margin-top: -9px; }
     }
     .device-top {
       display: flex;
       justify-content: space-between;
       align-items: center;
       font-size: 11px;
+      font-weight: 700;
+      color: var(--slate);
+    }
+    .device-brand-mini {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--navy);
       font-weight: 800;
-      color: var(--blue);
+    }
+    .device-brand-mini img {
+      height: 16px;
+      width: auto;
     }
     .status-pill {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      padding: 3px 8px;
+      gap: 6px;
+      padding: 3px 9px;
       border-radius: 999px;
-      background: #e6f7ef;
-      color: #12704b;
+      background: #ecfdf5;
+      color: #065f46;
       font-size: 10px;
-      font-weight: 800;
+      font-weight: 700;
+      letter-spacing: 0.4px;
     }
     .status-dot {
-      width: 7px;
-      height: 7px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
-      background: #16a34a;
-      animation: blink 1.8s infinite;
+      background: #10b981;
+      animation: slowPulse 3.6s ease-in-out infinite;
     }
-    @keyframes blink {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.45; transform: scale(0.8); }
+    @keyframes slowPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
     }
     .device-screen {
-      background: linear-gradient(155deg, #071e3d, #0d3a78);
-      color: #fff;
-      border-radius: 14px;
-      padding: 16px;
-      margin: 15px 0;
-      box-shadow: 0 8px 20px rgba(6, 24, 50, 0.28) inset;
+      background: linear-gradient(155deg, #071426, #0d3a78);
+      color: var(--white);
+      border-radius: 12px;
+      padding: 18px;
+      margin: 16px 0;
     }
-    .device-screen .lbl { font-size: 10px; color: #9bc0f0; letter-spacing: 0.9px; font-weight: 700; }
-    .device-screen strong { display: block; font-size: 28px; letter-spacing: -1px; margin: 3px 0; }
-    .device-screen .sub { font-size: 11px; color: #cbe0ff; }
+    .device-screen .lbl {
+      font-size: 10px;
+      color: #93c5fd;
+      letter-spacing: 1px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .device-screen strong {
+      display: block;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      margin: 4px 0;
+    }
+    .device-screen .sub {
+      font-size: 11.5px;
+      color: #cbd5e1;
+    }
     .device-bars { display: flex; gap: 5px; margin-top: 14px; }
     .device-bars i {
-      height: 6px;
+      height: 5px;
       flex: 1;
-      border-radius: 9px;
-      background: #1d4e89;
-      transition: background 0.3s ease, transform 0.3s ease;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, 0.16);
+      transition: background 0.5s ease;
     }
-    .device-bars i.active { background: #38bdf8; box-shadow: 0 0 8px rgba(56, 189, 248, 0.7); }
+    .device-bars i.active { background: var(--accent); }
     .device-footer {
       display: flex;
       justify-content: space-between;
       align-items: center;
       font-size: 11px;
-      color: #4b5e79;
-      font-weight: 600;
+      color: var(--muted);
+      font-weight: 500;
     }
-    .device-tap-hint { font-size: 10px; color: var(--blue2); font-weight: 700; }
     .float-tag {
       position: absolute;
       background: rgba(255, 255, 255, 0.96);
       color: var(--navy);
-      padding: 10px 14px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 800;
-      box-shadow: 0 14px 32px rgba(0, 14, 38, 0.26);
+      padding: 9px 14px;
+      border-radius: 10px;
+      font-size: 11.5px;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      box-shadow: 0 12px 28px rgba(4, 12, 28, 0.24);
       z-index: 4;
-      transition: transform 0.25s ease;
     }
-    .tag-one { top: 22px; right: -4px; animation: floatTagA 4.6s ease-in-out infinite; }
-    .tag-two { bottom: 22px; left: -4px; animation: floatTagB 5.1s ease-in-out infinite; }
-    @keyframes floatTagA { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
-    @keyframes floatTagB { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(7px); } }
+    .tag-one { top: 26px; right: 0; animation: slowTagA 10s ease-in-out infinite; }
+    .tag-two { bottom: 26px; left: 0; animation: slowTagB 11s ease-in-out infinite; }
+    @keyframes slowTagA { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+    @keyframes slowTagB { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
 
     /* Sections */
-    section { padding: 82px 0; }
-    .section-head { max-width: 680px; margin-bottom: 36px; }
+    section { padding: 92px 0; }
+    .section-head { max-width: 640px; margin-bottom: 44px; }
     .kicker {
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 2px;
-      font-weight: 800;
+      font-weight: 750;
       color: var(--blue);
     }
     h2 {
-      font-size: clamp(30px, 3.5vw, 42px);
-      line-height: 1.15;
-      letter-spacing: -1.4px;
-      margin: 10px 0 13px;
+      font-size: clamp(28px, 3.2vw, 40px);
+      line-height: 1.16;
+      letter-spacing: -1.1px;
+      font-weight: 800;
+      margin: 10px 0 14px;
       color: var(--navy);
     }
-    .section-head p, .muted { color: var(--muted); }
-    .reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.55s ease, transform 0.55s ease; }
+    .section-head p, .muted { color: var(--slate); margin: 0; }
+    .reveal {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
     .reveal.visible { opacity: 1; transform: translateY(0); }
 
     /* About */
-    .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 55px; align-items: center; }
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+    }
     .about-panel {
-      background: var(--pale);
-      border: 1px solid #d9e8fb;
-      border-radius: 20px;
-      padding: 32px;
-    }
-    .about-panel h3 { margin: 0 0 10px; color: var(--navy); }
-    .values { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
-    .value {
-      padding: 16px;
-      background: #fff;
-      border-radius: 13px;
-      border: 1px solid var(--line);
-      transition: transform 0.2s ease, border-color 0.2s ease;
-    }
-    .value:hover { transform: translateY(-3px); border-color: #9dc2f0; }
-    .value b { display: block; color: var(--blue); margin-bottom: 4px; }
-    .value span { font-size: 13px; color: var(--muted); }
-
-    /* Products */
-    .products { background: #f7faff; }
-    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
-    .card {
-      background: #fff;
+      background: var(--surface);
       border: 1px solid var(--line);
       border-radius: 16px;
-      padding: 26px;
-      box-shadow: 0 8px 24px rgba(15, 45, 85, 0.04);
-      transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+      padding: 34px;
+    }
+    .about-panel h3 { margin: 0 0 10px; color: var(--navy); font-size: 20px; }
+    .values { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
+    .value {
+      padding: 18px;
+      background: var(--white);
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      transition: border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+    .value:hover { border-color: #93c5fd; box-shadow: var(--shadow-sm); }
+    .value b { display: block; color: var(--navy); margin-bottom: 4px; font-size: 14.5px; }
+    .value span { font-size: 13px; color: var(--muted); line-height: 1.5; display: block; }
+
+    /* Solutions Grid */
+    .products { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .card {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 28px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
     }
     .card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 18px 40px rgba(13, 71, 161, 0.10);
-      border-color: #b7d2f4;
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-md);
+      border-color: #bfdbfe;
     }
     .card-icon {
-      width: 48px;
-      height: 48px;
+      width: 44px;
+      height: 44px;
       display: grid;
       place-items: center;
       background: var(--pale);
       color: var(--blue);
-      border-radius: 12px;
-      font-size: 22px;
-      margin-bottom: 17px;
-      font-weight: 800;
+      border-radius: 10px;
+      margin-bottom: 18px;
     }
-    .card h3 { margin: 0 0 8px; color: var(--navy); font-size: 19px; }
-    .card p { margin: 0; color: var(--muted); font-size: 14px; }
+    .card-icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .card h3 { margin: 0 0 8px; color: var(--navy); font-size: 18px; font-weight: 750; }
+    .card p { margin: 0; color: var(--slate); font-size: 14px; flex: 1; }
     .card .small-link {
-      display: inline-block;
-      margin-top: 17px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 20px;
       color: var(--blue);
-      font-weight: 750;
-      font-size: 13px;
+      font-weight: 700;
+      font-size: 13.5px;
     }
 
     /* Preorder */
     .preorder {
-      background: linear-gradient(125deg, #061832 0%, #0d47a1 100%);
-      color: #fff;
+      background: linear-gradient(135deg, #061326 0%, #0b2856 100%);
+      color: var(--white);
     }
-    .preorder h2 { color: #fff; }
-    .preorder-grid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 45px; align-items: start; }
-    .preorder-points { list-style: none; padding: 0; margin: 25px 0; }
-    .preorder-points li { margin: 13px 0; color: #d8e7ff; }
-    .preorder-points li::before { content: "✓"; color: #7ed7b2; font-weight: 900; margin-right: 10px; }
+    .preorder h2 { color: var(--white); }
+    .preorder-grid {
+      display: grid;
+      grid-template-columns: 0.92fr 1.08fr;
+      gap: 56px;
+      align-items: start;
+    }
+    .preorder-points { list-style: none; padding: 0; margin: 26px 0; }
+    .preorder-points li {
+      margin: 12px 0;
+      color: #dbeafe;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+    }
+    .preorder-points li::before {
+      content: "✓";
+      color: #34d399;
+      font-weight: 800;
+    }
     .form-panel {
-      background: #fff;
+      background: var(--white);
       color: var(--ink);
-      border-radius: 18px;
-      padding: 28px;
-      box-shadow: var(--shadow);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: var(--shadow-md);
     }
-    .form-panel h3 { margin: 0 0 5px; color: var(--navy); }
-    .form-panel > p { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
-    .field { margin-bottom: 14px; }
-    label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 6px; color: #334155; }
+    .form-panel h3 { margin: 0 0 6px; color: var(--navy); font-size: 20px; }
+    .form-panel > p { margin: 0 0 20px; color: var(--muted); font-size: 13.5px; }
+    .field { margin-bottom: 15px; }
+    label { display: block; font-size: 12.5px; font-weight: 650; margin-bottom: 6px; color: #334155; }
     input, select, textarea {
       width: 100%;
-      border: 1px solid #cfdae8;
-      border-radius: 9px;
-      padding: 12px 13px;
-      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 11px 13px;
+      background: var(--white);
       color: var(--ink);
+      font-size: 14px;
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
     }
@@ -482,99 +570,114 @@
       border-color: var(--blue);
       box-shadow: 0 0 0 3px rgba(13, 71, 161, 0.12);
     }
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .form-panel .btn { width: 100%; margin-top: 4px; }
-    .form-note { font-size: 11px !important; color: #8492a6 !important; margin-top: 12px !important; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-panel .btn { width: 100%; margin-top: 6px; }
+    .form-note { font-size: 11.5px !important; color: var(--muted) !important; margin-top: 12px !important; }
 
     /* Account Band */
-    .account-band { padding: 52px 0; background: #eaf2fd; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-    .account-inner { display: flex; align-items: center; justify-content: space-between; gap: 25px; }
-    .account-inner h2 { font-size: 29px; margin: 0 0 6px; }
-    .account-inner p { margin: 0; color: var(--muted); }
-
-    /* Announcements & Subscriptions */
-    .announcements { background: #fff; }
-    .post-placeholder {
-      border: 1px dashed #a9bfdc;
-      background: #f7faff;
-      border-radius: 16px;
-      padding: 32px;
-      text-align: center;
-      color: var(--muted);
+    .account-band {
+      padding: 56px 0;
+      background: var(--pale);
+      border-bottom: 1px solid var(--line);
     }
-    .post-placeholder strong { display: block; color: var(--navy); font-size: 18px; margin-bottom: 6px; }
-    .subscription { background: #f7faff; }
+    .account-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 28px;
+    }
+    .account-inner h2 { font-size: 28px; margin: 0 0 6px; }
+    .account-inner p { margin: 0; color: var(--slate); }
+
+    /* Subscriptions */
+    .subscription { background: var(--surface); border-bottom: 1px solid var(--line); }
     .plan { position: relative; }
-    .plan .price { font-size: 28px; font-weight: 900; color: var(--navy); margin: 15px 0 5px; }
-    .plan .price small { font-size: 12px; color: var(--muted); font-weight: 500; }
-    .plan ul { padding-left: 18px; color: var(--muted); font-size: 13px; min-height: 78px; }
-    .plan .btn { width: 100%; margin-top: 12px; }
+    .plan .price { font-size: 26px; font-weight: 800; color: var(--navy); margin: 16px 0 8px; }
+    .plan .price small { font-size: 12.5px; color: var(--muted); font-weight: 500; }
+    .plan ul { padding-left: 18px; color: var(--slate); font-size: 13.5px; margin: 12px 0 20px; flex: 1; }
+    .plan li { margin: 6px 0; }
+    .plan .btn { width: 100%; }
     .plan.featured { border: 2px solid var(--blue); }
     .popular {
       position: absolute;
-      right: 15px;
-      top: 15px;
-      font-size: 10px;
-      background: #e8f1ff;
+      right: 18px;
+      top: 18px;
+      font-size: 10.5px;
+      background: var(--pale);
       color: var(--blue);
-      padding: 5px 9px;
-      border-radius: 20px;
-      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 750;
     }
 
     /* Support & Footer */
-    .support-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 35px; }
-    .support-box { border: 1px solid var(--line); border-radius: 16px; padding: 26px; background: #fff; }
-    .support-box h3 { margin-top: 0; color: var(--navy); }
-    footer { background: #06152b; color: #c4d2e5; padding: 52px 0 22px; }
-    .footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 35px; }
-    footer .brand { color: #fff; }
-    footer .brand small { color: #b9c8dc; }
-    footer h4 { color: #fff; margin: 0 0 13px; }
-    footer a { display: block; color: #c4d2e5; font-size: 13px; margin: 8px 0; }
-    footer a:hover { color: #fff; }
-    .copyright { border-top: 1px solid #24364e; margin-top: 35px; padding-top: 17px; font-size: 11px; color: #8fa2bc; }
+    .support-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
+    .support-box {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 30px;
+      background: var(--white);
+      box-shadow: var(--shadow-sm);
+    }
+    .support-box h3 { margin: 0 0 10px; color: var(--navy); font-size: 20px; }
+    footer { background: var(--navy); color: #cbd5e1; padding: 56px 0 24px; }
+    .footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 40px; }
+    footer .brand-text strong { color: var(--white); }
+    footer .brand-text span { color: #94a3b8; }
+    footer h4 { color: var(--white); margin: 0 0 14px; font-size: 14px; font-weight: 700; }
+    footer a { display: block; color: #cbd5e1; font-size: 13.5px; margin: 9px 0; }
+    footer a:hover { color: var(--white); }
+    .copyright {
+      border-top: 1px solid rgba(255, 255, 255, 0.10);
+      margin-top: 40px;
+      padding-top: 20px;
+      font-size: 12px;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
     .notice {
       display: none;
-      padding: 11px 13px;
-      background: #e8f7f0;
-      color: #126343;
+      padding: 12px 14px;
+      background: #ecfdf5;
+      color: #065f46;
       border-radius: 8px;
       font-size: 13px;
-      margin-top: 12px;
+      margin-top: 14px;
     }
     .notice.error { background: #fef2f2; color: #b91c1c; }
 
-    @media (max-width: 880px) {
+    @media (max-width: 900px) {
       .navlinks {
         display: none;
         position: absolute;
-        top: 76px;
+        top: 74px;
         left: 0;
         right: 0;
-        background: #fff;
-        padding: 20px;
-        box-shadow: var(--shadow);
+        background: var(--white);
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--line);
+        box-shadow: var(--shadow-md);
         flex-direction: column;
         align-items: stretch;
+        gap: 16px;
       }
       .navlinks.open { display: flex; }
-      .nav-mobile-cta { display: inline-flex; }
       .menu-toggle { display: block; }
-      .nav-account { display: none; }
       .hero-grid, .about-grid, .preorder-grid, .support-grid { grid-template-columns: 1fr; }
-      .hero { padding: 66px 0; }
+      .hero { padding: 72px 0; }
       .hero-visual { min-height: 330px; }
       .cards { grid-template-columns: repeat(2, 1fr); }
-      .account-inner { align-items: flex-start; flex-direction: column; }
+      .account-inner { flex-direction: column; align-items: flex-start; }
       .footer-grid { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 560px) {
-      .container { width: min(100% - 30px, 1160px); }
-      section { padding: 58px 0; }
+      .container { width: min(100% - 32px, 1140px); }
+      section { padding: 64px 0; }
       .cards, .values, .form-row, .footer-grid { grid-template-columns: 1fr; }
-      .hero-visual { transform: scale(0.92); margin: -8px 0; }
-      .form-panel { padding: 21px; }
+      .form-panel, .support-box, .about-panel { padding: 22px; }
       .topbar .container { justify-content: center; text-align: center; }
     }
   </style>
@@ -590,18 +693,19 @@
   <header id="siteHeader">
     <nav class="container">
       <a class="brand" href="#home" aria-label="XP Technology home">
-        <img class="brand-logo" src="xp_logo.png" alt="XP Technology">
-        <span>XP<small>TECHNOLOGY</small></span>
+        <img class="brand-logo" src="xp_logo.png" alt="XP Technology logo">
+        <span class="brand-text">
+          <strong>XP Technology</strong>
+          <span>Smart Electronics</span>
+        </span>
       </a>
       <div class="navlinks" id="navlinks">
         <a href="#about">About</a>
         <a href="#products">Solutions</a>
-        <a href="#announcements">News &amp; updates</a>
         <a href="#subscriptions">Subscriptions</a>
         <a href="#support">Support</a>
-        <a class="btn nav-mobile-cta" href="/app">My Account ↗</a>
+        <a class="btn" href="/app">My Account</a>
       </div>
-      <a class="btn nav-account" href="/app">My Account ↗</a>
       <button class="menu-toggle" id="menuToggle" aria-label="Open menu">☰</button>
     </nav>
   </header>
@@ -614,26 +718,33 @@
         <div>
           <span class="eyebrow">Smart technology. Local impact.</span>
           <h1>Building technology for a smarter Africa.</h1>
-          <p>XP Technology designs practical electronic products, connected devices and learning experiences that make everyday life safer, easier and more productive.</p>
+          <p>XP Technology designs practical electronic products, connected IoT devices, and learning experiences that make everyday life safer, easier, and more productive.</p>
           <div class="hero-actions">
             <a class="btn light" href="#preorder">Pre-order Smart Gas Meter</a>
-            <a class="btn outline" href="/app">My XP Account ↗</a>
+            <a class="btn ghost-light" href="#products">Explore Solutions</a>
           </div>
-          <div class="hero-note">Locally driven innovation · IoT hardware · Research &amp; development · Technology education</div>
+          <div class="hero-metrics">
+            <div><strong>IoT Hardware</strong>Embedded systems &amp; telemetry</div>
+            <div><strong>Cloud Diagnostics</strong>Real-time safety &amp; leak alerts</div>
+            <div><strong>Local Engineering</strong>Built in Nigeria for Africa</div>
+          </div>
         </div>
 
-        <div class="hero-visual" id="heroVisual" aria-label="Interactive illustration of a connected XP smart device">
+        <div class="hero-visual" id="heroVisual" aria-label="Interactive XP smart device status card">
           <div class="ripple-ring"></div>
           <div class="ripple-ring r2"></div>
           <div class="ripple-ring r3"></div>
           <div class="orbit">
-            <div class="device-card" id="deviceCard" role="button" tabindex="0" title="Click to cycle live telemetry preview">
+            <div class="device-card" id="deviceCard" role="button" tabindex="0" title="Click to preview device telemetry">
               <div class="device-top">
-                <span>XP TECHNOLOGY</span>
+                <span class="device-brand-mini">
+                  <img src="xp_logo.png" alt="XP">
+                  <span>XP METER</span>
+                </span>
                 <span class="status-pill"><i class="status-dot"></i><span id="cardPill">ONLINE</span></span>
               </div>
               <div class="device-screen">
-                <span class="lbl" id="cardLabel">SMART DEVICE STATUS</span>
+                <span class="lbl" id="cardLabel">Smart Device Status</span>
                 <strong id="cardValue">84% LPG</strong>
                 <span class="sub" id="cardSub">10.5 kg remaining · Leak check safe</span>
                 <div class="device-bars" id="cardBars">
@@ -642,12 +753,12 @@
               </div>
               <div class="device-footer">
                 <span>Connected living, made practical.</span>
-                <span class="device-tap-hint">Tap ↻</span>
+                <span>Click to cycle</span>
               </div>
             </div>
           </div>
-          <div class="float-tag tag-one">⌁ Internet of Things</div>
-          <div class="float-tag tag-two">✓ Designed for real needs</div>
+          <div class="float-tag tag-one">IoT Telemetry</div>
+          <div class="float-tag tag-two">Real-time Safety</div>
         </div>
       </div>
     </section>
@@ -657,18 +768,20 @@
         <div>
           <span class="kicker">Who we are</span>
           <h2>Technology that solves problems that matter.</h2>
-          <p class="muted">XP Technology is an electronics technology company focused on the design and development of IoT hardware, intelligent electronic systems and technology education. We combine engineering, research and practical learning to create solutions for African homes, businesses and industries.</p>
-          <p class="muted">Our approach brings hardware, software and connected services together — with a long-term commitment to local manufacturing, accessible innovation and skills development.</p>
-          <a class="btn" href="#support">Talk to our team</a>
+          <p class="muted">XP Technology is an electronics technology company focused on the design and development of IoT hardware, intelligent electronic systems, and technology education. We combine engineering, research, and practical learning to create solutions for African homes, businesses, and industries.</p>
+          <p class="muted" style="margin-top:14px;">Our approach brings hardware, software, and connected services together — with a long-term commitment to local manufacturing, accessible innovation, and skills development.</p>
+          <div style="margin-top:26px;">
+            <a class="btn" href="#support">Talk to our team</a>
+          </div>
         </div>
         <div class="about-panel">
           <h3>Our focus</h3>
-          <p class="muted">From an idea and a circuit design to a connected product people can use, XP Technology works across the technology development journey.</p>
+          <p class="muted">From an idea and a circuit design to a connected product people can use, XP Technology works across the complete technology development journey.</p>
           <div class="values">
-            <div class="value"><b>Product engineering</b><span>Electronics design, prototyping and embedded systems.</span></div>
-            <div class="value"><b>Connected solutions</b><span>IoT devices, monitoring platforms and applications.</span></div>
+            <div class="value"><b>Product engineering</b><span>Electronics design, prototyping, and embedded systems.</span></div>
+            <div class="value"><b>Connected solutions</b><span>IoT devices, monitoring platforms, and mobile apps.</span></div>
             <div class="value"><b>Research &amp; development</b><span>Continuous improvement and applied innovation.</span></div>
-            <div class="value"><b>Technology education</b><span>Practical training and skills development.</span></div>
+            <div class="value"><b>Technology education</b><span>Practical training and engineering skills development.</span></div>
           </div>
         </div>
       </div>
@@ -679,44 +792,56 @@
         <div class="section-head reveal">
           <span class="kicker">What we build</span>
           <h2>Our products and solutions</h2>
-          <p>Purpose-built technology designed around practical needs, reliable information and useful outcomes.</p>
+          <p>Purpose-built technology designed around practical needs, reliable telemetry, and measurable outcomes.</p>
         </div>
         <div class="cards reveal">
           <article class="card">
-            <div class="card-icon">◉</div>
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            </div>
             <h3>Smart Domestic Gas Meter</h3>
-            <p>Monitor LPG cylinder usage and receive useful safety information through a connected device and mobile experience.</p>
+            <p>Monitor LPG cylinder usage, battery status, and gas leak alerts through a connected hardware unit and mobile experience.</p>
             <a class="small-link" href="#preorder">Pre-order the gas meter →</a>
           </article>
           <article class="card">
-            <div class="card-icon">♧</div>
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24"><path d="M12 22v-9"/><path d="M9 13c-3.5 0-6-2.5-6-6 3.5 0 6 2.5 6 6Z"/><path d="M15 10c0-3.5 2.5-6 6-6 0 3.5-2.5 6-6 6Z"/></svg>
+            </div>
             <h3>XP Farmers Assistant</h3>
-            <p>An IoT and AI-enabled agriculture solution designed to monitor plant conditions, support crop health insights and automate irrigation.</p>
+            <p>An IoT and AI-enabled agriculture solution designed to monitor plant conditions, support crop health insights, and automate irrigation.</p>
             <a class="small-link" href="#support">Enquire about the project →</a>
           </article>
           <article class="card">
-            <div class="card-icon">⌘</div>
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>
+            </div>
             <h3>Electronics &amp; IoT Development</h3>
-            <p>Embedded systems, electronic product design, firmware and connected applications for real-world use cases.</p>
+            <p>Embedded systems, electronic product design, firmware engineering, and connected applications for real-world use cases.</p>
             <a class="small-link" href="#support">Discuss a project →</a>
           </article>
           <article class="card">
-            <div class="card-icon">▣</div>
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 3 5-6"/></svg>
+            </div>
             <h3>Device Data Platform</h3>
-            <p>Access readings and information transmitted by your registered XP devices through your personal account.</p>
+            <p>Access live readings, cloud diagnostics, and refill station maps for your registered XP devices through your personal account.</p>
             <a class="small-link" href="/app">Go to my account →</a>
           </article>
           <article class="card">
-            <div class="card-icon">⚡</div>
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5Z"/><path d="M6 9.5v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg>
+            </div>
             <h3>Electronics Training</h3>
-            <p>Practical learning in electronics, AI, robotics, PCB design and the systems behind everyday technology.</p>
+            <p>Practical learning in electronics, AI, robotics, PCB design, and the engineering systems behind everyday technology.</p>
             <a class="small-link" href="#support">Ask about training →</a>
           </article>
           <article class="card">
-            <div class="card-icon">✧</div>
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.7.6 1 1.3 1 2.3h6c0-1 .3-1.7 1-2.3A7 7 0 0 0 12 2Z"/></svg>
+            </div>
             <h3>Research &amp; Innovation</h3>
-            <p>Exploring new hardware and software applications across energy, agriculture, automation and connected systems.</p>
-            <a class="small-link" href="#announcements">See our updates →</a>
+            <p>Exploring new hardware and software applications across energy, agriculture, automation, and connected infrastructure.</p>
+            <a class="small-link" href="#support">Partner with us →</a>
           </article>
         </div>
       </div>
@@ -727,13 +852,13 @@
         <div>
           <span class="eyebrow">Coming to your home</span>
           <h2>Be among the first to get the XP Smart Gas Meter.</h2>
-          <p style="color:#d8e7ff">Stay informed about product availability, launch updates and pre-order opportunities for our smart domestic LPG monitoring solution.</p>
+          <p style="color:#cbd5e1">Stay informed about product availability, launch updates, and pre-order opportunities for our smart domestic LPG monitoring solution.</p>
           <ul class="preorder-points">
-            <li>Monitor the gas remaining in your cylinder</li>
-            <li>Receive alerts and useful device information</li>
-            <li>Connect your meter to the XP device experience</li>
+            <li>Monitor remaining gas levels in real time</li>
+            <li>Receive automated leak and low-battery alerts</li>
+            <li>Sync your meter to the XP GAS web &amp; mobile app</li>
           </ul>
-          <p style="font-size:12px;color:#a9c5e8">Submitting this form is an expression of interest, not a completed purchase or confirmed order.</p>
+          <p style="font-size:12.5px;color:#94a3b8">Submitting this form is an expression of interest and does not constitute a completed purchase.</p>
         </div>
 
         <form class="form-panel" id="preorderForm">
@@ -769,7 +894,7 @@
           </div>
           <button class="btn" id="preSubmitBtn" type="submit">Submit interest →</button>
           <div class="notice" id="preNotice"></div>
-          <p class="form-note">Submitted directly to XP Technology's secure backend (`api.xptechltd.com`).</p>
+          <p class="form-note">Submitted directly to XP Technology's secure support API.</p>
         </form>
       </div>
     </section>
@@ -778,33 +903,18 @@
       <div class="container account-inner">
         <div>
           <h2>Your devices. Your data. One account.</h2>
-          <p>Sign in to view live readings, hardware diagnostics, and refill stations in the XP GAS web app.</p>
+          <p>Sign in to view live readings, hardware diagnostics, and verified refill stations in the XP GAS web app.</p>
         </div>
-        <a class="btn" href="/app">Access my XP account ↗</a>
+        <a class="btn" href="/app">Access Web App →</a>
       </div>
     </div>
-
-    <section class="announcements" id="announcements">
-      <div class="container reveal">
-        <div class="section-head">
-          <span class="kicker">From XP Technology</span>
-          <h2>News, announcements &amp; activities</h2>
-          <p>Follow product launches, company milestones, training programmes and updates from our research and development work.</p>
-        </div>
-        <div class="post-placeholder">
-          <strong>XP Smart Gas Meter &amp; Partner Map Now Live</strong>
-          Connect your Bluetooth or Wi-Fi meter, inspect cloud leak &amp; battery diagnostics, and locate verified LPG refill plants across Nigeria.<br>
-          <a class="small-link" href="/app" style="display:inline-block;margin-top:12px;color:var(--blue);font-weight:800;">Launch XP GAS Web App →</a>
-        </div>
-      </div>
-    </section>
 
     <section class="subscription" id="subscriptions">
       <div class="container reveal">
         <div class="section-head">
           <span class="kicker">Keep your devices connected</span>
           <h2>Device subscriptions</h2>
-          <p>Manage recurring services associated with your XP devices through your XP account.</p>
+          <p>Manage recurring connectivity and cloud diagnostic services associated with your XP devices.</p>
         </div>
         <div class="cards">
           <article class="card plan">
@@ -812,34 +922,34 @@
             <p>Flexible access for devices with a monthly service plan.</p>
             <div class="price">Flexible <small>/ month</small></div>
             <ul>
-              <li>Device service access</li>
-              <li>Account-based data viewing</li>
-              <li>Support contact channel</li>
+              <li>Cloud telemetry &amp; reading history</li>
+              <li>Real-time leak &amp; battery alerts</li>
+              <li>Standard support channel</li>
             </ul>
             <a class="btn" href="/app">Manage subscription</a>
           </article>
           <article class="card plan featured">
-            <span class="popular">Flexible option</span>
+            <span class="popular">Recommended</span>
             <h3>Annual</h3>
             <p>One annual subscription period for eligible connected devices.</p>
             <div class="price">Best Value <small>/ year</small></div>
             <ul>
-              <li>Annual service period</li>
-              <li>Device data access</li>
-              <li>Renewal reminders</li>
+              <li>Full annual cloud telemetry</li>
+              <li>AI diagnostics &amp; health reports</li>
+              <li>Priority renewal reminders</li>
             </ul>
             <a class="btn" href="/app">View annual plan</a>
           </article>
           <article class="card plan">
             <h3>Device activation</h3>
-            <p>For customers who need to register or activate a new XP device.</p>
+            <p>For customers who need to register or activate a new XP hardware unit.</p>
             <div class="price">Get in touch</div>
             <ul>
               <li>Device registration guidance</li>
-              <li>Account setup assistance</li>
-              <li>Plan information</li>
+              <li>Account &amp; Wi-Fi key setup</li>
+              <li>Fleet &amp; business onboarding</li>
             </ul>
-            <a class="btn outline-dark" href="#support">Contact support</a>
+            <a class="btn outline" href="#support">Contact support</a>
           </article>
         </div>
       </div>
@@ -850,14 +960,14 @@
         <div class="section-head">
           <span class="kicker">We are here to help</span>
           <h2>XP Technology support</h2>
-          <p>Need help with a device, your account, a subscription or a product enquiry? Reach our team through our official support channels.</p>
+          <p>Need help with a device, your account, a subscription, or a product enquiry? Reach our engineering support team.</p>
         </div>
         <div class="support-grid">
           <div class="support-box">
             <h3>Customer support</h3>
-            <p class="muted">For device setup, account access, data and subscription enquiries, contact the XP Technology support team.</p>
-            <p><strong>Support email:</strong> <a href="mailto:admin@xptechltd.com" style="color:var(--blue);font-weight:700;">admin@xptechltd.com</a></p>
-            <p class="muted" style="font-size:12px">You can also sign in to <a href="/app" style="color:var(--blue);font-weight:700;">My XP Account</a> to ask Pip AI for live meter diagnostics.</p>
+            <p class="muted">For device setup, account access, telemetry, and subscription enquiries, contact the XP Technology support team directly.</p>
+            <p style="margin-top:16px;"><strong>Support email:</strong> <a href="mailto:admin@xptechltd.com" style="color:var(--blue);font-weight:700;">admin@xptechltd.com</a></p>
+            <p class="muted" style="font-size:13px;margin-top:10px;">Already have an account? Sign in via <a href="/app" style="color:var(--blue);font-weight:700;">My Account</a> to inspect live hardware diagnostics or ask Pip AI.</p>
           </div>
           <div class="support-box">
             <h3>Send an enquiry</h3>
@@ -879,47 +989,48 @@
       <div class="footer-grid">
         <div>
           <a class="brand" href="#home">
-            <img class="brand-logo" src="xp_logo.png" alt="XP Technology">
-            <span>XP<small>TECHNOLOGY</small></span>
+            <img class="brand-logo" src="xp_logo.png" alt="XP Technology logo" style="background:#fff;padding:5px 8px;border-radius:8px;">
+            <span class="brand-text">
+              <strong>XP Technology</strong>
+              <span>Smart Electronics</span>
+            </span>
           </a>
-          <p style="font-size:13px;max-width:310px;color:#aebed2;margin-top:12px;">Practical electronics, connected devices and technology education — engineered for real needs.</p>
+          <p style="font-size:13.5px;max-width:320px;color:#94a3b8;margin-top:14px;">Practical electronics, connected IoT devices, and technology education — engineered for real needs.</p>
         </div>
         <div>
           <h4>Explore</h4>
           <a href="#about">About XP Technology</a>
           <a href="#products">Products &amp; solutions</a>
-          <a href="#announcements">News &amp; announcements</a>
           <a href="#preorder">Smart Gas Meter pre-order</a>
+          <a href="#subscriptions">Subscriptions</a>
         </div>
         <div>
           <h4>Customer links</h4>
-          <a href="/app">My XP Account</a>
-          <a href="/app">Subscriptions</a>
+          <a href="/app">My Account</a>
+          <a href="#support">Customer support</a>
           <a href="privacy.html">Privacy Policy</a>
           <a href="terms.html">Terms of Service</a>
         </div>
       </div>
       <div class="copyright">
-        © <span id="year"></span> XP Technology. All rights reserved.
-        <span style="float:right">Built with innovation in mind.</span>
+        <span>© <span id="year"></span> XP Technology. All rights reserved.</span>
+        <span>Built with engineering precision in Nigeria.</span>
       </div>
     </div>
   </footer>
 
-  <!-- Three.js WebGL interactive ripple field -->
+  <!-- Three.js WebGL slow interactive ripple field -->
   <script src="https://unpkg.com/three@0.160.0/build/three.min.js" crossorigin="anonymous"></script>
   <script>
     (function () {
       document.getElementById('year').textContent = new Date().getFullYear();
 
-      // Sticky header shadow
       var header = document.getElementById('siteHeader');
       window.addEventListener('scroll', function () {
         if (window.scrollY > 12) header.classList.add('scrolled');
         else header.classList.remove('scrolled');
       }, { passive: true });
 
-      // Mobile menu
       var menuToggle = document.getElementById('menuToggle');
       var navlinks = document.getElementById('navlinks');
       menuToggle.addEventListener('click', function () { navlinks.classList.toggle('open'); });
@@ -927,7 +1038,6 @@
         a.addEventListener('click', function () { navlinks.classList.remove('open'); });
       });
 
-      // Scroll reveal
       if ('IntersectionObserver' in window) {
         var obs = new IntersectionObserver(function (entries) {
           entries.forEach(function (entry) {
@@ -936,26 +1046,24 @@
               obs.unobserve(entry.target);
             }
           });
-        }, { threshold: 0.12 });
+        }, { threshold: 0.10 });
         document.querySelectorAll('.reveal').forEach(function (el) { obs.observe(el); });
       } else {
         document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('visible'); });
       }
 
-      // Hero interactive mouse glow + 3D tilt on floating device card
+      // Gentle cursor glow + subtle 3D tilt on floating device card
       var hero = document.getElementById('home');
       var heroGlow = document.getElementById('heroGlow');
       var deviceCard = document.getElementById('deviceCard');
-      var pointer = { nx: 0, ny: 0, px: 0.5, py: 0.5, active: false };
+      var pointer = { nx: 0, ny: 0, active: false };
 
       hero.addEventListener('mousemove', function (e) {
         var rect = hero.getBoundingClientRect();
         var x = e.clientX - rect.left;
         var y = e.clientY - rect.top;
-        pointer.px = x / rect.width;
-        pointer.py = y / rect.height;
-        pointer.nx = pointer.px * 2 - 1;
-        pointer.ny = -(pointer.py * 2 - 1);
+        pointer.nx = (x / rect.width) * 2 - 1;
+        pointer.ny = -((y / rect.height) * 2 - 1);
         pointer.active = true;
 
         heroGlow.style.left = x + 'px';
@@ -963,25 +1071,24 @@
         heroGlow.style.opacity = '1';
 
         var cardRect = deviceCard.getBoundingClientRect();
-        var cx = (e.clientX - (cardRect.left + cardRect.width / 2)) / 240;
-        var cy = (e.clientY - (cardRect.top + cardRect.height / 2)) / 240;
-        var rotY = Math.max(-14, Math.min(14, cx * 12));
-        var rotX = Math.max(-14, Math.min(14, -cy * 12));
+        var cx = (e.clientX - (cardRect.left + cardRect.width / 2)) / 320;
+        var cy = (e.clientY - (cardRect.top + cardRect.height / 2)) / 320;
+        var rotY = Math.max(-8, Math.min(8, cx * 7));
+        var rotX = Math.max(-8, Math.min(8, -cy * 7));
         deviceCard.style.transform =
-          'rotateX(' + rotX.toFixed(2) + 'deg) rotateY(' + rotY.toFixed(2) + 'deg) rotateZ(-2deg)';
+          'rotateX(' + rotX.toFixed(2) + 'deg) rotateY(' + rotY.toFixed(2) + 'deg)';
       });
 
       hero.addEventListener('mouseleave', function () {
         pointer.active = false;
         heroGlow.style.opacity = '0';
-        deviceCard.style.transform = 'rotateX(0deg) rotateY(0deg) rotateZ(-4deg)';
+        deviceCard.style.transform = 'rotateX(0deg) rotateY(0deg)';
       });
 
-      // Interactive telemetry states on device card click
       var cardStates = [
-        { pill: 'ONLINE', label: 'SMART DEVICE STATUS', value: '84% LPG', sub: '10.5 kg remaining · Leak check safe', bars: 4 },
-        { pill: 'SYNCED', label: 'DIRECT TELEMETRY', value: '12.5 KG', sub: 'Cloud health: Optimal · RSSI -58 dBm', bars: 5 },
-        { pill: 'CALIBRATED', label: 'SENSOR DIAGNOSTICS', value: '0 PPM', sub: 'Zero gas leak · Battery 94%', bars: 5 }
+        { pill: 'ONLINE', label: 'Smart Device Status', value: '84% LPG', sub: '10.5 kg remaining · Leak check safe', bars: 4 },
+        { pill: 'SYNCED', label: 'Direct Telemetry', value: '12.5 KG', sub: 'Cloud health: Optimal · RSSI -58 dBm', bars: 5 },
+        { pill: 'VERIFIED', label: 'Sensor Diagnostics', value: '0 PPM', sub: 'Zero gas leak · Battery 94%', bars: 5 }
       ];
       var cardIdx = 0;
       function cycleDeviceCard() {
@@ -1002,7 +1109,7 @@
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cycleDeviceCard(); }
       });
 
-      // Three.js WebGL interactive ripple mesh & IoT particle wave
+      // Slow, calm Three.js WebGL ripple field
       var canvas = document.getElementById('hero-webgl');
       if (window.THREE && canvas) {
         try {
@@ -1010,27 +1117,27 @@
           renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
           var scene = new THREE.Scene();
-          var camera = new THREE.PerspectiveCamera(52, 1, 0.1, 100);
-          camera.position.set(0, 3.2, 8.2);
+          var camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+          camera.position.set(0, 3.4, 8.6);
           camera.lookAt(0, 0, 0);
 
-          var cols = 44, rows = 26, count = cols * rows;
+          var cols = 42, rows = 24, count = cols * rows;
           var positions = new Float32Array(count * 3);
           var basePos = new Float32Array(count * 2);
           var colors = new Float32Array(count * 3);
           var idx = 0;
           for (var ix = 0; ix < cols; ix++) {
             for (var iz = 0; iz < rows; iz++) {
-              var x = (ix - cols / 2) * 0.42;
-              var z = (iz - rows / 2) * 0.42;
+              var x = (ix - cols / 2) * 0.44;
+              var z = (iz - rows / 2) * 0.44;
               positions[idx * 3] = x;
               positions[idx * 3 + 1] = 0;
               positions[idx * 3 + 2] = z;
               basePos[idx * 2] = x;
               basePos[idx * 2 + 1] = z;
-              colors[idx * 3] = 0.28;
-              colors[idx * 3 + 1] = 0.68;
-              colors[idx * 3 + 2] = 0.98;
+              colors[idx * 3] = 0.24;
+              colors[idx * 3 + 1] = 0.62;
+              colors[idx * 3 + 2] = 0.96;
               idx++;
             }
           }
@@ -1040,18 +1147,17 @@
           geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
           var material = new THREE.PointsMaterial({
-            size: 0.085,
+            size: 0.065,
             vertexColors: true,
             transparent: true,
-            opacity: 0.72,
+            opacity: 0.55,
             blending: THREE.AdditiveBlending
           });
-          var points = new THREE.Points(geometry, material);
-          scene.add(points);
+          scene.add(new THREE.Points(geometry, material));
 
           function resizeWebGL() {
             var w = hero.clientWidth || window.innerWidth;
-            var h = hero.clientHeight || 620;
+            var h = hero.clientHeight || 600;
             renderer.setSize(w, h, false);
             camera.aspect = w / h;
             camera.updateProjectionMatrix();
@@ -1063,11 +1169,12 @@
           var smoothX = 0, smoothZ = 0;
           function animate() {
             requestAnimationFrame(animate);
-            t += 0.025;
-            var targetX = pointer.active ? pointer.nx * 5.2 : Math.cos(t * 0.4) * 2.2;
-            var targetZ = pointer.active ? -pointer.ny * 3.0 : Math.sin(t * 0.4) * 1.4;
-            smoothX += (targetX - smoothX) * 0.08;
-            smoothZ += (targetZ - smoothZ) * 0.08;
+            // Slow, tranquil pace
+            t += 0.0075;
+            var targetX = pointer.active ? pointer.nx * 4.8 : Math.cos(t * 0.35) * 1.8;
+            var targetZ = pointer.active ? -pointer.ny * 2.6 : Math.sin(t * 0.35) * 1.2;
+            smoothX += (targetX - smoothX) * 0.035;
+            smoothZ += (targetZ - smoothZ) * 0.035;
 
             var posAttr = geometry.attributes.position;
             var colAttr = geometry.attributes.color;
@@ -1075,29 +1182,28 @@
               var bx = basePos[i * 2];
               var bz = basePos[i * 2 + 1];
               var dist = Math.hypot(bx - smoothX, bz - smoothZ);
-              var wave = Math.sin(bx * 0.65 + t) * 0.24 + Math.cos(bz * 0.75 + t * 0.9) * 0.22;
-              var ripple = Math.sin(dist * 2.3 - t * 3.4) * Math.exp(-dist * 0.24) * 0.85;
+              var wave = Math.sin(bx * 0.55 + t) * 0.18 + Math.cos(bz * 0.65 + t * 0.85) * 0.16;
+              var ripple = Math.sin(dist * 1.7 - t * 1.6) * Math.exp(-dist * 0.25) * 0.42;
               var y = wave + ripple;
               posAttr.array[i * 3 + 1] = y;
 
-              var highlight = Math.max(0, Math.min(1, (y + 0.5) * 0.75));
-              colAttr.array[i * 3] = 0.14 + highlight * 0.35;
-              colAttr.array[i * 3 + 1] = 0.50 + highlight * 0.42;
-              colAttr.array[i * 3 + 2] = 0.88 + highlight * 0.12;
+              var highlight = Math.max(0, Math.min(1, (y + 0.35) * 0.75));
+              colAttr.array[i * 3] = 0.15 + highlight * 0.28;
+              colAttr.array[i * 3 + 1] = 0.46 + highlight * 0.36;
+              colAttr.array[i * 3 + 2] = 0.86 + highlight * 0.14;
             }
             posAttr.needsUpdate = true;
             colAttr.needsUpdate = true;
-            camera.position.x += ((pointer.active ? pointer.nx * 0.6 : 0) - camera.position.x) * 0.04;
+            camera.position.x += ((pointer.active ? pointer.nx * 0.35 : 0) - camera.position.x) * 0.02;
             camera.lookAt(0, 0, 0);
             renderer.render(scene, camera);
           }
           animate();
         } catch (_) {
-          // Graceful fallback if WebGL context is unavailable
+          // Graceful fallback if WebGL is unavailable
         }
       }
 
-      // Wire Pre-order & Support forms to live backend POST /support
       async function postSupport(payload, btn, notice, successMsg) {
         btn.disabled = true;
         var origText = btn.textContent;
