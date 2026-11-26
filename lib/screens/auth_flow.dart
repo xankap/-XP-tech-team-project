@@ -11,6 +11,7 @@ import '../theme/app_theme.dart';
 import '../widgets/gauge_loading.dart';
 import '../widgets/google_sign_in_button.dart';
 import '../widgets/responsive_layout.dart';
+import '../widgets/xp_assistant_widget.dart';
 import '../widgets/xp_logo.dart';
 import 'retailer_registration_screen.dart';
 import 'station_auth_screen.dart';
@@ -225,7 +226,7 @@ class _LandingPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Sign in or create an account to monitor your gas cylinder or locate verified refill plants.',
+                  'Sign in or create an account to check how much gas you have left or find gas refills near you.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
@@ -242,6 +243,16 @@ class _LandingPage extends StatelessWidget {
                   child: const Text('Continue',
                       style:
                           TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                ),
+                const SizedBox(height: 10),
+                TextButton.icon(
+                  key: const Key('landing-tour-button'),
+                  onPressed: XpAssistantOverlay.startTour,
+                  icon: const Icon(Icons.explore_outlined, size: 18),
+                  label: const Text(
+                    'New here? Take a Quick Tour (Show Me Around)',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
                 if (onOpenStationPortal != null) ...[
                   const SizedBox(height: 16),

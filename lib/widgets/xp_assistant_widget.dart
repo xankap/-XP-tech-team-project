@@ -19,10 +19,14 @@ class _ChatMessage {
 }
 
 /// Floating miniature animated XP GAS mascot ("Pip") that opens an interactive
-/// AI assistant & support chatbot when clicked.
+/// AI assistant, guided site tour, & support chatbot when clicked.
 class XpAssistantOverlay extends StatefulWidget {
   final Widget child;
   final http.Client? httpClient;
+
+  /// Global trigger so any page (like LandingPage) can launch the Guided Tour.
+  static final ValueNotifier<int> tourTrigger = ValueNotifier<int>(0);
+  static void startTour() => tourTrigger.value++;
 
   const XpAssistantOverlay({
     super.key,
@@ -49,6 +53,38 @@ class _XpAssistantOverlayState extends State<XpAssistantOverlay>
   bool _sending = false;
   bool _showSupportForm = false;
   bool _submittingTicket = false;
+  int? _tourStep;
+
+  static const List<({IconData icon, String title, String desc, String linkHint})> _tourSteps = [
+    (
+      icon: Icons.speed_rounded,
+      title: '1. Check Your Gas Level',
+      desc:
+          'Connect your Bluetooth gas meter on the Dashboard to see how much gas is left, how many days it will last, and get leak warnings.',
+      linkHint: 'Dashboard → Connect Meter',
+    ),
+    (
+      icon: Icons.location_on_rounded,
+      title: '2. Find Gas Stations Near You',
+      desc:
+          'Open Find Refill to see trusted gas plants near you, compare prices per kg, and check opening & closing times.',
+      linkHint: 'Find Refill Tab → In Stock / Lowest Price',
+    ),
+    (
+      icon: Icons.storefront_rounded,
+      title: '3. Register Your Gas Plant',
+      desc:
+          'Own a gas station? Sign up on the Partner Portal, pin your location on the map, set your hours, and get verified by XP Admin.',
+      linkHint: 'Welcome / Map → Gas Plant Portal',
+    ),
+    (
+      icon: Icons.support_agent_rounded,
+      title: '4. Ask Pip Anytime',
+      desc:
+          'Click Pip in the bottom-right corner whenever you need help setting up your meter, registering a plant, or reaching XP Admin.',
+      linkHint: 'Bottom-Right Mascot → Chat or Send Ticket',
+    ),
+  ];
 
   final List<_ChatMessage> _messages = [
     const _ChatMessage(
@@ -71,10 +107,20 @@ class _XpAssistantOverlayState extends State<XpAssistantOverlay>
       vsync: this,
       duration: const Duration(milliseconds: 2600),
     )..repeat();
+    XpAssistantOverlay.tourTrigger.addListener(_onExternalTourTrigger);
+  }
+
+  void _onExternalTourTrigger() {
+    if (!mounted) return;
+    setState(() {
+      _isOpen = false;
+      _tourStep = 0;
+    });
   }
 
   @override
   void dispose() {
+    XpAssistantOverlay.tourTrigger.removeListener(_onExternalTourTrigger);
     _animCtrl.dispose();
     _inputCtrl.dispose();
     _supportContactCtrl.dispose();
@@ -228,6 +274,15 @@ class _XpAssistantOverlayState extends State<XpAssistantOverlay>
     return Stack(
       children: [
         widget.child,
+        if (_tourStep != null)
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () => setState(() => _tourStep = null),
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.45),
+              ),
+            ),
+          ),
         Positioned(
           right: isWide ? 24 : 14,
           bottom: isWide ? 24 : 76,
@@ -235,7 +290,17 @@ class _XpAssistantOverlayState extends State<XpAssistantOverlay>
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (_isOpen)
+              if (_tourStep != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Material(
+                    elevation: 18,
+                    shadowColor: AppTheme.corporateBlue.withValues(alpha: 0.30),
+                    borderRadius: BorderRadius.circular(20),
+                    child: _buildTourCard(context, panelWidth),
+                  ),
+                ),
+              if (_isOpen && _tourStep == null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Material(
@@ -440,6 +505,13 @@ class _XpAssistantOverlayState extends State<XpAssistantOverlay>
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               children: [
+                _quickChip('Site Tour', null, onTap: () {
+                  setState(() {
+                    _isOpen = false;
+                    _tourStep = 0;
+                  });
+                }),
+                const SizedBox(width: 6),
                 _quickChip('Calibrate meter', 'How do I calibrate my gas meter?'),
                 const SizedBox(width: 6),
                 _quickChip('Set up gas plant', 'How do I set up my gas plant?'),
@@ -485,6 +557,159 @@ class _XpAssistantOverlayState extends State<XpAssistantOverlay>
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTourCard(BuildContext context, double width) {
+    final stepIdx = (_tourStep ?? 0).clamp(0, _tourSteps.length - 1);
+    final step = _tourSteps[stepIdx];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isLast = stepIdx == _tourSteps.length - 1;
+
+    return Container(
+      width: width,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF121A2B) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppTheme.corporateBlue.withValues(alpha: 0.35),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppTheme.corporateBlue.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(step.icon, color: AppTheme.corporateBlue, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'XP GAS Guided Tour (${stepIdx + 1}/${_tourSteps.length})',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.corporateBlue,
+                      ),
+                    ),
+                    Text(
+                      step.title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 18),
+                tooltip: 'Close Tour',
+                onPressed: () => setState(() => _tourStep = null),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            step.desc,
+            style: TextStyle(
+              fontSize: 13.5,
+              height: 1.45,
+              color: isDark ? Colors.white70 : AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF182338) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.near_me_rounded,
+                    size: 15, color: AppTheme.corporateBlue),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    step.linkHint,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.corporateBlue,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Row(
+                children: List.generate(
+                  _tourSteps.length,
+                  (i) => Container(
+                    width: i == stepIdx ? 16 : 6,
+                    height: 6,
+                    margin: const EdgeInsets.only(right: 5),
+                    decoration: BoxDecoration(
+                      color: i == stepIdx
+                          ? AppTheme.corporateBlue
+                          : Colors.grey.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ),
+              ),
+              const Spacer(),
+              if (stepIdx > 0)
+                TextButton(
+                  onPressed: () => setState(() => _tourStep = stepIdx - 1),
+                  child: const Text('Back'),
+                )
+              else
+                TextButton(
+                  onPressed: () => setState(() => _tourStep = null),
+                  child: const Text('Skip'),
+                ),
+              const SizedBox(width: 6),
+              ElevatedButton(
+                onPressed: () {
+                  if (isLast) {
+                    setState(() => _tourStep = null);
+                  } else {
+                    setState(() => _tourStep = stepIdx + 1);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.corporateBlue,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text(isLast ? 'Finish Tour' : 'Next →'),
+              ),
+            ],
           ),
         ],
       ),

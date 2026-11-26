@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import 'xp_logo.dart';
 
@@ -31,9 +32,9 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
   const XpDesktopSplitAuthShell({
     super.key,
     required this.child,
-    this.heroTitle = 'Smart LPG Monitoring &\nInstant Refill Network',
+    this.heroTitle = 'Track Your Cooking Gas &\nFind Fast Refills Near You',
     this.heroSubtitle =
-        'Track cylinder gas levels in real time, detect leaks early, and locate verified LPG refill plants near you across Nigeria.',
+        'Check how much cooking gas is left in your cylinder, get early leak warnings, and find trusted gas stations near you across Nigeria.',
     this.highlights,
   });
 
@@ -48,18 +49,18 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
         const [
           (
             icon: Icons.sensors_rounded,
-            title: 'Live Smart Cylinder Telemetry',
-            subtitle: 'Monitor remaining kg, days left, and leak alerts.',
+            title: 'Check Your Gas Level Live',
+            subtitle: 'See how much gas is left, how long it will last, and get leak warnings.',
           ),
           (
             icon: Icons.location_on_rounded,
-            title: 'Verified Refill Plants Map',
-            subtitle: 'Compare live ₦/kg prices and opening hours nearby.',
+            title: 'Find Trusted Gas Stations',
+            subtitle: 'Compare gas prices per kg and see opening & closing times nearby.',
           ),
           (
             icon: Icons.storefront_rounded,
-            title: 'Gas Station Partner Portal',
-            subtitle: 'Pin your plant, update pricing, and reach customers.',
+            title: 'Register Your Gas Plant',
+            subtitle: 'Put your gas station on the map, update prices, and reach more buyers.',
           ),
         ];
 
@@ -136,13 +137,61 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
                         ),
                       ),
                       const Spacer(),
-                      Text(
-                        'XP GAS • Clean Cooking Energy Network',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.65),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'XP GAS • Clean Cooking Energy Network',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 14,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              InkWell(
+                                onTap: () => launchUrl(
+                                    Uri.parse('https://xptechltd.com/terms'),
+                                    mode: LaunchMode.externalApplication),
+                                child: Text(
+                                  'Terms of Service',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.78),
+                                    fontSize: 11.5,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: Colors.white.withValues(alpha: 0.5),
+                                  ),
+                                ),
+                              ),
+                              InkWell(
+                                onTap: () => launchUrl(
+                                    Uri.parse('https://xptechltd.com/privacy'),
+                                    mode: LaunchMode.externalApplication),
+                                child: Text(
+                                  'Privacy Policy',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.78),
+                                    fontSize: 11.5,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: Colors.white.withValues(alpha: 0.5),
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '© 2026 XP Technologies Ltd. All rights reserved.',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.60),
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ],
                   ),

@@ -26,7 +26,9 @@ void main() {
 
     // Desktop split shell shows the brand showcase + form body
     expect(find.text('XP GAS'), findsOneWidget);
-    expect(find.text('Live Smart Cylinder Telemetry'), findsOneWidget);
+    expect(find.text('Check Your Gas Level Live'), findsOneWidget);
+    expect(find.text('Terms of Service'), findsOneWidget);
+    expect(find.text('Privacy Policy'), findsOneWidget);
     expect(find.text('Form Body'), findsOneWidget);
 
     // Switch to mobile size: 390x844
@@ -34,7 +36,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Mobile view hides the desktop showcase and renders the child directly
-    expect(find.text('Live Smart Cylinder Telemetry'), findsNothing);
+    expect(find.text('Check Your Gas Level Live'), findsNothing);
     expect(find.text('Form Body'), findsOneWidget);
   });
 
@@ -96,6 +98,46 @@ void main() {
     await tester.pump();
 
     expect(find.text('Message XP GAS Admin'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('XpAssistantOverlay Guided Tour steps through 1 to 4 cleanly',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: XpAssistantOverlay(
+          child: Scaffold(body: Center(child: Text('App'))),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    XpAssistantOverlay.startTour();
+    await tester.pump();
+
+    expect(find.text('XP GAS Guided Tour (1/4)'), findsOneWidget);
+    expect(find.text('1. Check Your Gas Level'), findsOneWidget);
+
+    await tester.tap(find.text('Next →'));
+    await tester.pump();
+    expect(find.text('XP GAS Guided Tour (2/4)'), findsOneWidget);
+
+    await tester.tap(find.text('Skip'.isEmpty ? 'Back' : 'Next →'));
+    await tester.pump();
+    expect(find.text('XP GAS Guided Tour (3/4)'), findsOneWidget);
+
+    await tester.tap(find.text('Next →'));
+    await tester.pump();
+    expect(find.text('XP GAS Guided Tour (4/4)'), findsOneWidget);
+    expect(find.text('Finish Tour'), findsOneWidget);
+
+    await tester.tap(find.text('Finish Tour'));
+    await tester.pump();
+    expect(find.text('XP GAS Guided Tour (4/4)'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }
