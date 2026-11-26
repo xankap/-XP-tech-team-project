@@ -257,5 +257,42 @@ void main() {
       expect(profile.status, 'approved');
       expect(profile.pricePerKg, 1450);
     });
+
+    test('generateDeviceKey, getDeviceDiagnostics, and updateDeviceCalibration hit device endpoints', () async {
+      final seen = <http.Request>[];
+      final api = XpApi(
+        client: MockClient((req) async {
+          seen.add(req);
+          if (req.url.path.endsWith('/device-key')) {
+            return http.Response(
+              '{"ok":true,"meterId":"m-1","deviceKey":"xp_dev_abc123"}',
+              201,
+            );
+          }
+          if (req.url.path.endsWith('/diagnostics')) {
+            return http.Response(
+              '{"ok":true,"health":"critical","meter":{"id":"m-1","cylinderSizeKg":12.5,"tareOffsetKg":0.2,"calibrationFactor":1.0,"firmwareVersion":"1.2.0","lastRssi":-61},"recentEvents":[{"id":"e-1","eventType":"leak_alert","severity":"critical","message":"Leak detected"}]}',
+              200,
+            );
+          }
+          return http.Response('{"ok":true}', 200);
+        }),
+      );
+
+      final keyRes = await api.generateDeviceKey('m-1');
+      expect(keyRes.deviceKey, 'xp_dev_abc123');
+      expect(seen[0].method, 'POST');
+      expect(seen[0].url.path, '/meters/m-1/device-key');
+
+      final diag = await api.getDeviceDiagnostics('m-1');
+      expect(diag.health, 'critical');
+      expect(diag.firmwareVersion, '1.2.0');
+      expect(diag.lastRssi, -61);
+      expect(diag.recentEvents.single.eventType, 'leak_alert');
+
+      await api.updateDeviceCalibration('m-1', tareOffsetKg: 0.3, cylinderSizeKg: 12.5);
+      expect(seen[2].method, 'PATCH');
+      expect(seen[2].url.path, '/devices/m-1/calibration');
+    });
   });
 }

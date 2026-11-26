@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
+import '../services/session_controller.dart';
 import '../theme/app_theme.dart';
 
 class _ChatMessage {
@@ -163,10 +164,16 @@ class _XpAssistantOverlayState extends State<XpAssistantOverlay>
           .map((m) => {'role': m.isUser ? 'user' : 'model', 'text': m.text})
           .toList();
 
+      final token = SessionController.instance?.accessToken;
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
       final res = await _client
           .post(
             Uri.parse('${AppConfig.apiBaseUrl}/assistant/chat'),
-            headers: const {'Content-Type': 'application/json'},
+            headers: headers,
             body: jsonEncode({'message': text, 'history': history}),
           )
           .timeout(AppConfig.requestTimeout);

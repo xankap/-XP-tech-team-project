@@ -3202,6 +3202,186 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _openCloudDiagnosticsSheet() async {
+    setState(() => _busy = true);
+    try {
+      final api = XpApi();
+      final meters = await api.myMeters();
+      if (!mounted) return;
+      if (meters.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No registered cloud meters yet. Connect a meter first to register it.'),
+        ));
+        return;
+      }
+      final target = meters.first;
+      final diag = await api.getDeviceDiagnostics(target.id);
+      if (!mounted) return;
+      String? generatedKey;
+      bool keyBusy = false;
+
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final healthColor = diag.health == 'critical'
+                ? AppTheme.statusCritical
+                : diag.health == 'warning'
+                    ? AppTheme.statusWarning
+                    : AppTheme.statusOK;
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.monitor_heart_outlined, color: healthColor),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            target.label?.isNotEmpty == true
+                                ? target.label!
+                                : target.btAddress,
+                            style: Theme.of(ctx).textTheme.titleMedium,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: healthColor.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            diag.health.toUpperCase(),
+                            style: TextStyle(
+                              color: healthColor,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'MAC: ${target.btAddress} • Cylinder: ${diag.cylinderSizeKg.toStringAsFixed(1)} kg'
+                      '${diag.firmwareVersion != null ? ' • FW ${diag.firmwareVersion}' : ''}'
+                      '${diag.lastRssi != null ? ' • RSSI ${diag.lastRssi} dBm' : ''}',
+                      style: Theme.of(ctx).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: keyBusy
+                            ? null
+                            : () async {
+                                setSheetState(() => keyBusy = true);
+                                try {
+                                  final res = await api.generateDeviceKey(target.id);
+                                  if (ctx.mounted) {
+                                    setSheetState(() => generatedKey = res.deviceKey);
+                                  }
+                                } catch (e) {
+                                  if (ctx.mounted) {
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(content: Text('Key generation failed: $e')),
+                                    );
+                                  }
+                                } finally {
+                                  if (ctx.mounted) setSheetState(() => keyBusy = false);
+                                }
+                              },
+                        icon: const Icon(Icons.vpn_key_outlined),
+                        label: Text(keyBusy ? 'Generating key...' : 'Generate Wi-Fi / IoT Device Key'),
+                      ),
+                    ),
+                    if (generatedKey != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: healthColor.withValues(alpha: 0.4)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Copy this X-Device-Key into your ESP32 / hardware firmware (shown once):',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 6),
+                            SelectableText(
+                              generatedKey!,
+                              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                            ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: () {
+                                  Clipboard.setData(ClipboardData(text: generatedKey!));
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    const SnackBar(content: Text('Device key copied')),
+                                  );
+                                },
+                                icon: const Icon(Icons.copy, size: 16),
+                                label: const Text('Copy key'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    Text('Recent hardware events',
+                        style: Theme.of(ctx).textTheme.labelMedium),
+                    const SizedBox(height: 6),
+                    if (diag.recentEvents.isEmpty)
+                      const Text('No cloud diagnostic events recorded yet.')
+                    else
+                      ...diag.recentEvents.take(6).map((ev) => ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              ev.severity == 'critical'
+                                  ? Icons.error_outline
+                                  : ev.severity == 'warning'
+                                      ? Icons.warning_amber_rounded
+                                      : Icons.check_circle_outline,
+                              color: ev.severity == 'critical'
+                                  ? AppTheme.statusCritical
+                                  : ev.severity == 'warning'
+                                      ? AppTheme.statusWarning
+                                      : AppTheme.statusOK,
+                              size: 20,
+                            ),
+                            title: Text(ev.eventType),
+                            subtitle: ev.message != null ? Text(ev.message!) : null,
+                          )),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load cloud diagnostics: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = _AppState.of(context);
@@ -3305,6 +3485,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     style: TextStyle(
                                         color: AppTheme.statusWarning)),
                             ]))),
+                const SizedBox(height: 12),
+                Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('Cloud IoT & Diagnostics',
+                        style: Theme.of(context).textTheme.labelSmall)),
+                Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.cloud_done_outlined),
+                      title: const Text('Hardware health & IoT key'),
+                      subtitle: const Text(
+                          'View cloud leak/battery events or generate an X-Device-Key for Wi-Fi meters.'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: _busy ? null : _openCloudDiagnosticsSheet,
+                    )),
                 if (app.demoBusinessAccess) ...[
                   const SizedBox(height: 12),
                   Padding(

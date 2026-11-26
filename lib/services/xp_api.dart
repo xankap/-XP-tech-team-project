@@ -191,6 +191,90 @@ class ReadingUploadResult {
       );
 }
 
+/// Generated X-Device-Key credentials for direct Wi-Fi / ESP32 hardware telemetry.
+class DeviceKeyResult {
+  final String meterId;
+  final String deviceKey;
+  const DeviceKeyResult({required this.meterId, required this.deviceKey});
+
+  factory DeviceKeyResult.fromJson(Map<String, dynamic> j) => DeviceKeyResult(
+        meterId: j['meterId']?.toString() ?? '',
+        deviceKey: j['deviceKey']?.toString() ?? '',
+      );
+}
+
+class DeviceDiagnosticEvent {
+  final String id;
+  final String eventType;
+  final String severity;
+  final String? message;
+  final DateTime? createdAt;
+
+  const DeviceDiagnosticEvent({
+    required this.id,
+    required this.eventType,
+    required this.severity,
+    this.message,
+    this.createdAt,
+  });
+
+  factory DeviceDiagnosticEvent.fromJson(Map<String, dynamic> j) =>
+      DeviceDiagnosticEvent(
+        id: j['id']?.toString() ?? '',
+        eventType: j['eventType']?.toString() ?? 'info',
+        severity: j['severity']?.toString() ?? 'info',
+        message: j['message']?.toString(),
+        createdAt: j['createdAt'] != null
+            ? DateTime.tryParse(j['createdAt'].toString())?.toLocal()
+            : null,
+      );
+}
+
+class DeviceDiagnostics {
+  final String health; // healthy | warning | critical
+  final String meterId;
+  final String? firmwareVersion;
+  final String? hardwareModel;
+  final int? lastRssi;
+  final double tareOffsetKg;
+  final double calibrationFactor;
+  final double cylinderSizeKg;
+  final List<DeviceDiagnosticEvent> recentEvents;
+
+  const DeviceDiagnostics({
+    required this.health,
+    required this.meterId,
+    this.firmwareVersion,
+    this.hardwareModel,
+    this.lastRssi,
+    required this.tareOffsetKg,
+    required this.calibrationFactor,
+    required this.cylinderSizeKg,
+    this.recentEvents = const [],
+  });
+
+  factory DeviceDiagnostics.fromJson(Map<String, dynamic> j) {
+    final meter = j['meter'] is Map
+        ? Map<String, dynamic>.from(j['meter'] as Map)
+        : const <String, dynamic>{};
+    final events = (j['recentEvents'] as List? ?? const [])
+        .whereType<Map>()
+        .map((e) => DeviceDiagnosticEvent.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+    return DeviceDiagnostics(
+      health: j['health']?.toString() ?? 'healthy',
+      meterId: meter['id']?.toString() ?? '',
+      firmwareVersion: meter['firmwareVersion']?.toString(),
+      hardwareModel: meter['hardwareModel']?.toString(),
+      lastRssi: (meter['lastRssi'] as num?)?.toInt(),
+      tareOffsetKg: (meter['tareOffsetKg'] as num?)?.toDouble() ?? 0,
+      calibrationFactor: (meter['calibrationFactor'] as num?)?.toDouble() ?? 1,
+      cylinderSizeKg: (meter['cylinderSizeKg'] as num?)?.toDouble() ?? 12.5,
+      recentEvents: events,
+    );
+  }
+}
+
 /// Registered gas station / retailer profile.
 class RetailerProfile {
   final String id;
@@ -485,6 +569,41 @@ class XpApi {
         headers: h,
         body: jsonEncode({'readings': readings})));
     return ReadingUploadResult.fromJson(body);
+  }
+
+  /// Generates or rotates a direct hardware X-Device-Key for ESP32 / Wi-Fi telemetry.
+  Future<DeviceKeyResult> generateDeviceKey(String meterId) async {
+    final body = await _sendAuthed((h) => _client.post(
+          _uri('/meters/$meterId/device-key'),
+          headers: h,
+        ));
+    return DeviceKeyResult.fromJson(body);
+  }
+
+  /// Fetches cloud health, firmware info, latest readings, and recent events.
+  Future<DeviceDiagnostics> getDeviceDiagnostics(String meterId) async {
+    final body = await _sendAuthed(
+        (h) => _client.get(_uri('/devices/$meterId/diagnostics'), headers: h));
+    return DeviceDiagnostics.fromJson(body);
+  }
+
+  /// Updates load-cell calibration and cylinder size in the cloud.
+  Future<void> updateDeviceCalibration(
+    String meterId, {
+    double? tareOffsetKg,
+    double? calibrationFactor,
+    double? cylinderSizeKg,
+  }) async {
+    await _sendAuthed((h) => _client.patch(
+          _uri('/devices/$meterId/calibration'),
+          headers: h,
+          body: jsonEncode({
+            if (tareOffsetKg != null) 'tareOffsetKg': tareOffsetKg,
+            if (calibrationFactor != null)
+              'calibrationFactor': calibrationFactor,
+            if (cylinderSizeKg != null) 'cylinderSizeKg': cylinderSizeKg,
+          }),
+        ));
   }
 
   Future<void> postGasReading(

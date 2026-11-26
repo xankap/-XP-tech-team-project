@@ -836,6 +836,155 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _verifyEmail = email);
   }
 
+  Future<void> _showForgotPasswordDialog() async {
+    final emailCtrl = TextEditingController(
+      text: _email.text.contains('@') ? _email.text.trim() : '',
+    );
+    final tokenCtrl = TextEditingController();
+    final newPassCtrl = TextEditingController();
+    bool hasToken = false;
+    bool sending = false;
+    String? dialogMsg;
+    bool isError = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          title: const Text('Reset password'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!hasToken) ...[
+                  const Text(
+                    'Enter your account email to receive a password reset link & token.',
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ] else ...[
+                  const Text(
+                    'Paste the reset token from your email and choose a new password (8+ characters).',
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: tokenCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Reset token',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: newPassCtrl,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'New password',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+                if (dialogMsg != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    dialogMsg!,
+                    style: TextStyle(
+                      color: isError
+                          ? Theme.of(ctx).colorScheme.error
+                          : AppTheme.statusOK,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: sending
+                        ? null
+                        : () => setDlgState(() {
+                              hasToken = !hasToken;
+                              dialogMsg = null;
+                            }),
+                    child: Text(hasToken
+                        ? 'Need a reset email instead?'
+                        : 'Already have a reset token?'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: sending ? null : () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+            ElevatedButton(
+              onPressed: sending
+                  ? null
+                  : () async {
+                      setDlgState(() {
+                        sending = true;
+                        dialogMsg = null;
+                        isError = false;
+                      });
+                      try {
+                        if (!hasToken) {
+                          final em = emailCtrl.text.trim();
+                          if (!em.contains('@')) {
+                            throw const AuthApiException('Enter a valid email address.');
+                          }
+                          final msg = await _api.forgotPassword(email: em);
+                          if (ctx.mounted) {
+                            setDlgState(() {
+                              dialogMsg = msg;
+                              hasToken = true;
+                            });
+                          }
+                        } else {
+                          final tok = tokenCtrl.text.trim();
+                          final pw = newPassCtrl.text;
+                          if (tok.length < 10 || pw.length < 8) {
+                            throw const AuthApiException(
+                                'Enter a valid reset token and password (8+ chars).');
+                          }
+                          final msg = await _api.resetPassword(
+                            token: tok,
+                            newPassword: pw,
+                          );
+                          if (ctx.mounted) Navigator.of(ctx).pop();
+                          if (mounted) setState(() => _info = msg);
+                        }
+                      } catch (e) {
+                        if (ctx.mounted) {
+                          setDlgState(() {
+                            isError = true;
+                            dialogMsg = e.toString();
+                          });
+                        }
+                      } finally {
+                        if (ctx.mounted) setDlgState(() => sending = false);
+                      }
+                    },
+              child: Text(hasToken ? 'Update password' : 'Send reset email'),
+            ),
+          ],
+        ),
+      ),
+    );
+    emailCtrl.dispose();
+    tokenCtrl.dispose();
+    newPassCtrl.dispose();
+  }
+
   Future<void> _sendSmsCode() async {
     final phone = _phone.text.trim();
     if (!RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(phone)) {
@@ -1075,6 +1224,14 @@ class _LoginPageState extends State<LoginPage> {
           autofillHints: const [AutofillHints.password],
           decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Icons.lock_outline_rounded)),
           onSubmitted: (_) => _submitLogin(),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            key: const Key('forgot-password-btn'),
+            onPressed: _busy ? null : _showForgotPasswordDialog,
+            child: const Text('Forgot password?'),
+          ),
         ),
         _messages(context),
         if (_verifyEmail != null) ...[

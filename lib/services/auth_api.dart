@@ -142,6 +142,20 @@ class AuthApi {
     return json['message']?.toString() ?? 'If your account still needs verification, a new link has been sent.';
   }
 
+  Future<String> forgotPassword({required String email}) async {
+    final json = await _post('/auth/forgot-password', {'email': email}, fallbackError: 'Could not send reset email');
+    return json['message']?.toString() ?? 'If an account matches that email, a reset link has been sent.';
+  }
+
+  Future<String> resetPassword({required String token, required String newPassword}) async {
+    final json = await _post(
+      '/auth/reset-password',
+      {'token': token, 'newPassword': newPassword},
+      fallbackError: 'Could not reset password',
+    );
+    return json['message']?.toString() ?? 'Password updated. You can now log in.';
+  }
+
   Future<AuthResult> google({required String idToken}) =>
       _authPost('/auth/google', {'idToken': idToken}, fallbackError: 'Google sign-in failed');
 
