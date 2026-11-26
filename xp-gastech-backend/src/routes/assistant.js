@@ -205,30 +205,41 @@ async function callGemini(message, history = [], liveStations = [], deviceDiagno
   }
   contents.push({ role: 'user', parts: [{ text: message }] });
 
-  const model = (process.env.GEMINI_MODEL || 'gemini-3.8-flash').trim();
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: XP_GAS_SYSTEM_PROMPT + liveContext + deviceContext }] },
-      contents,
-      generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 350,
-      },
-    }),
-  });
+  const candidates = [
+    process.env.GEMINI_MODEL && process.env.GEMINI_MODEL.trim(),
+    'gemini-3-flash-preview',
+    'gemini-3.1-flash-lite-preview',
+    'gemini-flash-latest',
+  ].filter((v, i, arr) => v && arr.indexOf(v) === i);
 
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '');
-    console.warn(`[assistant] Gemini API returned ${res.status}: ${errText.slice(0, 200)}`);
-    return null;
+  for (const model of candidates) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: XP_GAS_SYSTEM_PROMPT + liveContext + deviceContext }] },
+        contents,
+        generationConfig: {
+          temperature: 0.4,
+          maxOutputTokens: 350,
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.warn(`[assistant] Gemini (${model}) returned ${res.status}: ${errText.slice(0, 200)}`);
+      continue;
+    }
+
+    const data = await res.json();
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (typeof reply === 'string' && reply.trim()) {
+      return reply.trim();
+    }
   }
-
-  const data = await res.json();
-  const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  return typeof reply === 'string' && reply.trim() ? reply.trim() : null;
+  return null;
 }
 
 // POST /assistant/chat
