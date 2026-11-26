@@ -88,9 +88,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('Pip · XP GAS Assistant'), findsOneWidget);
-    expect(find.text('Reach Admin'), findsOneWidget);
+    expect(find.text('Contact XP Admin'), findsOneWidget);
 
-    await tester.tap(find.text('Reach Admin'));
+    await tester.ensureVisible(find.text('Contact XP Admin'));
+    await tester.tap(find.text('Contact XP Admin'));
     await tester.pump();
 
     expect(find.text('Message XP GAS Admin'), findsOneWidget);

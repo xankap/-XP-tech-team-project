@@ -266,70 +266,85 @@ class _XpAssistantOverlayState extends State<XpAssistantOverlay>
           animation: _animCtrl,
           builder: (context, _) {
             final t = _animCtrl.value * 2 * math.pi;
-            final bobY = math.sin(t) * 4.5;
-            final scale = _hovered ? 1.08 : 1.0;
+            final bobY = math.sin(t) * 5.0;
+            final tilt = math.sin(t * 0.5) * 0.06;
+            final pulse = (math.sin(t * 2) + 1) / 2;
+            final scale = _hovered ? 1.10 : 1.0;
 
             return Transform.translate(
               offset: Offset(0, _isOpen ? 0 : bobY),
-              child: AnimatedScale(
-                scale: scale,
-                duration: const Duration(milliseconds: 160),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!_isOpen && MediaQuery.sizeOf(context).width >= 600)
+              child: Transform.rotate(
+                angle: _isOpen ? 0 : tilt,
+                child: AnimatedScale(
+                  scale: scale,
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutBack,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!_isOpen && MediaQuery.sizeOf(context).width >= 600)
+                        Container(
+                          margin: const EdgeInsets.only(right: 10),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF182338) : Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.12),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                            border: Border.all(
+                              color: AppTheme.corporateBlue.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Text(
+                            'Ask Pip · XP GAS',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : AppTheme.corporateBlue,
+                            ),
+                          ),
+                        ),
                       Container(
-                        margin: const EdgeInsets.only(right: 10),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 7),
+                        width: 68,
+                        height: 68,
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF182338) : Colors.white,
-                          borderRadius: BorderRadius.circular(20),
+                          shape: BoxShape.circle,
+                          color: Colors.white,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.12),
-                              blurRadius: 12,
+                              color: const Color(0xFF00B4D8).withValues(
+                                  alpha: _hovered ? 0.55 : (0.22 + pulse * 0.20)),
+                              blurRadius: _hovered ? 24 : (14 + pulse * 6),
+                              spreadRadius: _hovered ? 3 : pulse * 2,
                               offset: const Offset(0, 4),
                             ),
                           ],
                           border: Border.all(
-                            color: AppTheme.corporateBlue.withValues(alpha: 0.22),
+                            color: _hovered
+                                ? const Color(0xFF00B4D8)
+                                : AppTheme.corporateBlue,
+                            width: 2.5,
                           ),
                         ),
-                        child: Text(
-                          'Ask Pip · XP GAS',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? Colors.white : AppTheme.corporateBlue,
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/images/pip_mascot.jpg',
+                            fit: BoxFit.cover,
+                            alignment: const Alignment(0, -0.25),
+                            errorBuilder: (_, __, ___) => CustomPaint(
+                              painter: _PipMascotPainter(phase: _animCtrl.value),
+                            ),
                           ),
                         ),
                       ),
-                    Container(
-                      width: 62,
-                      height: 62,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF003B8E), AppTheme.corporateBlue, Color(0xFF0284C7)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.corporateBlue.withValues(
-                                alpha: _hovered ? 0.45 : 0.30),
-                            blurRadius: _hovered ? 20 : 14,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                        border: Border.all(color: Colors.white, width: 2.5),
-                      ),
-                      child: CustomPaint(
-                        painter: _PipMascotPainter(phase: _animCtrl.value),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );
@@ -367,11 +382,23 @@ class _XpAssistantOverlayState extends State<XpAssistantOverlay>
             ),
             child: Row(
               children: [
-                SizedBox(
-                  width: 34,
-                  height: 34,
-                  child: CustomPaint(
-                    painter: _PipMascotPainter(phase: 0.2),
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/images/pip_mascot.jpg',
+                      fit: BoxFit.cover,
+                      alignment: const Alignment(0, -0.25),
+                      errorBuilder: (_, __, ___) => const CustomPaint(
+                        painter: _PipMascotPainter(phase: 0.2),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
