@@ -266,85 +266,58 @@ class _XpAssistantOverlayState extends State<XpAssistantOverlay>
           animation: _animCtrl,
           builder: (context, _) {
             final t = _animCtrl.value * 2 * math.pi;
-            final bobY = math.sin(t) * 5.0;
-            final tilt = math.sin(t * 0.5) * 0.06;
-            final pulse = (math.sin(t * 2) + 1) / 2;
-            final scale = _hovered ? 1.10 : 1.0;
+            final bobY = math.sin(t) * 4.5;
+            final scale = _hovered ? 1.08 : 1.0;
 
             return Transform.translate(
               offset: Offset(0, _isOpen ? 0 : bobY),
-              child: Transform.rotate(
-                angle: _isOpen ? 0 : tilt,
-                child: AnimatedScale(
-                  scale: scale,
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOutBack,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!_isOpen && MediaQuery.sizeOf(context).width >= 600)
-                        Container(
-                          margin: const EdgeInsets.only(right: 10),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF182338) : Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.12),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                            border: Border.all(
-                              color: AppTheme.corporateBlue.withValues(alpha: 0.25),
-                            ),
-                          ),
-                          child: Text(
-                            'Ask Pip · XP GAS',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? Colors.white : AppTheme.corporateBlue,
-                            ),
-                          ),
-                        ),
+              child: AnimatedScale(
+                scale: scale,
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutBack,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (!_isOpen && MediaQuery.sizeOf(context).width >= 600)
                       Container(
-                        width: 68,
-                        height: 68,
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 13, vertical: 8),
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
+                          color: isDark ? const Color(0xFF182338) : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF00B4D8).withValues(
-                                  alpha: _hovered ? 0.55 : (0.22 + pulse * 0.20)),
-                              blurRadius: _hovered ? 24 : (14 + pulse * 6),
-                              spreadRadius: _hovered ? 3 : pulse * 2,
+                              color: Colors.black.withValues(alpha: 0.12),
+                              blurRadius: 12,
                               offset: const Offset(0, 4),
                             ),
                           ],
                           border: Border.all(
-                            color: _hovered
-                                ? const Color(0xFF00B4D8)
-                                : AppTheme.corporateBlue,
-                            width: 2.5,
+                            color: AppTheme.corporateBlue.withValues(alpha: 0.25),
                           ),
                         ),
-                        child: ClipOval(
-                          child: Image.asset(
-                            'assets/images/pip_mascot.jpg',
-                            fit: BoxFit.cover,
-                            alignment: const Alignment(0, -0.25),
-                            errorBuilder: (_, __, ___) => CustomPaint(
-                              painter: _PipMascotPainter(phase: _animCtrl.value),
-                            ),
+                        child: Text(
+                          'Ask Pip · XP GAS',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : AppTheme.corporateBlue,
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    SizedBox(
+                      width: 82,
+                      height: 98,
+                      child: CustomPaint(
+                        painter: _PipMascotPainter(
+                          phase: _animCtrl.value,
+                          hovered: _hovered,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );
@@ -382,26 +355,17 @@ class _XpAssistantOverlayState extends State<XpAssistantOverlay>
             ),
             child: Row(
               children: [
-                Container(
+                SizedBox(
                   width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    border: Border.all(color: Colors.white, width: 1.5),
-                  ),
-                  child: ClipOval(
-                    child: Image.asset(
-                      'assets/images/pip_mascot.jpg',
-                      fit: BoxFit.cover,
-                      alignment: const Alignment(0, -0.25),
-                      errorBuilder: (_, __, ___) => const CustomPaint(
-                        painter: _PipMascotPainter(phase: 0.2),
-                      ),
+                  height: 44,
+                  child: AnimatedBuilder(
+                    animation: _animCtrl,
+                    builder: (_, __) => CustomPaint(
+                      painter: _PipMascotPainter(phase: _animCtrl.value),
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -662,67 +626,255 @@ class _XpAssistantOverlayState extends State<XpAssistantOverlay>
   }
 }
 
-/// Custom-painted miniature XP GAS mascot ("Pip") with animated eyes & flame antenna.
+/// Custom-painted animated vector mascot matching the XP GAS LPG cylinder robot:
+/// transparent background, collar + brass valve, 3D blue body, glowing cyan
+/// blinking visor eyes, articulated legs/boots, and a waving right hand.
 class _PipMascotPainter extends CustomPainter {
   final double phase;
-  const _PipMascotPainter({required this.phase});
+  final bool hovered;
+  const _PipMascotPainter({required this.phase, this.hovered = false});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2 + 2;
+    final w = size.width;
+    final h = size.height;
+    final cx = w * 0.54; // Slightly right-shifted to leave room for waving arm
 
-    // Tiny flickering flame antenna on top
-    final flicker = math.sin(phase * 4 * math.pi) * 1.5;
-    final flamePaint = Paint()..color = const Color(0xFFFFB300);
-    final flamePath = Path()
-      ..moveTo(cx, cy - size.height * 0.38 - flicker)
-      ..quadraticBezierTo(cx + 5, cy - size.height * 0.25, cx, cy - size.height * 0.20)
-      ..quadraticBezierTo(cx - 5, cy - size.height * 0.25, cx, cy - size.height * 0.38 - flicker);
-    canvas.drawPath(flamePath, flamePaint);
-
-    // Visor / face screen
-    final visorRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(cx, cy + 1), width: size.width * 0.56, height: size.height * 0.38),
-      const Radius.circular(8),
-    );
-    canvas.drawRRect(visorRect, Paint()..color = Colors.white);
-
-    // Blinking eyes every ~2.5s
-    final blink = phase > 0.92;
-    final eyePaint = Paint()
-      ..color = AppTheme.corporateBlue
-      ..strokeWidth = 2.0
+    final outline = Paint()
+      ..color = const Color(0xFF1E293B)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1.2, w * 0.022)
+      ..strokeJoin = StrokeJoin.round
       ..strokeCap = StrokeCap.round;
 
-    final leftEyeX = cx - size.width * 0.11;
-    final rightEyeX = cx + size.width * 0.11;
-    final eyeY = cy - 1;
+    final metalFill = Paint()..color = const Color(0xFFCBD5E1);
+    final metalDark = Paint()..color = const Color(0xFF94A3B8);
 
-    if (blink) {
-      canvas.drawLine(Offset(leftEyeX - 3, eyeY), Offset(leftEyeX + 3, eyeY), eyePaint);
-      canvas.drawLine(Offset(rightEyeX - 3, eyeY), Offset(rightEyeX + 3, eyeY), eyePaint);
-    } else {
-      canvas.drawCircle(Offset(leftEyeX, eyeY), 2.5, eyePaint);
-      canvas.drawCircle(Offset(rightEyeX, eyeY), 2.5, eyePaint);
+    // 1. Soft ground shadow
+    final bobFactor = math.sin(phase * 2 * math.pi);
+    final shadowWidth = w * (0.42 - bobFactor * 0.03);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(cx, h * 0.955),
+        width: shadowWidth,
+        height: h * 0.055,
+      ),
+      Paint()..color = Colors.black.withValues(alpha: 0.18),
+    );
+
+    // 2. Legs & Robotic Boots
+    void drawLeg(double lx, bool isLeft) {
+      // Metallic leg segments
+      final legRect = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(lx, h * 0.77), width: w * 0.11, height: h * 0.14),
+        Radius.circular(w * 0.04),
+      );
+      canvas.drawRRect(legRect, metalFill);
+      canvas.drawRRect(legRect, outline);
+      // Knee joint
+      canvas.drawCircle(Offset(lx, h * 0.77), w * 0.045, metalDark);
+      canvas.drawCircle(Offset(lx, h * 0.77), w * 0.045, outline);
+
+      // Blue boot cuff
+      final cuff = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(lx, h * 0.85), width: w * 0.135, height: h * 0.065),
+        Radius.circular(w * 0.03),
+      );
+      canvas.drawRRect(cuff, Paint()..color = const Color(0xFF3B97D8));
+      canvas.drawRRect(cuff, outline);
+
+      // Silver toe boot
+      final footCenter = Offset(lx + (isLeft ? -w * 0.015 : w * 0.015), h * 0.905);
+      final foot = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: footCenter, width: w * 0.17, height: h * 0.068),
+        Radius.circular(w * 0.034),
+      );
+      canvas.drawRRect(foot, metalFill);
+      canvas.drawRRect(foot, outline);
     }
 
-    // Friendly smile
-    final smilePaint = Paint()
-      ..color = AppTheme.corporateBlue
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.8
+    drawLeg(cx - w * 0.13, true);
+    drawLeg(cx + w * 0.13, false);
+
+    // 3. Left Arm (viewer's right, resting on hip)
+    final lShoulder = Offset(cx + w * 0.25, h * 0.48);
+    final lElbow = Offset(cx + w * 0.36, h * 0.57);
+    final lHand = Offset(cx + w * 0.29, h * 0.65);
+    final armStroke = Paint()
+      ..color = const Color(0xFF94A3B8)
+      ..strokeWidth = w * 0.075
       ..strokeCap = StrokeCap.round;
-    canvas.drawArc(
-      Rect.fromCenter(center: Offset(cx, cy + 4), width: 10, height: 6),
-      0.15,
-      math.pi - 0.3,
-      false,
-      smilePaint,
+    canvas.drawLine(lShoulder, lElbow, armStroke);
+    canvas.drawLine(lElbow, lHand, armStroke);
+    canvas.drawCircle(lShoulder, w * 0.055, metalDark);
+    canvas.drawCircle(lShoulder, w * 0.055, outline);
+    // Blue cuff & fist
+    canvas.drawCircle(lElbow, w * 0.048, Paint()..color = const Color(0xFF3B97D8));
+    canvas.drawCircle(lElbow, w * 0.048, outline);
+    canvas.drawCircle(lHand, w * 0.062, metalFill);
+    canvas.drawCircle(lHand, w * 0.062, outline);
+
+    // 4. Right Arm (viewer's left, WAVING!)
+    final rShoulder = Offset(cx - w * 0.25, h * 0.48);
+    final waveAngle = math.sin(phase * (hovered ? 6 : 4) * math.pi) * 0.36;
+    canvas.save();
+    canvas.translate(rShoulder.dx, rShoulder.dy);
+    canvas.rotate(waveAngle);
+
+    final rElbow = Offset(-w * 0.12, -h * 0.05);
+    final rWrist = Offset(-w * 0.18, -h * 0.15);
+    canvas.drawLine(Offset.zero, rElbow, armStroke);
+    canvas.drawLine(rElbow, rWrist, armStroke);
+    canvas.drawCircle(Offset.zero, w * 0.055, metalDark);
+    canvas.drawCircle(Offset.zero, w * 0.055, outline);
+
+    // Blue wrist cuff
+    final rCuff = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(-w * 0.16, -h * 0.115), width: w * 0.095, height: h * 0.06),
+      Radius.circular(w * 0.025),
     );
+    canvas.drawRRect(rCuff, Paint()..color = const Color(0xFF3B97D8));
+    canvas.drawRRect(rCuff, outline);
+
+    // Waving hand palm + fingers
+    canvas.drawCircle(rWrist, w * 0.058, metalFill);
+    canvas.drawCircle(rWrist, w * 0.058, outline);
+    final fingerPaint = Paint()
+      ..color = const Color(0xFFCBD5E1)
+      ..strokeWidth = math.max(1.5, w * 0.032)
+      ..strokeCap = StrokeCap.round;
+    for (final angle in [-0.7, -0.3, 0.1, 0.55]) {
+      final fx = rWrist.dx + math.sin(angle) * w * 0.095 - w * 0.015;
+      final fy = rWrist.dy - math.cos(angle) * w * 0.095;
+      canvas.drawLine(rWrist, Offset(fx, fy), fingerPaint);
+    }
+    canvas.restore();
+
+    // 5. Top Cylinder Collar & Brass Valve
+    final collarRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(cx, h * 0.21), width: w * 0.38, height: h * 0.14),
+      Radius.circular(w * 0.06),
+    );
+    canvas.drawRRect(collarRect, Paint()..color = const Color(0xFF2B7AB9));
+    canvas.drawRRect(collarRect, outline);
+    // Collar cutout windows
+    final cutoutPaint = Paint()..color = const Color(0xFF174A77);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx - w * 0.12, h * 0.205), width: w * 0.065, height: h * 0.065),
+        Radius.circular(w * 0.015),
+      ),
+      cutoutPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx + w * 0.12, h * 0.205), width: w * 0.065, height: h * 0.065),
+        Radius.circular(w * 0.015),
+      ),
+      cutoutPaint,
+    );
+    // Brass valve + silver wheel
+    final valveBody = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(cx, h * 0.17), width: w * 0.075, height: h * 0.075),
+      Radius.circular(w * 0.02),
+    );
+    canvas.drawRRect(valveBody, Paint()..color = const Color(0xFFD4A037));
+    canvas.drawRRect(valveBody, outline);
+    final wheel = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(cx, h * 0.12), width: w * 0.13, height: h * 0.032),
+      Radius.circular(w * 0.016),
+    );
+    canvas.drawRRect(wheel, metalFill);
+    canvas.drawRRect(wheel, outline);
+
+    // 6. Main 3D Blue Cylinder Body
+    final bodyRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(cx, h * 0.50), width: w * 0.54, height: h * 0.50),
+      Radius.circular(w * 0.22),
+    );
+    final bodyShader = const LinearGradient(
+      colors: [Color(0xFF5BB6F5), Color(0xFF2A82C9), Color(0xFF175994)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ).createShader(bodyRect.outerRect);
+    canvas.drawRRect(bodyRect, Paint()..shader = bodyShader);
+    canvas.drawRRect(bodyRect, outline);
+
+    // Weld seam + shoulder gloss
+    canvas.drawLine(
+      Offset(cx - w * 0.26, h * 0.56),
+      Offset(cx + w * 0.26, h * 0.56),
+      Paint()
+        ..color = const Color(0xFF164A7A).withValues(alpha: 0.45)
+        ..strokeWidth = math.max(1.0, w * 0.015),
+    );
+    canvas.drawOval(
+      Rect.fromCenter(center: Offset(cx - w * 0.11, h * 0.30), width: w * 0.14, height: h * 0.03),
+      Paint()..color = Colors.white.withValues(alpha: 0.35),
+    );
+
+    // 7. Dark Rounded Visor Screen
+    final visorRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(cx, h * 0.43), width: w * 0.39, height: h * 0.195),
+      Radius.circular(w * 0.075),
+    );
+    canvas.drawRRect(visorRect, Paint()..color = const Color(0xFF0E1726));
+    canvas.drawRRect(visorRect, outline);
+
+    // Cyan Glow Eyes (Blink smoothly!)
+    final blink = (phase > 0.42 && phase < 0.47) || (phase > 0.90 && phase < 0.95);
+    final cyanGlow = Paint()
+      ..color = const Color(0xFF38E4FF).withValues(alpha: 0.45)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(2.0, w * 0.045)
+      ..strokeCap = StrokeCap.round;
+    final cyanCore = Paint()
+      ..color = const Color(0xFF7DF3FF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1.6, w * 0.032)
+      ..strokeCap = StrokeCap.round;
+
+    final leftEyeCenter = Offset(cx - w * 0.09, h * 0.42);
+    final rightEyeCenter = Offset(cx + w * 0.09, h * 0.42);
+
+    if (blink) {
+      for (final eye in [leftEyeCenter, rightEyeCenter]) {
+        canvas.drawLine(
+          Offset(eye.dx - w * 0.038, eye.dy + h * 0.01),
+          Offset(eye.dx + w * 0.038, eye.dy + h * 0.01),
+          cyanGlow,
+        );
+        canvas.drawLine(
+          Offset(eye.dx - w * 0.038, eye.dy + h * 0.01),
+          Offset(eye.dx + w * 0.038, eye.dy + h * 0.01),
+          cyanCore,
+        );
+      }
+    } else {
+      // Happy curved cyan eyes (∩ ∩) matching user's mascot image
+      for (final eye in [leftEyeCenter, rightEyeCenter]) {
+        final arcRect = Rect.fromCenter(
+          center: Offset(eye.dx, eye.dy + h * 0.015),
+          width: w * 0.072,
+          height: h * 0.065,
+        );
+        canvas.drawArc(arcRect, math.pi, math.pi, false, cyanGlow);
+        canvas.drawArc(arcRect, math.pi, math.pi, false, cyanCore);
+      }
+    }
+
+    // Glowing cyan smile
+    final smileRect = Rect.fromCenter(
+      center: Offset(cx, h * 0.465),
+      width: w * 0.085,
+      height: h * 0.04,
+    );
+    canvas.drawArc(smileRect, 0.2, math.pi - 0.4, false, cyanGlow);
+    canvas.drawArc(smileRect, 0.2, math.pi - 0.4, false, cyanCore);
   }
 
   @override
   bool shouldRepaint(covariant _PipMascotPainter oldDelegate) =>
-      oldDelegate.phase != phase;
+      oldDelegate.phase != phase || oldDelegate.hovered != hovered;
 }

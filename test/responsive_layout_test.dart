@@ -91,6 +91,7 @@ void main() {
     expect(find.text('Contact XP Admin'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Contact XP Admin'));
+    await tester.pump();
     await tester.tap(find.text('Contact XP Admin'));
     await tester.pump();
 
