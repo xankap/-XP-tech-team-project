@@ -205,7 +205,8 @@ async function callGemini(message, history = [], liveStations = [], deviceDiagno
   }
   contents.push({ role: 'user', parts: [{ text: message }] });
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const model = (process.env.GEMINI_MODEL || 'gemini-3.8-flash').trim();
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
