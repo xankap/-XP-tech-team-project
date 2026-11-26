@@ -2,10 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/account", "destination": "/app.html" },
-    { "source": "/account/(.*)", "destination": "/app.html" },
-    { "source": "/app", "destination": "/app.html" },
-    { "source": "/login", "destination": "/app.html" }
+    { "source": "/account", "destination": "/app" },
+    { "source": "/account/(.*)", "destination": "/app" },
+    { "source": "/login", "destination": "/app" }
   ],
   "headers": [
     {
