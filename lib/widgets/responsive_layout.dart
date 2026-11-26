@@ -68,83 +68,90 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
       backgroundColor: isDark ? const Color(0xFF0A1120) : const Color(0xFFF4F7FC),
       body: Row(
         children: [
-          // Left Brand & Feature Showcase
+          // Left Brand & Feature Showcase (cursor-reactive background + pinned bottom legal footer)
           Expanded(
             flex: 5,
-            child: Container(
-              height: double.infinity,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF003B8E), AppTheme.corporateBlue, Color(0xFF0284C7)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
+            child: _InteractiveShowcaseBackground(
               child: SafeArea(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 48, vertical: 32),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const XpLogo(
-                            width: 38,
-                            padding: EdgeInsets.all(7),
-                            shadow: false,
-                          ),
-                          const SizedBox(width: 14),
-                          const Text(
-                            'XP GAS',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.8,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(48, 36, 48, 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const XpLogo(
+                                  width: 38,
+                                  padding: EdgeInsets.all(7),
+                                  shadow: false,
+                                ),
+                                const SizedBox(width: 14),
+                                const Text(
+                                  'XP GAS',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 28),
-                      Text(
-                        heroTitle,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 38,
-                          fontWeight: FontWeight.w900,
-                          height: 1.15,
-                          letterSpacing: -0.8,
+                            const SizedBox(height: 36),
+                            Text(
+                              heroTitle,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 36,
+                                fontWeight: FontWeight.w900,
+                                height: 1.15,
+                                letterSpacing: -0.8,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 460),
+                              child: Text(
+                                heroSubtitle,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.88),
+                                  fontSize: 15,
+                                  height: 1.55,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 30),
+                            ...items.map(
+                              (item) => _InteractiveHighlightCard(
+                                icon: item.icon,
+                                title: item.title,
+                                subtitle: item.subtitle,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 460),
-                        child: Text(
-                          heroSubtitle,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.86),
-                            fontSize: 15.5,
-                            height: 1.55,
-                          ),
+                    ),
+                    // Pinned bottom legal & network footer
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(48, 14, 48, 22),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.14)),
                         ),
                       ),
-                      const SizedBox(height: 36),
-                      ...items.map(
-                        (item) => _InteractiveHighlightCard(
-                          icon: item.icon,
-                          title: item.title,
-                          subtitle: item.subtitle,
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-                      Column(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             'XP GAS • Clean Cooking Energy Network',
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.85),
+                              color: Colors.white.withValues(alpha: 0.90),
                               fontSize: 12.5,
                               fontWeight: FontWeight.w700,
                             ),
@@ -162,10 +169,11 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
                                 child: Text(
                                   'Terms of Service',
                                   style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.78),
+                                    color: Colors.white.withValues(alpha: 0.80),
                                     fontSize: 11.5,
                                     decoration: TextDecoration.underline,
-                                    decorationColor: Colors.white.withValues(alpha: 0.5),
+                                    decorationColor:
+                                        Colors.white.withValues(alpha: 0.5),
                                   ),
                                 ),
                               ),
@@ -176,17 +184,18 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
                                 child: Text(
                                   'Privacy Policy',
                                   style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.78),
+                                    color: Colors.white.withValues(alpha: 0.80),
                                     fontSize: 11.5,
                                     decoration: TextDecoration.underline,
-                                    decorationColor: Colors.white.withValues(alpha: 0.5),
+                                    decorationColor:
+                                        Colors.white.withValues(alpha: 0.5),
                                   ),
                                 ),
                               ),
                               Text(
                                 '© 2026 XP Technologies Ltd. All rights reserved.',
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.60),
+                                  color: Colors.white.withValues(alpha: 0.62),
                                   fontSize: 11.5,
                                 ),
                               ),
@@ -194,8 +203,8 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
                           ),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -215,6 +224,187 @@ class XpDesktopSplitAuthShell extends StatelessWidget {
       ),
     );
   }
+}
+
+class _InteractiveShowcaseBackground extends StatefulWidget {
+  final Widget child;
+  const _InteractiveShowcaseBackground({required this.child});
+
+  @override
+  State<_InteractiveShowcaseBackground> createState() =>
+      _InteractiveShowcaseBackgroundState();
+}
+
+class _InteractiveShowcaseBackgroundState
+    extends State<_InteractiveShowcaseBackground> {
+  Alignment _glowCenter = const Alignment(-0.4, -0.3);
+  Offset? _cursorFraction;
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() {
+        _hovered = false;
+        _cursorFraction = null;
+        _glowCenter = const Alignment(-0.4, -0.3);
+      }),
+      onHover: (event) {
+        final box = context.findRenderObject() as RenderBox?;
+        if (box == null || !box.hasSize) return;
+        final fx = (event.localPosition.dx / box.size.width).clamp(0.0, 1.0);
+        final fy = (event.localPosition.dy / box.size.height).clamp(0.0, 1.0);
+        setState(() {
+          _cursorFraction = Offset(fx, fy);
+          _glowCenter = Alignment(fx * 2 - 1, fy * 2 - 1);
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: _glowCenter,
+            radius: _hovered ? 1.30 : 1.5,
+            colors: const [
+              Color(0xFF0284C7),
+              AppTheme.corporateBlue,
+              Color(0xFF002B6B),
+            ],
+            stops: const [0.0, 0.50, 1.0],
+          ),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            CustomPaint(
+              painter: _ReactiveMeshPainter(cursor: _cursorFraction),
+            ),
+            widget.child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// GPU-accelerated 3D-parallax particle & constellation mesh that reacts
+/// smoothly to mouse hover without adding heavy external JS bundle weight.
+class _ReactiveMeshPainter extends CustomPainter {
+  final Offset? cursor;
+  const _ReactiveMeshPainter({this.cursor});
+
+  static const List<Offset> _baseNodes = [
+    Offset(0.12, 0.14),
+    Offset(0.28, 0.08),
+    Offset(0.46, 0.18),
+    Offset(0.72, 0.12),
+    Offset(0.88, 0.22),
+    Offset(0.18, 0.34),
+    Offset(0.38, 0.31),
+    Offset(0.62, 0.28),
+    Offset(0.82, 0.40),
+    Offset(0.09, 0.54),
+    Offset(0.29, 0.52),
+    Offset(0.54, 0.48),
+    Offset(0.76, 0.58),
+    Offset(0.92, 0.64),
+    Offset(0.16, 0.74),
+    Offset(0.41, 0.70),
+    Offset(0.64, 0.76),
+    Offset(0.85, 0.82),
+    Offset(0.24, 0.88),
+    Offset(0.52, 0.90),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cPx = cursor != null
+        ? Offset(cursor!.dx * size.width, cursor!.dy * size.height)
+        : null;
+
+    // Shift nodes subtly with 3D parallax + magnetic pull toward cursor
+    final points = <Offset>[];
+    for (int i = 0; i < _baseNodes.length; i++) {
+      final base = Offset(
+        _baseNodes[i].dx * size.width,
+        _baseNodes[i].dy * size.height,
+      );
+      if (cPx == null) {
+        points.add(base);
+      } else {
+        final depth = 0.015 + (i % 4) * 0.008;
+        final parallax = Offset(
+          (cPx.dx - size.width / 2) * depth,
+          (cPx.dy - size.height / 2) * depth,
+        );
+        final delta = cPx - base;
+        final dist = delta.distance;
+        final pull = dist < 180 && dist > 1
+            ? delta * ((180 - dist) / 180 * 0.16)
+            : Offset.zero;
+        points.add(base + parallax + pull);
+      }
+    }
+
+    // Draw subtle constellation connections between nearby nodes
+    final linePaint = Paint()..strokeWidth = 1.0;
+    for (int i = 0; i < points.length; i++) {
+      for (int j = i + 1; j < points.length; j++) {
+        final d = (points[i] - points[j]).distance;
+        if (d < 150) {
+          final alpha = (1 - d / 150) * 0.16;
+          linePaint.color = Colors.white.withValues(alpha: alpha);
+          canvas.drawLine(points[i], points[j], linePaint);
+        }
+      }
+    }
+
+    // Connect nearby nodes to the live cursor with glowing cyan lines
+    if (cPx != null) {
+      for (final pt in points) {
+        final d = (pt - cPx).distance;
+        if (d < 190) {
+          final alpha = (1 - d / 190) * 0.45;
+          canvas.drawLine(
+            pt,
+            cPx,
+            Paint()
+              ..color = const Color(0xFF7DF3FF).withValues(alpha: alpha)
+              ..strokeWidth = 1.3,
+          );
+        }
+      }
+      // Subtle cursor orb halo
+      canvas.drawCircle(
+        cPx,
+        28,
+        Paint()
+          ..color = const Color(0xFF7DF3FF).withValues(alpha: 0.10)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18),
+      );
+    }
+
+    // Draw nodes
+    for (int i = 0; i < points.length; i++) {
+      final pt = points[i];
+      final nearCursor = cPx != null && (pt - cPx).distance < 160;
+      final radius = (i % 3 == 0 ? 3.2 : 2.1) + (nearCursor ? 1.2 : 0.0);
+      canvas.drawCircle(
+        pt,
+        radius,
+        Paint()
+          ..color = nearCursor
+              ? const Color(0xFF7DF3FF).withValues(alpha: 0.85)
+              : Colors.white.withValues(alpha: 0.30),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ReactiveMeshPainter oldDelegate) =>
+      oldDelegate.cursor != cursor;
 }
 
 class _InteractiveHighlightCard extends StatefulWidget {
@@ -239,18 +429,29 @@ class _InteractiveHighlightCardState extends State<_InteractiveHighlightCard> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
+      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
+        transform: Matrix4.translationValues(0, _hovered ? -3 : 0, 0),
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: _hovered ? 0.16 : 0.07),
+          color: Colors.white.withValues(alpha: _hovered ? 0.18 : 0.08),
           borderRadius: BorderRadius.circular(14),
+          boxShadow: _hovered
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.16),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : null,
           border: Border.all(
-            color: Colors.white.withValues(alpha: _hovered ? 0.35 : 0.12),
+            color: Colors.white.withValues(alpha: _hovered ? 0.42 : 0.14),
           ),
         ),
         child: Row(
