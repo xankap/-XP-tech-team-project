@@ -503,7 +503,12 @@ window.editUserRole = function(id, name, currentRole) {
 };
 
 // ---------------- TAB 5: METERS ----------------
+const recentDeviceKeys = new Map();
+
 function showDeviceKeyModal({ meterId, btAddress, label, deviceKey }) {
+  if (meterId && deviceKey) {
+    recentDeviceKeys.set(meterId, deviceKey);
+  }
   document.getElementById('device-key-meter-label').textContent = `${label || 'XP Smart Meter'} (${btAddress || meterId})`;
   document.getElementById('device-key-value').value = deviceKey;
   document.getElementById('device-key-curl').textContent =
@@ -511,7 +516,7 @@ function showDeviceKeyModal({ meterId, btAddress, label, deviceKey }) {
   -H "Content-Type: application/json" \\
   -H "X-Device-Key: ${deviceKey}" \\
   -d '{"percent":82,"weightKg":10.25,"battery":94,"leak":0,"rssi":-61}'`;
-  document.getElementById('device-key-modal').classList.add('open');
+  openModal('device-key-modal');
 }
 
 document.getElementById('btn-copy-device-key')?.addEventListener('click', async () => {
@@ -533,9 +538,8 @@ document.getElementById('btn-gen-mac')?.addEventListener('click', () => {
 });
 
 document.getElementById('btn-open-provision-meter')?.addEventListener('click', async () => {
-  const modal = document.getElementById('provision-meter-modal');
   const select = document.getElementById('prov-owner-id');
-  modal.classList.add('open');
+  openModal('provision-meter-modal');
   if (select) {
     select.innerHTML = '<option value="">Loading accounts...</option>';
     try {
@@ -563,7 +567,7 @@ document.getElementById('btn-confirm-provision-meter')?.addEventListener('click'
   }
   try {
     const res = await window.api.provisionMeter({ ownerUserId, btAddress, label, cylinderSizeKg, generateKey: true });
-    document.getElementById('provision-meter-modal').classList.remove('open');
+    closeAllModals();
     showToast('Meter provisioned', 'success');
     if (res.deviceKey) {
       showDeviceKeyModal({
@@ -606,6 +610,7 @@ async function loadMeters() {
         ? '<span style="color:#10b981;font-weight:700;font-size:12px;">● Key Active</span>'
         : '<span style="color:#64748b;font-size:12px;">○ No Key</span>';
 
+      const cachedKey = recentDeviceKeys.get(m.id);
       tr.innerHTML = `
         <td><code>${escapeHtml(m.btAddress)}</code><br><small class="text-muted">${escapeHtml(m.label || 'Default Cylinder')}${m.firmwareVersion ? ` · v${escapeHtml(m.firmwareVersion)}` : ''}</small></td>
         <td>${escapeHtml(m.ownerEmail || 'Unknown')}</td>
@@ -626,13 +631,23 @@ async function loadMeters() {
           <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
             ${keyBadge}
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              <button class="btn btn-primary btn-sm btn-gen-key">${m.hasDeviceKey ? 'Rotate Key' : 'Generate Key'}</button>
+              ${cachedKey ? '<button class="btn btn-primary btn-sm btn-show-key">View / Copy Key</button>' : ''}
+              <button class="btn ${cachedKey ? 'btn-secondary' : 'btn-primary'} btn-sm btn-gen-key">${m.hasDeviceKey ? 'Rotate Key' : 'Generate Key'}</button>
               ${m.hasDeviceKey ? '<button class="btn btn-secondary btn-sm btn-revoke-key">Revoke</button>' : ''}
               <button class="btn btn-secondary btn-sm btn-ping-meter" title="Queue PING command">Ping</button>
             </div>
           </div>
         </td>
       `;
+
+      tr.querySelector('.btn-show-key')?.addEventListener('click', () => {
+        showDeviceKeyModal({
+          meterId: m.id,
+          btAddress: m.btAddress,
+          label: m.label,
+          deviceKey: cachedKey,
+        });
+      });
 
       tr.querySelector('.btn-gen-key')?.addEventListener('click', async () => {
         if (m.hasDeviceKey && !confirm(`Rotate X-Device-Key for ${m.btAddress}? The old hardware key will stop working immediately.`)) return;
