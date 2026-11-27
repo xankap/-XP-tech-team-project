@@ -145,6 +145,12 @@ function recommendResources(text) {
 
 function localXpGasReply(message, liveStations = []) {
   const q = message.toLowerCase();
+  if (/(pre-?order|order|buy.*meter|get.*meter|subscription|monthly|annual|plan)/.test(q)) {
+    return 'You can register your Smart Gas Meter pre-order interest directly in the Pre-order section on this page! For existing devices, sign in via "My Account" to manage monthly or annual device telemetry subscriptions.';
+  }
+  if (/(farmer|agric|crop|irrigat|training|pcb|robot|education)/.test(q)) {
+    return 'XP Technology builds the XP Farmers Assistant (IoT + AI crop monitoring & irrigation) and delivers practical Electronics, Robotics, AI, and PCB design training. Use the Support enquiry form to discuss a project or training programme.';
+  }
   if (/(calibrat|tare|zero|scale|bluetooth|hc-05|meter|pair)/.test(q)) {
     return 'To calibrate your XP GAS digital meter:\n1. Place the meter scale on a flat surface with no cylinder on it so it zeroes cleanly.\n2. Set your cylinder size (6kg, 12.5kg, 25kg, or 50kg) in Settings.\n3. Enable Bluetooth and tap "Connect Meter" on your Dashboard to pair with your HC-05 unit.';
   }
