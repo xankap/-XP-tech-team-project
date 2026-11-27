@@ -587,8 +587,11 @@
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label" for="prov-bt-address">Device MAC / Serial Address</label>
-          <input id="prov-bt-address" class="form-input" placeholder="e.g. 98:D3:31:AA:BB:CC or XP-ESP32-001" />
+          <label class="form-label" for="prov-bt-address">Device MAC Address</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="prov-bt-address" class="form-input" placeholder="e.g. 98:D3:31:AA:BB:CC" />
+            <button type="button" id="btn-gen-mac" class="btn btn-secondary btn-sm" style="white-space:nowrap;">Generate MAC</button>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label" for="prov-label">Meter Label</label>

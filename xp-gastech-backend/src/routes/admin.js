@@ -23,12 +23,12 @@ function hashDeviceKey(key) {
 }
 
 function normalizeBtAddress(raw) {
-  const s = v.text(raw, 'btAddress', { min: 4, max: 64 }).toUpperCase();
+  const s = v.text(raw, 'btAddress', { min: 12, max: 64 }).toUpperCase();
   const hex = s.replace(/[^0-9A-F]/g, '');
-  if (hex.length === 12) {
-    return hex.match(/.{2}/g).join(':');
+  if (hex.length !== 12) {
+    throw v.bad('btAddress must be a 12-hex-digit MAC address (e.g. 98:D3:31:AA:BB:CC)');
   }
-  return s;
+  return hex.match(/.{2}/g).join(':');
 }
 
 // All endpoints in /admin require an authenticated admin user.
@@ -475,10 +475,10 @@ router.post('/meters', route(async (req, res) => {
   }
 
   const btAddress = normalizeBtAddress(b.btAddress);
-  const label = b.label ? v.text(b.label, 'label', { min: 1, max: 80 }) : 'XP Smart Meter';
+  const label = b.label ? v.text(b.label, 'label', { min: 1, max: 60 }) : 'XP Smart Meter';
   const cylinderSizeKg = b.cylinderSizeKg === undefined || b.cylinderSizeKg === null
     ? 12.5
-    : v.number(b.cylinderSizeKg, 'cylinderSizeKg', { min: 1, max: 500 });
+    : v.number(b.cylinderSizeKg, 'cylinderSizeKg', { min: 0.5, max: 200 });
   const generateKey = b.generateKey !== false;
 
   const userRes = await pool.query('select id, email, username from public.users where id = $1', [ownerUserId]);
@@ -490,11 +490,11 @@ router.post('/meters', route(async (req, res) => {
   const { rows } = await pool.query(
     `insert into public.meters (owner_user_id, bt_address, label, cylinder_size_kg, device_key_hash)
      values ($1, $2, $3, $4, $5)
-     on conflict (owner_user_id, bt_address) do update
-       set label = excluded.label,
+     on conflict (bt_address) where deleted_at is null do update
+       set owner_user_id = excluded.owner_user_id,
+           label = excluded.label,
            cylinder_size_kg = excluded.cylinder_size_kg,
            device_key_hash = coalesce(excluded.device_key_hash, public.meters.device_key_hash),
-           deleted_at = null,
            updated_at = now()
      returning id, owner_user_id, bt_address, label, cylinder_size_kg, created_at`,
     [ownerUserId, btAddress, label, cylinderSizeKg, keyHash]

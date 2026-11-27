@@ -525,6 +525,13 @@ document.getElementById('btn-copy-device-key')?.addEventListener('click', async 
   }
 });
 
+document.getElementById('btn-gen-mac')?.addEventListener('click', () => {
+  const bytes = Array.from({ length: 6 }, () =>
+    Math.floor(Math.random() * 256).toString(16).padStart(2, '0').toUpperCase()
+  );
+  document.getElementById('prov-bt-address').value = bytes.join(':');
+});
+
 document.getElementById('btn-open-provision-meter')?.addEventListener('click', async () => {
   const modal = document.getElementById('provision-meter-modal');
   const select = document.getElementById('prov-owner-id');
