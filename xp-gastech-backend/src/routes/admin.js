@@ -466,7 +466,7 @@ router.post('/meters', route(async (req, res) => {
   if (b.ownerUserId) {
     ownerUserId = v.uuid(b.ownerUserId, 'ownerUserId');
   } else if (b.ownerEmail) {
-    const email = v.email(b.ownerEmail);
+    const email = v.text(b.ownerEmail, 'ownerEmail', { min: 3, max: 254 }).toLowerCase();
     const byEmail = await pool.query('select id from public.users where lower(email) = lower($1)', [email]);
     if (!byEmail.rows[0]) return res.status(404).json({ error: 'Owner user email not found' });
     ownerUserId = byEmail.rows[0].id;
@@ -478,7 +478,7 @@ router.post('/meters', route(async (req, res) => {
   const label = b.label ? v.text(b.label, 'label', { min: 1, max: 60 }) : 'XP Smart Meter';
   const cylinderSizeKg = b.cylinderSizeKg === undefined || b.cylinderSizeKg === null
     ? 12.5
-    : v.number(b.cylinderSizeKg, 'cylinderSizeKg', { min: 0.5, max: 200 });
+    : v.num(b.cylinderSizeKg, 'cylinderSizeKg', { min: 0.5, max: 200 });
   const generateKey = b.generateKey !== false;
 
   const userRes = await pool.query('select id, email, username from public.users where id = $1', [ownerUserId]);

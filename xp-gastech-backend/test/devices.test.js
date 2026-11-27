@@ -812,3 +812,72 @@ test('admin can generate, revoke X-Device-Key and queue commands for any meter',
   assert.equal(revData.revoked, true);
   assert.ok(queries.some((q) => q.sql.includes('insert into public.audit_logs')));
 });
+
+test('POST /admin/meters provisions meter and issues X-Device-Key', async (t) => {
+  const origQuery = pool.query.bind(pool);
+  const now = new Date().toISOString();
+
+  pool.query = async (sql) => {
+    if (sql.includes('from users u where u.id = $1')) {
+      return {
+        rows: [
+          {
+            id: TEST_USER_ID,
+            email: 'admin@xptechltd.com',
+            phone: null,
+            username: 'admin',
+            role: 'admin',
+            phone_verified_at: null,
+            email_verified_at: now,
+            created_at: now,
+            session_active: true,
+          },
+        ],
+      };
+    }
+    if (sql.includes('select id, email, username from public.users where id = $1')) {
+      return { rows: [{ id: TEST_USER_ID, email: 'admin@xptechltd.com', username: 'admin' }] };
+    }
+    if (sql.includes('insert into public.meters')) {
+      return {
+        rows: [
+          {
+            id: TEST_METER_ID,
+            owner_user_id: TEST_USER_ID,
+            bt_address: '98:D3:31:AA:BB:CC',
+            label: 'Test Meter',
+            cylinder_size_kg: '12.5',
+            created_at: now,
+          },
+        ],
+      };
+    }
+    return { rows: [] };
+  };
+  t.after(() => {
+    pool.query = origQuery;
+  });
+
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const adminToken = jwt.sign({ sub: TEST_USER_ID, typ: 'access' }, process.env.JWT_SECRET, {
+    expiresIn: '1h',
+  });
+
+  const res = await fetch(`${base}/api/v1/admin/meters`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      btAddress: '98:D3:31:AA:BB:CC',
+      label: 'Test Meter',
+      cylinderSizeKg: 12.5,
+      generateKey: true,
+    }),
+  });
+  assert.equal(res.status, 201);
+  const data = await res.json();
+  assert.equal(data.ok, true);
+  assert.equal(data.meter.btAddress, '98:D3:31:AA:BB:CC');
+  assert.match(data.deviceKey, /^xpdev_[0-9a-f]{48}$/);
+});
