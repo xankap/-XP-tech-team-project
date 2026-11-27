@@ -1545,6 +1545,18 @@
           sendPipMessage(chip.getAttribute('data-q'));
         });
       });
+
+      // Quietly prefetch the Flutter web app in the background after landing page settles
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          ['/app', '/flutter_bootstrap.js', '/main.dart.js'].forEach(function (href) {
+            var link = document.createElement('link');
+            link.rel = 'prefetch';
+            link.href = href;
+            document.head.appendChild(link);
+          });
+        }, 1200);
+      });
     })();
   </script>
 </body>
