@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const express = require('express');
 const { pool } = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
@@ -182,7 +183,7 @@ router.post(
         weight_kg: item.weight_kg ?? item.weightKg,
         leak_level: item.leak_level ?? item.leakLevel ?? item.leak,
         recorded_at: item.recorded_at ?? item.recordedAt ?? new Date().toISOString(),
-        client_reading_id: item.client_reading_id ?? item.clientReadingId,
+        client_reading_id: item.client_reading_id ?? item.clientReadingId ?? crypto.randomUUID(),
         source: 'device_direct',
       });
     });
