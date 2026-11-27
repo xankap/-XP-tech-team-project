@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const express = require('express');
 const { pool } = require('../db/pool');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
@@ -7,6 +8,28 @@ const { notifyRetailerReview } = require('./retailers');
 
 const router = express.Router();
 const route = asyncRoute('Admin request failed', 'admin');
+
+const ADMIN_ALLOWED_COMMANDS = new Set([
+  'CALIBRATE_EMPTY',
+  'TARE',
+  'SET_EMPTY',
+  'REBOOT',
+  'PING',
+  'SET_INTERVAL',
+]);
+
+function hashDeviceKey(key) {
+  return crypto.createHash('sha256').update(String(key)).digest('hex');
+}
+
+function normalizeBtAddress(raw) {
+  const s = v.text(raw, 'btAddress', { min: 4, max: 64 }).toUpperCase();
+  const hex = s.replace(/[^0-9A-F]/g, '');
+  if (hex.length === 12) {
+    return hex.match(/.{2}/g).join(':');
+  }
+  return s;
+}
 
 // All endpoints in /admin require an authenticated admin user.
 router.use(requireAuth, requireAdmin);
@@ -385,6 +408,8 @@ router.get('/meters', route(async (_req, res) => {
   const query = `
     select 
       m.id, m.owner_user_id, m.bt_address, m.label, m.cylinder_size_kg,
+      m.tare_offset_kg, m.calibration_factor, m.firmware_version, m.hardware_model, m.last_rssi,
+      (m.device_key_hash is not null) as has_device_key,
       m.created_at, m.updated_at, m.last_reading_at, m.deleted_at,
       u.email as owner_email, u.username as owner_username, u.phone as owner_phone,
       r.percent as last_percent, r.weight_kg as last_weight_kg,
@@ -413,6 +438,12 @@ router.get('/meters', route(async (_req, res) => {
       btAddress: m.bt_address,
       label: m.label,
       cylinderSizeKg: m.cylinder_size_kg === null ? null : Number(m.cylinder_size_kg),
+      tareOffsetKg: m.tare_offset_kg === null ? 0 : Number(m.tare_offset_kg),
+      calibrationFactor: m.calibration_factor === null ? 1 : Number(m.calibration_factor),
+      firmwareVersion: m.firmware_version ?? null,
+      hardwareModel: m.hardware_model ?? null,
+      lastRssi: m.last_rssi ?? null,
+      hasDeviceKey: Boolean(m.has_device_key),
       createdAt: m.created_at,
       updatedAt: m.updated_at,
       lastReadingAt: m.last_reading_at,
@@ -426,6 +457,144 @@ router.get('/meters', route(async (_req, res) => {
       } : null,
     })),
   });
+}));
+
+// POST /admin/meters — Provision a new IoT meter for a user (optionally issuing X-Device-Key)
+router.post('/meters', route(async (req, res) => {
+  const b = req.body || {};
+  const ownerUserId = v.uuid(b.ownerUserId, 'ownerUserId');
+  const btAddress = normalizeBtAddress(b.btAddress);
+  const label = b.label ? v.text(b.label, 'label', { min: 1, max: 80 }) : 'XP Smart Meter';
+  const cylinderSizeKg = b.cylinderSizeKg === undefined || b.cylinderSizeKg === null
+    ? 12.5
+    : v.number(b.cylinderSizeKg, 'cylinderSizeKg', { min: 1, max: 500 });
+  const generateKey = b.generateKey !== false;
+
+  const userRes = await pool.query('select id, email, username from public.users where id = $1', [ownerUserId]);
+  if (!userRes.rows[0]) return res.status(404).json({ error: 'Owner user not found' });
+
+  const deviceKey = generateKey ? `xpdev_${crypto.randomBytes(24).toString('hex')}` : null;
+  const keyHash = deviceKey ? hashDeviceKey(deviceKey) : null;
+
+  const { rows } = await pool.query(
+    `insert into public.meters (owner_user_id, bt_address, label, cylinder_size_kg, device_key_hash)
+     values ($1, $2, $3, $4, $5)
+     on conflict (owner_user_id, bt_address) do update
+       set label = excluded.label,
+           cylinder_size_kg = excluded.cylinder_size_kg,
+           device_key_hash = coalesce(excluded.device_key_hash, public.meters.device_key_hash),
+           deleted_at = null,
+           updated_at = now()
+     returning id, owner_user_id, bt_address, label, cylinder_size_kg, created_at`,
+    [ownerUserId, btAddress, label, cylinderSizeKg, keyHash]
+  );
+
+  await pool.query(
+    `insert into public.audit_logs (actor_user_id, action, target_type, target_id, metadata)
+     values ($1, 'admin_provision_meter', 'meter', $2, $3::jsonb)`,
+    [req.user.id, rows[0].id, JSON.stringify({ ownerUserId, btAddress, generateKey })]
+  ).catch(() => {});
+
+  return res.status(201).json({
+    ok: true,
+    meter: {
+      id: rows[0].id,
+      ownerUserId: rows[0].owner_user_id,
+      btAddress: rows[0].bt_address,
+      label: rows[0].label,
+      cylinderSizeKg: Number(rows[0].cylinder_size_kg),
+      hasDeviceKey: Boolean(keyHash),
+      createdAt: rows[0].created_at,
+    },
+    ...(deviceKey ? { deviceKey } : {}),
+  });
+}));
+
+// POST /admin/meters/:id/device-key — Admin generates or rotates an IoT X-Device-Key
+router.post('/meters/:id/device-key', route(async (req, res) => {
+  const id = v.uuid(req.params.id, 'meter id');
+  const deviceKey = `xpdev_${crypto.randomBytes(24).toString('hex')}`;
+  const keyHash = hashDeviceKey(deviceKey);
+
+  const { rows } = await pool.query(
+    `update public.meters
+        set device_key_hash = $1, updated_at = now()
+      where id = $2 and deleted_at is null
+      returning id, bt_address, label, owner_user_id`,
+    [keyHash, id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Meter not found' });
+
+  await pool.query(
+    `insert into public.audit_logs (actor_user_id, action, target_type, target_id, metadata)
+     values ($1, 'admin_generate_device_key', 'meter', $2, $3::jsonb)`,
+    [req.user.id, rows[0].id, JSON.stringify({ btAddress: rows[0].bt_address })]
+  ).catch(() => {});
+
+  return res.status(200).json({
+    ok: true,
+    meterId: rows[0].id,
+    btAddress: rows[0].bt_address,
+    label: rows[0].label,
+    deviceKey,
+    endpoints: {
+      me: '/api/v1/devices/me',
+      handshake: '/api/v1/devices/handshake',
+      telemetry: '/api/v1/devices/telemetry',
+      events: '/api/v1/devices/events',
+      commandsPending: '/api/v1/devices/commands/pending',
+    },
+  });
+}));
+
+// DELETE /admin/meters/:id/device-key — Admin revokes a compromised or retired IoT key
+router.delete('/meters/:id/device-key', route(async (req, res) => {
+  const id = v.uuid(req.params.id, 'meter id');
+  const { rows } = await pool.query(
+    `update public.meters
+        set device_key_hash = null, updated_at = now()
+      where id = $1 and deleted_at is null
+      returning id, bt_address`,
+    [id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Meter not found' });
+
+  await pool.query(
+    `insert into public.audit_logs (actor_user_id, action, target_type, target_id, metadata)
+     values ($1, 'admin_revoke_device_key', 'meter', $2, $3::jsonb)`,
+    [req.user.id, rows[0].id, JSON.stringify({ btAddress: rows[0].bt_address })]
+  ).catch(() => {});
+
+  return res.json({ ok: true, meterId: rows[0].id, revoked: true });
+}));
+
+// POST /admin/meters/:id/commands — Admin queues a remote command for an IoT meter
+router.post('/meters/:id/commands', route(async (req, res) => {
+  const meterId = v.uuid(req.params.id, 'meter id');
+  const b = req.body || {};
+  const command = v.text(b.command, 'command', { min: 2, max: 40 }).toUpperCase();
+  if (!ADMIN_ALLOWED_COMMANDS.has(command)) {
+    throw v.bad(`command must be one of: ${Array.from(ADMIN_ALLOWED_COMMANDS).join(', ')}`);
+  }
+  const payload = b.payload && typeof b.payload === 'object' && !Array.isArray(b.payload) ? b.payload : {};
+
+  const meterRes = await pool.query('select id from public.meters where id = $1 and deleted_at is null', [meterId]);
+  if (!meterRes.rows[0]) return res.status(404).json({ error: 'Meter not found' });
+
+  const { rows } = await pool.query(
+    `insert into public.device_commands (meter_id, issued_by, command, payload)
+     values ($1, $2, $3, $4::jsonb)
+     returning id, meter_id, command, payload, status, created_at`,
+    [meterId, req.user.id, command, JSON.stringify(payload)]
+  );
+
+  await pool.query(
+    `insert into public.audit_logs (actor_user_id, action, target_type, target_id, metadata)
+     values ($1, 'admin_queue_device_command', 'meter', $2, $3::jsonb)`,
+    [req.user.id, meterId, JSON.stringify({ command, commandId: rows[0].id })]
+  ).catch(() => {});
+
+  return res.status(201).json({ ok: true, command: rows[0] });
 }));
 
 // 9. GET /admin/support

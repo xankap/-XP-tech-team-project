@@ -163,6 +163,32 @@ class AdminApiClient {
     return this._request('/admin/meters');
   }
 
+  async provisionMeter({ ownerUserId, btAddress, label, cylinderSizeKg, generateKey = true }) {
+    return this._request('/admin/meters', {
+      method: 'POST',
+      body: JSON.stringify({ ownerUserId, btAddress, label, cylinderSizeKg, generateKey }),
+    });
+  }
+
+  async generateMeterDeviceKey(id) {
+    return this._request(`/admin/meters/${id}/device-key`, {
+      method: 'POST',
+    });
+  }
+
+  async revokeMeterDeviceKey(id) {
+    return this._request(`/admin/meters/${id}/device-key`, {
+      method: 'DELETE',
+    });
+  }
+
+  async sendMeterCommand(id, command, payload = {}) {
+    return this._request(`/admin/meters/${id}/commands`, {
+      method: 'POST',
+      body: JSON.stringify({ command, payload }),
+    });
+  }
+
   // Customer & Business Support Desk
   async getSupport({ status = 'all', search = '', limit = 50, offset = 0 } = {}) {
     const params = new URLSearchParams();

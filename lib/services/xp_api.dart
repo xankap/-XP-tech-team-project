@@ -606,6 +606,34 @@ class XpApi {
         ));
   }
 
+  /// Queues a remote command for the IoT meter (CALIBRATE_EMPTY, TARE, SET_EMPTY, REBOOT, PING, SET_INTERVAL).
+  Future<Map<String, dynamic>> sendDeviceCommand(
+    String meterId,
+    String command, {
+    Map<String, dynamic>? payload,
+  }) async {
+    final body = await _sendAuthed((h) => _client.post(
+          _uri('/devices/$meterId/commands'),
+          headers: h,
+          body: jsonEncode({
+            'command': command,
+            if (payload != null) 'payload': payload,
+          }),
+        ));
+    return Map<String, dynamic>.from(body['command'] as Map);
+  }
+
+  /// Lists recent queued/acked commands for a meter.
+  Future<List<Map<String, dynamic>>> getDeviceCommands(String meterId) async {
+    final body = await _sendAuthed(
+        (h) => _client.get(_uri('/devices/$meterId/commands'), headers: h));
+    final list = (body['commands'] as List?) ?? const [];
+    return list
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
   Future<void> postGasReading(
       {double? kgLeft, double? percentLeft, String? cylinderLabel}) async {
     final recordedAt = DateTime.now().toUtc().toIso8601String();

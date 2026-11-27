@@ -1,4 +1,8 @@
 ﻿<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Network & API communication (required for release builds). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- Classic Bluetooth (HC-05 meter over SPP).
          Android 11 and lower: install-time BLUETOOTH/BLUETOOTH_ADMIN, and
          location (runtime) is needed to discover nearby devices. -->

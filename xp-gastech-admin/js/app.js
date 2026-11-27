@@ -503,16 +503,69 @@ window.editUserRole = function(id, name, currentRole) {
 };
 
 // ---------------- TAB 5: METERS ----------------
+function showDeviceKeyModal({ meterId, btAddress, label, deviceKey }) {
+  document.getElementById('device-key-meter-label').textContent = `${label || 'XP Smart Meter'} (${btAddress || meterId})`;
+  document.getElementById('device-key-value').value = deviceKey;
+  document.getElementById('device-key-curl').textContent =
+`curl -X POST https://api.xptechltd.com/api/v1/devices/telemetry \\
+  -H "Content-Type: application/json" \\
+  -H "X-Device-Key: ${deviceKey}" \\
+  -d '{"percent":82,"weightKg":10.25,"battery":94,"leak":0,"rssi":-61}'`;
+  document.getElementById('device-key-modal').classList.add('open');
+}
+
+document.getElementById('btn-copy-device-key')?.addEventListener('click', async () => {
+  const val = document.getElementById('device-key-value')?.value;
+  if (!val) return;
+  try {
+    await navigator.clipboard.writeText(val);
+    showToast('Hardware X-Device-Key copied to clipboard', 'success');
+  } catch {
+    showToast('Copy failed — please select and copy manually', 'error');
+  }
+});
+
+document.getElementById('btn-open-provision-meter')?.addEventListener('click', () => {
+  document.getElementById('provision-meter-modal').classList.add('open');
+});
+
+document.getElementById('btn-confirm-provision-meter')?.addEventListener('click', async () => {
+  const ownerUserId = document.getElementById('prov-owner-id').value.trim();
+  const btAddress = document.getElementById('prov-bt-address').value.trim();
+  const label = document.getElementById('prov-label').value.trim();
+  const cylinderSizeKg = Number(document.getElementById('prov-size').value) || 12.5;
+  if (!ownerUserId || !btAddress) {
+    showToast('Owner User ID and Device MAC/Serial are required', 'error');
+    return;
+  }
+  try {
+    const res = await window.api.provisionMeter({ ownerUserId, btAddress, label, cylinderSizeKg, generateKey: true });
+    document.getElementById('provision-meter-modal').classList.remove('open');
+    showToast('Meter provisioned', 'success');
+    if (res.deviceKey) {
+      showDeviceKeyModal({
+        meterId: res.meter.id,
+        btAddress: res.meter.btAddress,
+        label: res.meter.label,
+        deviceKey: res.deviceKey,
+      });
+    }
+    loadMeters();
+  } catch (err) {
+    showToast(`Provision failed: ${err.message}`, 'error');
+  }
+});
+
 async function loadMeters() {
   const tbody = document.getElementById('meters-tbody');
-  tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Loading digital meter readings...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Loading digital meter readings...</td></tr>`;
 
   try {
     const { meters } = await window.api.getMeters();
     tbody.innerHTML = '';
 
     if (!meters || meters.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" class="empty-state"><div class="empty-icon">📟</div>No registered digital meters in system yet.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" class="empty-state"><div class="empty-icon">📟</div>No registered digital meters in system yet.</td></tr>`;
       return;
     }
 
@@ -526,8 +579,12 @@ async function loadMeters() {
         ? '<span style="color:#10b981;font-weight:700">● Safe</span>'
         : (reading?.leakLevel ? '<span style="color:#ef4444;font-weight:700">⚠ LEAK DETECTED</span>' : '<span class="text-muted">No telemetry</span>');
 
+      const keyBadge = m.hasDeviceKey
+        ? '<span style="color:#10b981;font-weight:700;font-size:12px;">● Key Active</span>'
+        : '<span style="color:#64748b;font-size:12px;">○ No Key</span>';
+
       tr.innerHTML = `
-        <td><code>${escapeHtml(m.btAddress)}</code><br><small class="text-muted">${escapeHtml(m.label || 'Default Cylinder')}</small></td>
+        <td><code>${escapeHtml(m.btAddress)}</code><br><small class="text-muted">${escapeHtml(m.label || 'Default Cylinder')}${m.firmwareVersion ? ` · v${escapeHtml(m.firmwareVersion)}` : ''}</small></td>
         <td>${escapeHtml(m.ownerEmail || 'Unknown')}</td>
         <td>${m.cylinderSizeKg ? `${m.cylinderSizeKg} kg` : '12.5 kg'}</td>
         <td>
@@ -542,7 +599,49 @@ async function loadMeters() {
         <td>${reading?.battery !== null && reading?.battery !== undefined ? `${reading.battery}%` : '---'}</td>
         <td>${leakStatus}</td>
         <td>${m.lastReadingAt ? formatDate(m.lastReadingAt) : 'Never'}</td>
+        <td>
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
+            ${keyBadge}
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn btn-primary btn-sm btn-gen-key">${m.hasDeviceKey ? 'Rotate Key' : 'Generate Key'}</button>
+              ${m.hasDeviceKey ? '<button class="btn btn-secondary btn-sm btn-revoke-key">Revoke</button>' : ''}
+              <button class="btn btn-secondary btn-sm btn-ping-meter" title="Queue PING command">Ping</button>
+            </div>
+          </div>
+        </td>
       `;
+
+      tr.querySelector('.btn-gen-key')?.addEventListener('click', async () => {
+        if (m.hasDeviceKey && !confirm(`Rotate X-Device-Key for ${m.btAddress}? The old hardware key will stop working immediately.`)) return;
+        try {
+          const res = await window.api.generateMeterDeviceKey(m.id);
+          showDeviceKeyModal(res);
+          loadMeters();
+        } catch (err) {
+          showToast(`Key generation failed: ${err.message}`, 'error');
+        }
+      });
+
+      tr.querySelector('.btn-revoke-key')?.addEventListener('click', async () => {
+        if (!confirm(`Revoke X-Device-Key for ${m.btAddress}?`)) return;
+        try {
+          await window.api.revokeMeterDeviceKey(m.id);
+          showToast('Hardware key revoked', 'success');
+          loadMeters();
+        } catch (err) {
+          showToast(`Revoke failed: ${err.message}`, 'error');
+        }
+      });
+
+      tr.querySelector('.btn-ping-meter')?.addEventListener('click', async () => {
+        try {
+          await window.api.sendMeterCommand(m.id, 'PING');
+          showToast(`PING command queued for ${m.btAddress}`, 'success');
+        } catch (err) {
+          showToast(`Command failed: ${err.message}`, 'error');
+        }
+      });
+
       tbody.appendChild(tr);
     });
   } catch (err) {

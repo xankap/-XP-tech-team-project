@@ -10,6 +10,7 @@ const deviceRoutes = require('./src/routes/devices');
 const adminRoutes = require('./src/routes/admin');
 const supportRoutes = require('./src/routes/support');
 const assistantRoutes = require('./src/routes/assistant');
+const docsRoutes = require('./src/routes/docs');
 const { securityHeaders, requestLogger } = require('./src/middleware/security');
 const { getSmsConfig } = require('./src/services/sendchamp');
 const { getEmailConfig } = require('./src/services/sendchampEmail');
@@ -90,6 +91,7 @@ function healthHandler(_req, res) {
 
 function mountApiRoutes(target) {
   target.get('/health', healthHandler);
+  target.use('/', docsRoutes);
   target.use('/auth', authRoutes);
   target.use('/retailers', retailerRoutes);
   target.use('/businesses', businessRoutes);

@@ -21,6 +21,52 @@ const ALLOWED_EVENT_TYPES = new Set([
 
 const ALLOWED_SEVERITIES = new Set(['info', 'warning', 'critical']);
 
+const ALLOWED_COMMANDS = new Set([
+  'CALIBRATE_EMPTY',
+  'TARE',
+  'SET_EMPTY',
+  'REBOOT',
+  'PING',
+  'SET_INTERVAL',
+]);
+
+function mapDeviceCommand(row) {
+  return {
+    id: row.id,
+    meterId: row.meter_id,
+    command: row.command,
+    payload: row.payload || {},
+    status: row.status,
+    ackMessage: row.ack_message || null,
+    deliveredAt: row.delivered_at || null,
+    ackedAt: row.acked_at || null,
+    createdAt: row.created_at,
+  };
+}
+
+async function claimPendingCommands(meterId) {
+  try {
+    const { rows } = await pool.query(
+      `update public.device_commands
+          set status = 'delivered',
+              delivered_at = coalesce(delivered_at, now())
+        where id in (
+          select id
+            from public.device_commands
+           where meter_id = $1 and status = 'pending'
+           order by created_at asc
+           limit 10
+        )
+        returning id, meter_id, command, payload, status, delivered_at, created_at`,
+      [meterId]
+    );
+    return Array.isArray(rows) ? rows.map(mapDeviceCommand) : [];
+  } catch (err) {
+    console.warn('[devices] pending command fetch skipped:', err.message);
+    return [];
+  }
+}
+
 function extractClientIp(req) {
   const fwd = req.headers['x-forwarded-for'];
   if (typeof fwd === 'string' && fwd.trim()) {
@@ -90,6 +136,8 @@ router.post(
       ]
     );
 
+    const commands = await claimPendingCommands(req.device.id);
+
     res.json({
       ok: true,
       meterId: meter.id,
@@ -100,6 +148,7 @@ router.post(
       calibrationFactor: Number(meter.calibration_factor ?? 1),
       firmwareVersion: meter.firmware_version,
       hardwareModel: meter.hardware_model,
+      commands,
       serverTime: new Date().toISOString(),
     });
   })
@@ -228,13 +277,97 @@ router.post(
       client.release();
     }
 
+    const commands = await claimPendingCommands(req.device.id);
+
     res.status(201).json({
       ok: true,
       meterId: req.device.id,
       inserted,
       duplicates,
       anomalies,
+      commands,
       serverTime: new Date().toISOString(),
+    });
+  })
+);
+
+// GET /devices/me — hardware self-check & config fetch
+router.get(
+  '/me',
+  requireDeviceAuth,
+  route(async (req, res) => {
+    const { rows } = await pool.query(
+      `select count(*)::int as pending_commands
+         from public.device_commands
+        where meter_id = $1 and status = 'pending'`,
+      [req.device.id]
+    );
+    res.json({
+      ok: true,
+      meterId: req.device.id,
+      btAddress: req.device.btAddress,
+      label: req.device.label,
+      cylinderSizeKg: req.device.cylinderSizeKg,
+      tareOffsetKg: req.device.tareOffsetKg,
+      calibrationFactor: req.device.calibrationFactor,
+      firmwareVersion: req.device.firmwareVersion,
+      hardwareModel: req.device.hardwareModel,
+      lastReadingAt: req.device.lastReadingAt,
+      pendingCommandsCount: rows[0]?.pending_commands ?? 0,
+      serverTime: new Date().toISOString(),
+    });
+  })
+);
+
+// GET /devices/commands/pending — hardware polls & claims pending commands
+router.get(
+  '/commands/pending',
+  requireDeviceAuth,
+  route(async (req, res) => {
+    const commands = await claimPendingCommands(req.device.id);
+    res.json({
+      ok: true,
+      commands,
+      serverTime: new Date().toISOString(),
+    });
+  })
+);
+
+// POST /devices/commands/:commandId/ack — hardware confirms command execution
+router.post(
+  '/commands/:commandId/ack',
+  requireDeviceAuth,
+  route(async (req, res) => {
+    const commandId = v.uuid(req.params.commandId, 'commandId');
+    const body = req.body || {};
+    const status =
+      body.status === undefined || body.status === null
+        ? 'acked'
+        : v.text(body.status, 'status', { min: 4, max: 16 });
+    if (status !== 'acked' && status !== 'failed') {
+      throw v.bad('status must be acked or failed');
+    }
+    const ackMessage =
+      body.message === undefined || body.message === null
+        ? null
+        : v.text(body.message, 'message', { max: 500 });
+
+    const { rows } = await pool.query(
+      `update public.device_commands
+          set status = $3,
+              ack_message = $4,
+              acked_at = now()
+        where id = $1 and meter_id = $2
+        returning id, meter_id, command, payload, status, ack_message, delivered_at, acked_at, created_at`,
+      [commandId, req.device.id, status, ackMessage]
+    );
+    if (!rows[0]) {
+      return res.status(404).json({ error: 'Command not found for this device' });
+    }
+
+    res.json({
+      ok: true,
+      command: mapDeviceCommand(rows[0]),
     });
   })
 );
@@ -467,6 +600,82 @@ router.patch(
         tareOffsetKg: Number(updated.tare_offset_kg),
         calibrationFactor: Number(updated.calibration_factor),
       },
+    });
+  })
+);
+
+// POST /devices/:id/commands — mobile app or admin queues a command for hardware
+router.post(
+  '/:id/commands',
+  requireAuth,
+  route(async (req, res) => {
+    const meterId = v.uuid(req.params.id, 'meter id');
+    const body = req.body || {};
+    const command = v.text(body.command, 'command', { min: 2, max: 40 }).toUpperCase();
+    if (!ALLOWED_COMMANDS.has(command)) {
+      throw v.bad(`command must be one of: ${Array.from(ALLOWED_COMMANDS).join(', ')}`);
+    }
+
+    let payload = {};
+    if (body.payload !== undefined && body.payload !== null) {
+      if (typeof body.payload !== 'object' || Array.isArray(body.payload)) {
+        throw v.bad('payload must be an object');
+      }
+      payload = body.payload;
+    }
+
+    const { rows: existingRows } = await pool.query(
+      `select id, owner_user_id from public.meters where id = $1 and deleted_at is null`,
+      [meterId]
+    );
+    const existing = existingRows[0];
+    if (!existing) return res.status(404).json({ error: 'Meter not found' });
+    if (existing.owner_user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const { rows } = await pool.query(
+      `insert into public.device_commands (meter_id, issued_by, command, payload)
+       values ($1, $2, $3, $4::jsonb)
+       returning id, meter_id, command, payload, status, ack_message, delivered_at, acked_at, created_at`,
+      [meterId, req.user.id, command, JSON.stringify(payload)]
+    );
+
+    res.status(201).json({
+      ok: true,
+      command: mapDeviceCommand(rows[0]),
+    });
+  })
+);
+
+// GET /devices/:id/commands — mobile app or admin inspects recent commands & status
+router.get(
+  '/:id/commands',
+  requireAuth,
+  route(async (req, res) => {
+    const meterId = v.uuid(req.params.id, 'meter id');
+    const { rows: existingRows } = await pool.query(
+      `select id, owner_user_id from public.meters where id = $1 and deleted_at is null`,
+      [meterId]
+    );
+    const existing = existingRows[0];
+    if (!existing) return res.status(404).json({ error: 'Meter not found' });
+    if (existing.owner_user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const { rows } = await pool.query(
+      `select id, meter_id, command, payload, status, ack_message, delivered_at, acked_at, created_at
+         from public.device_commands
+        where meter_id = $1
+        order by created_at desc
+        limit 25`,
+      [meterId]
+    );
+
+    res.json({
+      ok: true,
+      commands: rows.map(mapDeviceCommand),
     });
   })
 );
