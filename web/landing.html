@@ -33,7 +33,9 @@
       margin: 0;
       font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       color: var(--ink);
-      background: var(--white);
+      background: radial-gradient(circle at 75% 25%, rgba(21, 101, 192, 0.32) 0%, transparent 55%),
+                  linear-gradient(135deg, #050d1a 0%, #071426 48%, #0b2a5b 100%);
+      background-attachment: fixed;
       line-height: 1.65;
       -webkit-font-smoothing: antialiased;
       overflow-x: hidden;
@@ -181,38 +183,39 @@
       cursor: pointer;
     }
 
-    /* Hero */
-    .hero {
-      position: relative;
-      background: radial-gradient(circle at 75% 30%, rgba(21, 101, 192, 0.38) 0%, transparent 52%),
-                  linear-gradient(135deg, #050d1a 0%, #071426 45%, #0b2a5b 100%);
-      color: var(--white);
-      padding: 96px 0 92px;
-      overflow: hidden;
-      min-height: 600px;
-      display: flex;
-      align-items: center;
-    }
+    /* Global Fixed WebGL Background */
     #hero-webgl {
-      position: absolute;
+      position: fixed;
       inset: 0;
-      width: 100%;
-      height: 100%;
+      width: 100vw;
+      height: 100vh;
       z-index: 0;
       pointer-events: none;
-      opacity: 0.85;
+      opacity: 0.9;
     }
     .hero-glow {
-      position: absolute;
+      position: fixed;
       width: 560px;
       height: 560px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(56, 189, 248, 0.12) 0%, rgba(13, 71, 161, 0) 70%);
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.14) 0%, rgba(13, 71, 161, 0) 70%);
       pointer-events: none;
       transform: translate(-50%, -50%);
       z-index: 1;
       opacity: 0;
       transition: opacity 0.6s ease;
+    }
+    main, footer { position: relative; z-index: 2; }
+
+    /* Hero */
+    .hero {
+      position: relative;
+      background: transparent;
+      color: var(--white);
+      padding: 96px 0 92px;
+      min-height: 600px;
+      display: flex;
+      align-items: center;
     }
     .hero .container { position: relative; z-index: 2; }
     .hero-grid {
@@ -427,9 +430,24 @@
     @keyframes slowTagA { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
     @keyframes slowTagB { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
 
-    /* Sections */
-    section { padding: 92px 0; }
-    .section-head { max-width: 640px; margin-bottom: 44px; }
+    /* Sections as Slideable Elevated Panels over 3D Background */
+    section { padding: 48px 0; }
+    .slide-panel {
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(255, 255, 255, 0.65);
+      border-radius: 24px;
+      padding: 64px 52px;
+      box-shadow: 0 32px 80px rgba(3, 10, 24, 0.42);
+    }
+    .slide-panel.dark-glass {
+      background: rgba(7, 20, 38, 0.72);
+      border: 1px solid rgba(147, 197, 253, 0.18);
+      color: var(--white);
+    }
+    .slide-panel.dark-glass h2 { color: var(--white); }
+    .section-head { max-width: 640px; margin-bottom: 40px; }
     .kicker {
       font-size: 11px;
       text-transform: uppercase;
@@ -448,8 +466,8 @@
     .section-head p, .muted { color: var(--slate); margin: 0; }
     .reveal {
       opacity: 0;
-      transform: translateY(16px);
-      transition: opacity 0.7s ease, transform 0.7s ease;
+      transform: translateY(36px);
+      transition: opacity 0.85s cubic-bezier(0.22, 1, 0.36, 1), transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
     }
     .reveal.visible { opacity: 1; transform: translateY(0); }
 
@@ -480,7 +498,7 @@
     .value span { font-size: 13px; color: var(--muted); line-height: 1.5; display: block; }
 
     /* Solutions Grid */
-    .products { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .products { background: transparent; border: 0; }
     .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
     .card {
       background: var(--white);
@@ -522,7 +540,7 @@
 
     /* Preorder */
     .preorder {
-      background: linear-gradient(135deg, #061326 0%, #0b2856 100%);
+      background: transparent;
       color: var(--white);
     }
     .preorder h2 { color: var(--white); }
@@ -806,11 +824,11 @@
       .footer-grid { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 560px) {
-      .container { width: min(100% - 32px, 1140px); }
-      section { padding: 64px 0; }
+      .container { width: min(100% - 28px, 1140px); }
+      section { padding: 28px 0; }
+      .slide-panel { padding: 28px 20px; border-radius: 18px; }
       .cards, .values, .form-row, .footer-grid { grid-template-columns: 1fr; }
-      .form-panel, .support-box, .about-panel { padding: 22px; }
-      .topbar .container { justify-content: center; text-align: center; }
+      .form-panel, .support-box, .about-panel { padding: 20px; }
     }
   </style>
 </head>
@@ -835,10 +853,11 @@
     </nav>
   </header>
 
+  <canvas id="hero-webgl" aria-hidden="true"></canvas>
+  <div class="hero-glow" id="heroGlow" aria-hidden="true"></div>
+
   <main>
     <section class="hero" id="home">
-      <canvas id="hero-webgl" aria-hidden="true"></canvas>
-      <div class="hero-glow" id="heroGlow" aria-hidden="true"></div>
       <div class="container hero-grid">
         <div>
           <span class="eyebrow">Smart technology. Local impact.</span>
@@ -887,7 +906,7 @@
     </section>
 
     <section id="about" class="reveal">
-      <div class="container about-grid">
+      <div class="container slide-panel about-grid">
         <div>
           <span class="kicker">Who we are</span>
           <h2>Technology that solves problems that matter.</h2>
@@ -919,7 +938,7 @@
     </section>
 
     <section class="products" id="products">
-      <div class="container">
+      <div class="container slide-panel reveal">
         <div class="section-head reveal">
           <span class="kicker">What we build</span>
           <h2>Our products and solutions</h2>
@@ -979,7 +998,7 @@
     </section>
 
     <section class="preorder" id="preorder">
-      <div class="container preorder-grid reveal">
+      <div class="container slide-panel dark-glass preorder-grid reveal">
         <div>
           <span class="eyebrow">Coming to your home</span>
           <h2>Be among the first to get the XP Smart Gas Meter.</h2>
@@ -1030,7 +1049,7 @@
     </section>
 
     <section id="support">
-      <div class="container reveal">
+      <div class="container slide-panel reveal">
         <div class="section-head">
           <span class="kicker">We are here to help</span>
           <h2>XP Technology support</h2>
@@ -1166,26 +1185,30 @@
       var pointer = { nx: 0, ny: 0, active: false };
       var targetRotX = 0, targetRotY = 0, smoothRotX = 0, smoothRotY = 0;
 
-      hero.addEventListener('mousemove', function (e) {
-        var rect = hero.getBoundingClientRect();
-        var x = e.clientX - rect.left;
-        var y = e.clientY - rect.top;
-        pointer.nx = (x / rect.width) * 2 - 1;
-        pointer.ny = -((y / rect.height) * 2 - 1);
+      window.addEventListener('mousemove', function (e) {
+        var vw = window.innerWidth || 1;
+        var vh = window.innerHeight || 1;
+        pointer.nx = (e.clientX / vw) * 2 - 1;
+        pointer.ny = -((e.clientY / vh) * 2 - 1);
         pointer.active = true;
 
-        heroGlow.style.left = x + 'px';
-        heroGlow.style.top = y + 'px';
+        heroGlow.style.left = e.clientX + 'px';
+        heroGlow.style.top = e.clientY + 'px';
         heroGlow.style.opacity = '1';
 
         var vRect = heroVisual.getBoundingClientRect();
-        var cx = (e.clientX - (vRect.left + vRect.width / 2)) / 260;
-        var cy = (e.clientY - (vRect.top + vRect.height / 2)) / 260;
-        targetRotY = Math.max(-9, Math.min(9, cx * 7));
-        targetRotX = Math.max(-9, Math.min(9, -cy * 7));
-      });
+        if (vRect.bottom > 0 && vRect.top < vh) {
+          var cx = (e.clientX - (vRect.left + vRect.width / 2)) / 260;
+          var cy = (e.clientY - (vRect.top + vRect.height / 2)) / 260;
+          targetRotY = Math.max(-9, Math.min(9, cx * 7));
+          targetRotX = Math.max(-9, Math.min(9, -cy * 7));
+        } else {
+          targetRotX = 0;
+          targetRotY = 0;
+        }
+      }, { passive: true });
 
-      hero.addEventListener('mouseleave', function () {
+      document.addEventListener('mouseleave', function () {
         pointer.active = false;
         heroGlow.style.opacity = '0';
         targetRotX = 0;
@@ -1275,8 +1298,8 @@
           scene.add(new THREE.Points(geometry, material));
 
           function resizeWebGL() {
-            var w = hero.clientWidth || window.innerWidth;
-            var h = hero.clientHeight || 600;
+            var w = window.innerWidth || 1280;
+            var h = window.innerHeight || 720;
             renderer.setSize(w, h, false);
             camera.aspect = w / h;
             camera.updateProjectionMatrix();
