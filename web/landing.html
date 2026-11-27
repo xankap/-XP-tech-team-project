@@ -85,7 +85,7 @@
       flex-shrink: 0;
     }
     .brand-logo {
-      height: 36px;
+      height: 44px;
       width: auto;
       display: block;
       object-fit: contain;
@@ -302,27 +302,29 @@
       place-items: center;
       position: relative;
       transform-style: preserve-3d;
+      animation: slowFloat 10s ease-in-out infinite;
     }
     .device-card {
       z-index: 3;
       width: 268px;
       padding: 22px;
       border-radius: 18px;
-      background: rgba(255, 255, 255, 0.97);
+      background: rgba(255, 255, 255, 0.98);
       color: var(--navy);
       box-shadow: 0 30px 70px rgba(3, 10, 24, 0.52), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
       cursor: pointer;
       user-select: none;
       transform-style: preserve-3d;
-      transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.4s ease;
-      animation: slowFloat 9.5s ease-in-out infinite;
+      backface-visibility: hidden;
+      will-change: transform;
+      transition: box-shadow 0.4s ease;
     }
     .device-card:hover {
       box-shadow: 0 36px 84px rgba(13, 71, 161, 0.38), 0 0 0 1px rgba(147, 197, 253, 0.85) inset;
     }
     @keyframes slowFloat {
-      0%, 100% { margin-top: 0px; }
-      50% { margin-top: -9px; }
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-7px); }
     }
     .device-top {
       display: flex;
@@ -816,7 +818,7 @@
   <header id="siteHeader">
     <nav class="container">
       <a class="brand" href="#home" aria-label="XP Technology home">
-        <img class="brand-logo" src="xp_logo.png" alt="XP Technology logo">
+        <img class="brand-logo" src="xp_logo.png?v=3" alt="XP Technology logo">
         <span class="brand-text">
           <strong>XP Technology</strong>
           <span>Smart Electronics</span>
@@ -861,7 +863,7 @@
             <div class="device-card" id="deviceCard" role="button" tabindex="0" title="Click to preview device telemetry">
               <div class="device-top">
                 <span class="device-brand-mini">
-                  <img src="xp_logo.png" alt="XP">
+                  <img src="xp_logo.png?v=3" alt="XP">
                   <span>XP METER</span>
                 </span>
                 <span class="status-pill"><i class="status-dot"></i><span id="cardPill">ONLINE</span></span>
@@ -1061,7 +1063,7 @@
       <div class="footer-grid">
         <div>
           <a class="brand" href="#home">
-            <img class="brand-logo" src="xp_logo.png" alt="XP Technology logo" style="background:#fff;padding:5px 8px;border-radius:8px;">
+            <img class="brand-logo" src="xp_logo.png?v=3" alt="XP Technology logo" style="background:#fff;padding:5px 8px;border-radius:8px;">
             <span class="brand-text">
               <strong>XP Technology</strong>
               <span>Smart Electronics</span>
@@ -1099,7 +1101,7 @@
   <section class="pip-panel" id="pipPanel" aria-label="XP Technology AI Assistant" aria-hidden="true">
     <div class="pip-head">
       <div class="pip-head-title">
-        <img src="xp_logo.png" alt="XP">
+        <img src="xp_logo.png?v=3" alt="XP">
         <div>
           <strong>Pip — XP Technology AI</strong>
           <span>Devices, pre-orders &amp; support</span>
@@ -1156,11 +1158,13 @@
         document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('visible'); });
       }
 
-      // Gentle cursor glow + subtle 3D tilt on floating device card
+      // Gentle cursor glow + buttery-smooth 3D tilt on floating device card
       var hero = document.getElementById('home');
       var heroGlow = document.getElementById('heroGlow');
+      var heroVisual = document.getElementById('heroVisual');
       var deviceCard = document.getElementById('deviceCard');
       var pointer = { nx: 0, ny: 0, active: false };
+      var targetRotX = 0, targetRotY = 0, smoothRotX = 0, smoothRotY = 0;
 
       hero.addEventListener('mousemove', function (e) {
         var rect = hero.getBoundingClientRect();
@@ -1174,20 +1178,31 @@
         heroGlow.style.top = y + 'px';
         heroGlow.style.opacity = '1';
 
-        var cardRect = deviceCard.getBoundingClientRect();
-        var cx = (e.clientX - (cardRect.left + cardRect.width / 2)) / 320;
-        var cy = (e.clientY - (cardRect.top + cardRect.height / 2)) / 320;
-        var rotY = Math.max(-8, Math.min(8, cx * 7));
-        var rotX = Math.max(-8, Math.min(8, -cy * 7));
-        deviceCard.style.transform =
-          'rotateX(' + rotX.toFixed(2) + 'deg) rotateY(' + rotY.toFixed(2) + 'deg)';
+        var vRect = heroVisual.getBoundingClientRect();
+        var cx = (e.clientX - (vRect.left + vRect.width / 2)) / 260;
+        var cy = (e.clientY - (vRect.top + vRect.height / 2)) / 260;
+        targetRotY = Math.max(-9, Math.min(9, cx * 7));
+        targetRotX = Math.max(-9, Math.min(9, -cy * 7));
       });
 
       hero.addEventListener('mouseleave', function () {
         pointer.active = false;
         heroGlow.style.opacity = '0';
-        deviceCard.style.transform = 'rotateX(0deg) rotateY(0deg)';
+        targetRotX = 0;
+        targetRotY = 0;
       });
+
+      (function updateCardTilt() {
+        smoothRotX += (targetRotX - smoothRotX) * 0.08;
+        smoothRotY += (targetRotY - smoothRotY) * 0.08;
+        if (Math.abs(smoothRotX) > 0.01 || Math.abs(smoothRotY) > 0.01 || pointer.active) {
+          deviceCard.style.transform =
+            'rotateX(' + smoothRotX.toFixed(2) + 'deg) rotateY(' + smoothRotY.toFixed(2) + 'deg)';
+        } else {
+          deviceCard.style.transform = 'rotateX(0deg) rotateY(0deg)';
+        }
+        requestAnimationFrame(updateCardTilt);
+      })();
 
       var cardStates = [
         { pill: 'ONLINE', label: 'Smart Device Status', value: '84% LPG', sub: '10.5 kg remaining · Leak check safe', bars: 4 },
