@@ -581,12 +581,14 @@
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label class="form-label" for="prov-owner-id">Owner User ID (UUID)</label>
-          <input id="prov-owner-id" class="form-input" placeholder="e.g. 22222222-2222-4222-8222-222222222222" />
+          <label class="form-label">Owner Account</label>
+          <select id="prov-owner-id" class="form-select">
+            <option value="">Loading accounts...</option>
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label" for="prov-bt-address">Device MAC / Serial Address</label>
-          <input id="prov-bt-address" class="form-input" placeholder="98:D3:31:AA:BB:CC" />
+          <input id="prov-bt-address" class="form-input" placeholder="e.g. 98:D3:31:AA:BB:CC or XP-ESP32-001" />
         </div>
         <div class="form-group">
           <label class="form-label" for="prov-label">Meter Label</label>

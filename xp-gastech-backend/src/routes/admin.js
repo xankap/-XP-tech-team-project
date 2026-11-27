@@ -462,7 +462,18 @@ router.get('/meters', route(async (_req, res) => {
 // POST /admin/meters — Provision a new IoT meter for a user (optionally issuing X-Device-Key)
 router.post('/meters', route(async (req, res) => {
   const b = req.body || {};
-  const ownerUserId = v.uuid(b.ownerUserId, 'ownerUserId');
+  let ownerUserId = null;
+  if (b.ownerUserId) {
+    ownerUserId = v.uuid(b.ownerUserId, 'ownerUserId');
+  } else if (b.ownerEmail) {
+    const email = v.email(b.ownerEmail);
+    const byEmail = await pool.query('select id from public.users where lower(email) = lower($1)', [email]);
+    if (!byEmail.rows[0]) return res.status(404).json({ error: 'Owner user email not found' });
+    ownerUserId = byEmail.rows[0].id;
+  } else {
+    ownerUserId = req.user.id;
+  }
+
   const btAddress = normalizeBtAddress(b.btAddress);
   const label = b.label ? v.text(b.label, 'label', { min: 1, max: 80 }) : 'XP Smart Meter';
   const cylinderSizeKg = b.cylinderSizeKg === undefined || b.cylinderSizeKg === null

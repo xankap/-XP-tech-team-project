@@ -525,17 +525,33 @@ document.getElementById('btn-copy-device-key')?.addEventListener('click', async 
   }
 });
 
-document.getElementById('btn-open-provision-meter')?.addEventListener('click', () => {
-  document.getElementById('provision-meter-modal').classList.add('open');
+document.getElementById('btn-open-provision-meter')?.addEventListener('click', async () => {
+  const modal = document.getElementById('provision-meter-modal');
+  const select = document.getElementById('prov-owner-id');
+  modal.classList.add('open');
+  if (select) {
+    select.innerHTML = '<option value="">Loading accounts...</option>';
+    try {
+      const { users } = await window.api.getUsers({ limit: 100 });
+      const currentId = window.api.user?.id || '';
+      select.innerHTML = (users || []).map((u) => {
+        const label = `${escapeHtml(u.email || u.username || u.phone || u.id)} (${escapeHtml(u.role)})`;
+        return `<option value="${escapeHtml(u.id)}"${u.id === currentId ? ' selected' : ''}>${label}</option>`;
+      }).join('') || `<option value="${escapeHtml(currentId)}">Current Admin</option>`;
+    } catch {
+      const currentId = window.api.user?.id || '';
+      select.innerHTML = `<option value="${escapeHtml(currentId)}">Current Admin (${escapeHtml(window.api.user?.email || 'me')})</option>`;
+    }
+  }
 });
 
 document.getElementById('btn-confirm-provision-meter')?.addEventListener('click', async () => {
-  const ownerUserId = document.getElementById('prov-owner-id').value.trim();
+  const ownerUserId = document.getElementById('prov-owner-id').value.trim() || undefined;
   const btAddress = document.getElementById('prov-bt-address').value.trim();
   const label = document.getElementById('prov-label').value.trim();
   const cylinderSizeKg = Number(document.getElementById('prov-size').value) || 12.5;
-  if (!ownerUserId || !btAddress) {
-    showToast('Owner User ID and Device MAC/Serial are required', 'error');
+  if (!btAddress) {
+    showToast('Device MAC / Serial Address is required', 'error');
     return;
   }
   try {
