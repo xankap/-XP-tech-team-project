@@ -312,7 +312,10 @@
           <div class="section-card">
             <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
               <span class="section-title">Digital Gas Meter Telemetry &amp; IoT Provisioning</span>
-              <button id="btn-open-provision-meter" class="btn btn-primary btn-sm">+ Provision IoT Meter &amp; Key</button>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button id="btn-export-meters-csv" class="btn btn-secondary btn-sm">⬇ Export Meters CSV</button>
+                <button id="btn-open-provision-meter" class="btn btn-primary btn-sm">+ Provision IoT Meter &amp; Key</button>
+              </div>
             </div>
             <div class="table-responsive">
               <table class="admin-table">
@@ -562,9 +565,13 @@
           </div>
         </div>
         <div class="form-group">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap;">
             <label class="form-label" style="margin:0;">Arduino / IoT Firmware Config</label>
-            <button id="btn-copy-firmware-cfg" class="btn btn-secondary btn-sm">Copy C++ Config</button>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button id="btn-copy-firmware-cfg" class="btn btn-secondary btn-sm">Copy C++ Config</button>
+              <button id="btn-download-firmware-h" class="btn btn-primary btn-sm">⬇ Download .h</button>
+              <button id="btn-download-firmware-json" class="btn btn-secondary btn-sm">⬇ Download .json</button>
+            </div>
           </div>
           <pre id="device-key-firmware" style="background:#0b1220;color:#e2e8f0;padding:12px;border-radius:8px;font-size:11.5px;overflow-x:auto;margin:0;"></pre>
         </div>

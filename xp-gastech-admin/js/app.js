@@ -504,11 +504,41 @@ window.editUserRole = function(id, name, currentRole) {
 
 // ---------------- TAB 5: METERS ----------------
 const recentDeviceKeys = new Map();
+let lastLoadedMeters = [];
+let currentKeyModalData = null;
+
+function downloadFile(filename, content, mimeType = 'text/plain;charset=utf-8') {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function buildFirmwareHeader({ meterId, btAddress, label, deviceKey }) {
+  return `// XP GasTech Smart Meter — Auto-generated IoT Config
+// Meter: ${label || 'XP Smart Meter'} (${btAddress || meterId || ''})
+#pragma once
+
+const char API_HOST[]   = "api.xptechltd.com";
+const uint16_t API_PORT = 443; // HTTPS (Vercel requires TLS on 443)
+const char API_PATH[]   = "/api/v1/devices/telemetry";
+const char API_TOKEN[]  = "${deviceKey}"; // Send in HTTP header: X-Device-Key
+
+const char METER_ID[]   = "${meterId || ''}";
+const char DEVICE_MAC[] = "${btAddress || ''}";
+`;
+}
 
 function showDeviceKeyModal({ meterId, btAddress, label, deviceKey }) {
   if (meterId && deviceKey) {
     recentDeviceKeys.set(meterId, deviceKey);
   }
+  currentKeyModalData = { meterId, btAddress, label, deviceKey };
   document.getElementById('device-key-meter-label').textContent = `${label || 'XP Smart Meter'} (${btAddress || meterId})`;
   document.getElementById('device-key-value').value = deviceKey;
   const fwEl = document.getElementById('device-key-firmware');
@@ -526,6 +556,83 @@ const char API_TOKEN[]  = "${deviceKey}"; // send in header X-Device-Key`;
   -d '{"percent":82,"weightKg":10.25,"battery":94,"leak":0,"rssi":-61}'`;
   openModal('device-key-modal');
 }
+
+document.getElementById('btn-download-firmware-h')?.addEventListener('click', () => {
+  if (!currentKeyModalData?.deviceKey) return;
+  const macSlug = (currentKeyModalData.btAddress || currentKeyModalData.meterId || 'meter').replace(/[^a-zA-Z0-9]+/g, '_');
+  downloadFile(`xp_device_config_${macSlug}.h`, buildFirmwareHeader(currentKeyModalData));
+  showToast('Downloaded Arduino .h config file', 'success');
+});
+
+document.getElementById('btn-download-firmware-json')?.addEventListener('click', () => {
+  if (!currentKeyModalData?.deviceKey) return;
+  const macSlug = (currentKeyModalData.btAddress || currentKeyModalData.meterId || 'meter').replace(/[^a-zA-Z0-9]+/g, '_');
+  const payload = {
+    meterId: currentKeyModalData.meterId,
+    btAddress: currentKeyModalData.btAddress,
+    label: currentKeyModalData.label || 'XP Smart Meter',
+    apiHost: 'api.xptechltd.com',
+    apiPort: 443,
+    apiPath: '/api/v1/devices/telemetry',
+    legacyDgmPath: '/v1/dgm/telemetry',
+    headerName: 'X-Device-Key',
+    deviceKey: currentKeyModalData.deviceKey,
+  };
+  downloadFile(`xp_device_config_${macSlug}.json`, JSON.stringify(payload, null, 2), 'application/json;charset=utf-8');
+  showToast('Downloaded IoT JSON config file', 'success');
+});
+
+document.getElementById('btn-export-meters-csv')?.addEventListener('click', () => {
+  if (!lastLoadedMeters || lastLoadedMeters.length === 0) {
+    showToast('No digital meters to export yet', 'error');
+    return;
+  }
+  const headers = [
+    'Meter ID',
+    'MAC Address',
+    'Label',
+    'Owner Email',
+    'Cylinder Size (kg)',
+    'Firmware',
+    'Key Active',
+    'Level (%)',
+    'Weight (kg)',
+    'Battery (%)',
+    'Leak Level',
+    'Last Synced',
+    'API Host',
+    'API Port',
+    'API Path',
+  ];
+  const esc = (val) => {
+    const s = val === null || val === undefined ? '' : String(val);
+    return `"${s.replace(/"/g, '""')}"`;
+  };
+  const rows = lastLoadedMeters.map((m) => {
+    const r = m.latestReading;
+    return [
+      m.id,
+      m.btAddress,
+      m.label || 'XP Smart Meter',
+      m.ownerEmail || '',
+      m.cylinderSizeKg ?? '',
+      m.firmwareVersion || '',
+      m.hasDeviceKey ? 'true' : 'false',
+      r?.percent ?? '',
+      r?.weightKg ?? '',
+      r?.battery ?? '',
+      r?.leakLevel ?? '',
+      m.lastReadingAt || '',
+      'api.xptechltd.com',
+      '443',
+      '/api/v1/devices/telemetry',
+    ].map(esc).join(',');
+  });
+  const csv = [headers.map(esc).join(','), ...rows].join('\r\n');
+  const stamp = new Date().toISOString().slice(0, 10);
+  downloadFile(`xp_digital_meters_${stamp}.csv`, csv, 'text/csv;charset=utf-8');
+  showToast(`Exported ${lastLoadedMeters.length} meter(s) to CSV`, 'success');
+});
 
 document.getElementById('btn-copy-firmware-cfg')?.addEventListener('click', async () => {
   const val = document.getElementById('device-key-firmware')?.textContent;
@@ -608,6 +715,7 @@ async function loadMeters() {
 
   try {
     const { meters } = await window.api.getMeters();
+    lastLoadedMeters = meters || [];
     tbody.innerHTML = '';
 
     if (!meters || meters.length === 0) {
