@@ -567,7 +567,7 @@ document.getElementById('btn-confirm-provision-meter')?.addEventListener('click'
   }
   try {
     const res = await window.api.provisionMeter({ ownerUserId, btAddress, label, cylinderSizeKg, generateKey: true });
-    closeAllModals();
+    closeModal();
     showToast('Meter provisioned', 'success');
     if (res.deviceKey) {
       showDeviceKeyModal({
