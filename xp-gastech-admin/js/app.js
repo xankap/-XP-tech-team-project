@@ -511,6 +511,14 @@ function showDeviceKeyModal({ meterId, btAddress, label, deviceKey }) {
   }
   document.getElementById('device-key-meter-label').textContent = `${label || 'XP Smart Meter'} (${btAddress || meterId})`;
   document.getElementById('device-key-value').value = deviceKey;
+  const fwEl = document.getElementById('device-key-firmware');
+  if (fwEl) {
+    fwEl.textContent =
+`const char API_HOST[]   = "api.xptechltd.com";
+const uint16_t API_PORT = 443; // HTTPS (Vercel requires TLS on 443)
+const char API_PATH[]   = "/api/v1/devices/telemetry";
+const char API_TOKEN[]  = "${deviceKey}"; // send in header X-Device-Key`;
+  }
   document.getElementById('device-key-curl').textContent =
 `curl -X POST https://api.xptechltd.com/api/v1/devices/telemetry \\
   -H "Content-Type: application/json" \\
@@ -518,6 +526,17 @@ function showDeviceKeyModal({ meterId, btAddress, label, deviceKey }) {
   -d '{"percent":82,"weightKg":10.25,"battery":94,"leak":0,"rssi":-61}'`;
   openModal('device-key-modal');
 }
+
+document.getElementById('btn-copy-firmware-cfg')?.addEventListener('click', async () => {
+  const val = document.getElementById('device-key-firmware')?.textContent;
+  if (!val) return;
+  try {
+    await navigator.clipboard.writeText(val);
+    showToast('Arduino/IoT firmware config copied', 'success');
+  } catch {
+    showToast('Copy failed — please select and copy manually', 'error');
+  }
+});
 
 document.getElementById('btn-copy-device-key')?.addEventListener('click', async () => {
   const val = document.getElementById('device-key-value')?.value;

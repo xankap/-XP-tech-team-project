@@ -109,6 +109,8 @@ mountApiRoutes(app);
 const v1Router = express.Router();
 mountApiRoutes(v1Router);
 app.use('/api/v1', v1Router);
+// Legacy / firmware-friendly DGM alias (/v1/dgm/telemetry, /v1/dgm/handshake, etc.)
+app.use('/v1/dgm', deviceRoutes);
 
 // JSON 404 for unknown routes.
 app.use((_req, res) => {
